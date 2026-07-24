@@ -425,6 +425,8 @@
     max-width:460px; max-height:88vh; overflow:auto}
   .modal h3{margin:0; padding:16px 20px; border-bottom:1px solid var(--line); font-size:17px; font-weight:600}
   .modal .body{padding:18px 20px}
+  .libnote{margin:0; padding:10px 20px; background:var(--cream); border-bottom:1px solid var(--line);
+    font-size:11.5px; line-height:1.45; color:var(--ink-3)}
   .modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px}
   .lp-item{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--line);
     border-radius:9px; margin-bottom:7px; cursor:pointer}
@@ -764,14 +766,17 @@ const ROOM_LUX = [
 ];
 
 /* ---- Thư viện đèn mẫu ---- */
+/* ---- Danh mục đèn KHỞI ĐIỂM ----
+   3 mẫu đầu là đèn anh Khoa hay dùng, lấy từ dự án HB House (kèm thumbnail + link desou.vn);
+   giữ nguyên id dl9/dl12/sp12 để mở lại các dự án cũ không bị nhân đôi mẫu.
+   Danh mục này chỉ dùng cho LẦN ĐẦU mở app hoặc khi bấm “⟲ Mẫu mặc định” —
+   sau đó danh mục chung trong IndexedDB (LIB_KEY) mới là bản chuẩn. ---- */
 const DEFAULT_LIGHTS = [
-  {id:"dl9",  code:"D1", type:"downlight", name:"Downlight âm trần 9W",  lumen:900,  watt:9,  beam:60,  url:"", thumb:null},
-  {id:"dl12", code:"D2", type:"downlight", name:"Downlight âm trần 12W", lumen:1200, watt:12, beam:60,  url:"", thumb:null},
-  {id:"dl18", code:"D3", type:"downlight", name:"Downlight âm trần 18W", lumen:1800, watt:18, beam:90,  url:"", thumb:null},
+  {id:"dl9", code:"M07", type:"downlight", name:"Mini07", lumen:615, watt:7, beam:24, url:"https://desou.vn/san-pham-chi-tiet#den-am-tran/mini07", thumb:"data:image/jpeg;base64,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"},
+  {id:"dl12", code:"BG12", type:"downlight", name:"BG12", lumen:1050, watt:12, beam:36, url:"https://desou.vn/san-pham-chi-tiet#den-am-tran/bg12", thumb:"data:image/jpeg;base64,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"},
+  {id:"sp12", code:"SO22", type:"spot", name:"SO22", lumen:1000, watt:10, beam:24, url:"", thumb:"data:image/jpeg;base64,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"},
   {id:"pn40", code:"P1", type:"panel",     name:"Panel 600×600 40W",     lumen:4000, watt:40, beam:120, url:"", thumb:null},
   {id:"tb18", code:"T1", type:"tube",      name:"Tuýp LED 1m2 18W",      lumen:1900, watt:18, beam:150, url:"", thumb:null},
-  {id:"sp7",  code:"S1", type:"spot",      name:"Rọi ray spotlight 7W",  lumen:600,  watt:7,  beam:24,  url:"", thumb:null},
-  {id:"sp12", code:"S2", type:"spot",      name:"Rọi ray spotlight 12W", lumen:1000, watt:12, beam:36,  url:"", thumb:null},
   {id:"pd6",  code:"PD1",type:"pendant",   name:"Đèn thả trang trí 6W",  lumen:400,  watt:6,  beam:120, url:"", thumb:null},
   {id:"ch45", code:"CH1",type:"chandelier",name:"Đèn chùm thả bàn ăn 45W",lumen:2500, watt:45, beam:150, url:"", thumb:null},
   {id:"st10", code:"LD1",type:"strip",     name:"LED dây hắt khe 10W/m", lumen:800,  watt:10, beam:120, url:"", thumb:null},
@@ -783,19 +788,19 @@ function autoCode(type, lights){
   while((lights||state.lights).some(l=>l.code===p+n)) n++;
   return p+n;
 }
-/* ---- Thư viện tuỳ chỉnh: đèn do người dùng thêm/sửa, lưu RIÊNG (dùng chung mọi dự án) ---- */
-const DEFAULT_IDS = new Set(DEFAULT_LIGHTS.map(l=>l.id));
-let customLib = [];   // các mẫu đèn KHÔNG thuộc bộ mặc định — nạp từ IndexedDB lúc khởi động
-/* Đèn khởi tạo cho dự án mới = bộ mặc định + mọi đèn tuỳ chỉnh đã lưu */
+/* ---- DANH MỤC ĐÈN CHUNG (anh Khoa chốt 2026-07-24): thư viện = kho vật tư của INEX, ĐỘC LẬP dự án.
+   Mọi thay đổi trong Thư viện (thêm / sửa — kể cả sửa mẫu mặc định / xoá) đều áp cho MỌI dự án mới.
+   Bộ DEFAULT_LIGHTS chỉ là danh mục KHỞI ĐIỂM lần đầu dùng app + phao khôi phục. ---- */
+let libCatalog = [];   // danh mục đèn dùng chung — nạp từ IndexedDB lúc khởi động
+/* Đèn khởi tạo cho dự án mới = đúng danh mục chung (rỗng/hỏng thì quay về bộ mặc định) */
 function initialLights(){
-  return DEFAULT_LIGHTS.map(l=>({...l})).concat(customLib.map(l=>({...l})));
+  const src = (libCatalog && libCatalog.length) ? libCatalog : DEFAULT_LIGHTS;
+  return src.map(l=>({...l}));
 }
-/* Rút các mẫu tuỳ chỉnh từ dự án hiện tại và ghi vào thư viện chung */
+/* Ghi TOÀN BỘ thư viện của dự án đang mở vào danh mục chung (thêm/sửa/xoá đều phản ánh đúng) */
 function syncLib(){
-  customLib = (state && state.lights ? state.lights : [])
-    .filter(l=>!DEFAULT_IDS.has(l.id))
-    .map(l=>({...l}));
-  dbPut(LIB_KEY, customLib).catch(()=>{});
+  libCatalog = (state && state.lights ? state.lights : []).map(l=>({...l}));
+  dbPut(LIB_KEY, libCatalog).catch(()=>{});
 }
 const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
@@ -950,14 +955,18 @@ function dbGet(key){ return db().then(d=>new Promise((res,rej)=>{
   const t=d.transaction(DB_STORE,"readonly");
   const q=t.objectStore(DB_STORE).get(key); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); })); }
 
-/* Gộp các mẫu tuỳ chỉnh của dự án đang mở VÀO thư viện chung (không xoá mẫu của dự án khác) */
+/* Mở dự án cũ: BỔ SUNG vào danh mục các mẫu nó có mà danh mục chưa có (theo id).
+   CHỈ gom mẫu THỰC SỰ CÓ ĐÈN ĐẶT trên bản vẽ — mẫu nằm không trong thư viện dự án cũ là rác,
+   gom vào sẽ kéo ngược những mẫu anh đã chủ động bỏ khỏi danh mục.
+   Chỉ THÊM — mẫu trùng id giữ bản của danh mục (danh mục là bản chuẩn), và không xoá gì. */
 function mergeLibFromState(){
+  const used=new Set();
+  (state.floors||[]).forEach(f=>(f.zones||[]).forEach(z=>(z.lights||[]).forEach(pl=>used.add(pl.lightId))));
   let changed=false;
-  (state.lights||[]).filter(l=>!DEFAULT_IDS.has(l.id)).forEach(l=>{
-    const i=customLib.findIndex(x=>x.id===l.id);
-    if(i<0){ customLib.push({...l}); changed=true; }
+  (state.lights||[]).forEach(l=>{
+    if(used.has(l.id) && !libCatalog.some(x=>x.id===l.id)){ libCatalog.push({...l}); changed=true; }
   });
-  if(changed) dbPut(LIB_KEY, customLib).catch(()=>{});
+  if(changed) dbPut(LIB_KEY, libCatalog).catch(()=>{});
 }
 function adopt(raw){
   state = migrate(raw);
@@ -966,8 +975,14 @@ function adopt(raw){
   mergeLibFromState();   // đưa mẫu đèn tuỳ chỉnh của dự án cũ vào thư viện chung
 }
 function load(){
-  // nạp thư viện đèn tuỳ chỉnh TRƯỚC để dự án mới (newState) có sẵn các mẫu đã lưu
-  return dbGet(LIB_KEY).then(lib=>{ if(Array.isArray(lib)) customLib=lib; }).catch(()=>{})
+  // nạp danh mục đèn chung TRƯỚC để dự án mới (newState) khởi tạo đúng danh mục đã lưu;
+  // lần đầu dùng app (chưa có danh mục) thì GIEO bằng bộ khởi điểm và ghi xuống luôn —
+  // không gieo thì danh mục còn rỗng, mở 1 file cũ là nó chỉ còn đúng đèn của file đó.
+  return dbGet(LIB_KEY).then(lib=>{
+    if(Array.isArray(lib) && lib.length){ libCatalog=lib; return; }
+    libCatalog=DEFAULT_LIGHTS.map(l=>({...l}));
+    return dbPut(LIB_KEY, libCatalog).catch(()=>{});
+  }).catch(()=>{ libCatalog=DEFAULT_LIGHTS.map(l=>({...l})); })
     .then(()=>dbGet(DB_KEY)).then(v=>{
     if(v && v.floors && v.floors.some(f=>f.zones&&f.zones.length)){ adopt(v); return; }
     // dữ liệu bản cũ (localStorage): nạp và GIỮ NGUYÊN làm phao dự phòng — không bao giờ xoá
@@ -3096,9 +3111,11 @@ function openLibrary(pickMode){
   libSel = z? z.placeLightId : null;
   const m=document.createElement("div"); m.className="modal-bg"; m.id="libModal";
   m.innerHTML=`<div class="modal"><h3 class="serif">Thư viện đèn</h3>
+    <p class="libnote">Danh mục dùng chung mọi dự án — thêm, sửa hay xoá ở đây sẽ áp cho các dự án mới.</p>
     <div class="body" id="libBody"></div>
     <div class="foot">
       <button class="btn ghost" id="libAdd">+ Thêm đèn</button>
+      <button class="btn ghost sm" id="libRestore" title="Thêm lại các mẫu đèn mặc định còn thiếu — không đụng tới mẫu anh đã sửa hoặc tự thêm">⟲ Mẫu mặc định</button>
       <span style="flex:1"></span>
       <button class="btn" id="libCancel">Đóng</button>
       ${z?'<button class="btn primary" id="libUse">Dùng cho khu vực</button>':""}
@@ -3117,6 +3134,14 @@ function openLibrary(pickMode){
       if(pickMode) toast("Đã chọn — nhấn L để đặt hoặc “Tự rải loại này”"); }
     close(); };
   m.querySelector("#libAdd").onclick=()=>lightForm(null);
+  m.querySelector("#libRestore").onclick=()=>{
+    const missing=DEFAULT_LIGHTS.filter(d=>!state.lights.some(l=>l.id===d.id));
+    if(!missing.length){ toast("Đã có đủ mẫu mặc định"); return; }
+    mutate(()=>{ missing.forEach(d=>state.lights.push({...d})); });
+    syncLib();
+    toast("Đã thêm lại "+missing.length+" mẫu mặc định — Ctrl+Z để hoàn tác");
+    renderLib();
+  };
   renderLib();
 
   function renderLib(){
