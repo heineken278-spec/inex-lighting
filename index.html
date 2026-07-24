@@ -736,6 +736,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const SVGNS = "http://www.w3.org/2000/svg";
 const LS_KEY = "inex_lighting_v1";                 // bản cũ — chỉ để nạp lại một lần
 const DB_NAME="inex_lighting", DB_STORE="projects", DB_KEY="current";
+const LIB_KEY="lightLibrary";   // thư viện đèn tuỳ chỉnh — dùng chung MỌI dự án (không mất khi tạo dự án mới)
 const FILE_EXT=".inexlight";
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const LM_PER_W = 100;
@@ -781,6 +782,20 @@ function autoCode(type, lights){
   const p=CODE_PREFIX[type]||"X"; let n=1;
   while((lights||state.lights).some(l=>l.code===p+n)) n++;
   return p+n;
+}
+/* ---- Thư viện tuỳ chỉnh: đèn do người dùng thêm/sửa, lưu RIÊNG (dùng chung mọi dự án) ---- */
+const DEFAULT_IDS = new Set(DEFAULT_LIGHTS.map(l=>l.id));
+let customLib = [];   // các mẫu đèn KHÔNG thuộc bộ mặc định — nạp từ IndexedDB lúc khởi động
+/* Đèn khởi tạo cho dự án mới = bộ mặc định + mọi đèn tuỳ chỉnh đã lưu */
+function initialLights(){
+  return DEFAULT_LIGHTS.map(l=>({...l})).concat(customLib.map(l=>({...l})));
+}
+/* Rút các mẫu tuỳ chỉnh từ dự án hiện tại và ghi vào thư viện chung */
+function syncLib(){
+  customLib = (state && state.lights ? state.lights : [])
+    .filter(l=>!DEFAULT_IDS.has(l.id))
+    .map(l=>({...l}));
+  dbPut(LIB_KEY, customLib).catch(()=>{});
 }
 const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
@@ -847,7 +862,7 @@ function newState(){
   return {
     version:6, projectName:"Dự án chưa đặt tên",
     showGlow:true, labelMode:"all",
-    lights: DEFAULT_LIGHTS.map(l=>({...l})),
+    lights: initialLights(),
     floors:[newFloor("Tầng 1")], cur:0,
   };
 }
@@ -935,13 +950,25 @@ function dbGet(key){ return db().then(d=>new Promise((res,rej)=>{
   const t=d.transaction(DB_STORE,"readonly");
   const q=t.objectStore(DB_STORE).get(key); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); })); }
 
+/* Gộp các mẫu tuỳ chỉnh của dự án đang mở VÀO thư viện chung (không xoá mẫu của dự án khác) */
+function mergeLibFromState(){
+  let changed=false;
+  (state.lights||[]).filter(l=>!DEFAULT_IDS.has(l.id)).forEach(l=>{
+    const i=customLib.findIndex(x=>x.id===l.id);
+    if(i<0){ customLib.push({...l}); changed=true; }
+  });
+  if(changed) dbPut(LIB_KEY, customLib).catch(()=>{});
+}
 function adopt(raw){
   state = migrate(raw);
-  if(!state.lights||!state.lights.length) state.lights = DEFAULT_LIGHTS.map(l=>({...l}));
+  if(!state.lights||!state.lights.length) state.lights = initialLights();
   state.floors.forEach(f=>{ if(f.bg) bgCache[f.id]={bg:f.bg, bgW:f.bgW, bgH:f.bgH}; });
+  mergeLibFromState();   // đưa mẫu đèn tuỳ chỉnh của dự án cũ vào thư viện chung
 }
 function load(){
-  return dbGet(DB_KEY).then(v=>{
+  // nạp thư viện đèn tuỳ chỉnh TRƯỚC để dự án mới (newState) có sẵn các mẫu đã lưu
+  return dbGet(LIB_KEY).then(lib=>{ if(Array.isArray(lib)) customLib=lib; }).catch(()=>{})
+    .then(()=>dbGet(DB_KEY)).then(v=>{
     if(v && v.floors && v.floors.some(f=>f.zones&&f.zones.length)){ adopt(v); return; }
     // dữ liệu bản cũ (localStorage): nạp và GIỮ NGUYÊN làm phao dự phòng — không bao giờ xoá
     const raw=localStorage.getItem(LS_KEY);
@@ -3118,6 +3145,7 @@ function openLibrary(pickMode){
           });
         });
         if(libSel===l.id) libSel=state.lights[0].id;
+        syncLib();   // cập nhật thư viện chung sau khi xoá mẫu
         renderLib();
       };
       el.appendChild(del);
@@ -3199,6 +3227,7 @@ function openLibrary(pickMode){
         if(existing){ Object.assign(existing,data); }
         else { const nl={id:"c"+Date.now(), ...data}; state.lights.push(nl); libSel=nl.id; }
       });
+      syncLib();   // lưu mẫu đèn vừa thêm/sửa vào thư viện chung — không mất khi tạo dự án mới
       renderLib();
     };
   }
