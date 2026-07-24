@@ -132,6 +132,8 @@
   #stage{position:absolute; top:0; left:0; transform-origin:0 0}
   #bg{display:block; user-select:none; -webkit-user-drag:none; pointer-events:none}
   #overlay{position:absolute; top:0; left:0; overflow:visible}
+  /* CSS thắng thuộc tính display="none" trên phần tử → bật vòng hover không cần vẽ lại overlay */
+  #overlay .lightm.hov .hovr{display:inline}
 
   /* Onboarding — hướng dẫn khởi đầu khi canvas trống */
   #onboard{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -578,7 +580,7 @@
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.2c.9.8 1.3 1.7 1.3 2.8h5.4c0-1.1.4-2 1.3-2.8A6 6 0 0 0 12 3z"/></svg>
       </button>
     </aside>
-    <div id="bgPop" class="hidden">
+    <div id="bgPop" class="uifloat hidden">
       <p class="eyebrow">Mặt bằng nền</p>
       <button class="btn" style="width:100%" id="btnUpload">⤒ Tải ảnh mặt bằng…</button>
       <input type="file" id="fileInput" accept="image/*" class="hidden">
@@ -610,15 +612,15 @@
         <img id="bg" alt="">
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
-      <div id="floorBar"></div>
-      <div id="sceneBar"></div>
-      <div id="scaleTag">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
-      <div id="zoombar">
+      <div id="floorBar" class="uifloat"></div>
+      <div id="sceneBar" class="uifloat"></div>
+      <div id="scaleTag" class="uifloat">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
+      <div id="zoombar" class="uifloat">
         <button class="btn sm" id="zoomOut">−</button>
         <button class="btn sm" id="zoomFit">Vừa khung</button>
         <button class="btn sm" id="zoomIn">+</button>
       </div>
-      <div id="selChip" class="hidden">
+      <div id="selChip" class="uifloat hidden">
         <span id="selTxt" class="cnt"></span>
         <button id="chipRotL" title="Xoay trái 15° (phím Q)">↺ Xoay</button>
         <button id="chipRotR" title="Xoay phải 15° (phím E)">↻</button>
@@ -628,8 +630,8 @@
         <button id="chipDup" title="Nhân bản (Ctrl+D)">⧉ Nhân bản</button>
         <button id="chipDel" class="dgr" title="Xoá (Delete)">✕ Xoá</button>
       </div>
-      <div id="hint"></div>
-      <div id="onboard" class="hidden">
+      <div id="hint" class="uifloat"></div>
+      <div id="onboard" class="uifloat hidden">
         <div class="ob-card">
           <div class="ob-eyebrow">Bắt đầu</div>
           <h2>Bố trí đèn trên mặt bằng</h2>
@@ -739,6 +741,10 @@ const SVGNS = "http://www.w3.org/2000/svg";
 const LS_KEY = "inex_lighting_v1";                 // bản cũ — chỉ để nạp lại một lần
 const DB_NAME="inex_lighting", DB_STORE="projects", DB_KEY="current";
 const LIB_KEY="lightLibrary";   // thư viện đèn tuỳ chỉnh — dùng chung MỌI dự án (không mất khi tạo dự án mới)
+const STATE_VERSION=6;          // phiên bản cấu trúc state hiện tại — migrate() nâng dữ liệu cũ lên mức này
+/* Khi đọc dữ liệu THẤT BẠI, chặn mọi ghi đè: thà không lưu còn hơn ghi đè dự án thật bằng
+   một bản dựng lại sai. Xem adoptGuarded() / blockSave(). */
+let saveBlocked=false;
 const FILE_EXT=".inexlight";
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const LM_PER_W = 100;
@@ -834,19 +840,46 @@ function newFloor(name, pxPerMeter){
 }
 const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
-/* Ký tự cụm a/b/c… — chuẩn bản vẽ ME: đèn ghi mã loại + chữ mạch (VD "D2a") */
+/* Ký tự cụm a/b/c… — chuẩn bản vẽ ME: đèn ghi mã loại + chữ mạch (VD "D2a").
+   Trả null khi hết 26 chữ. TUYỆT ĐỐI không trả "z" như trước: hai cụm cùng khoá làm hai đèn
+   khác nhau in RA CÙNG MỘT NHÃN trên bản vẽ — sai âm thầm, tệ hơn là báo lỗi. */
 function nextKey(fl){
   const used=new Set((fl.circuits||[]).map(c=>c.key));
   for(let i=0;i<26;i++){ const k=String.fromCharCode(97+i); if(!used.has(k)) return k; }
-  return "z";
+  return null;
+}
+/* Sinh mã duy nhất theo DANH SÁCH thật, không theo độ dài mảng: "CT"+(length+1) sẽ trùng
+   ngay sau khi xoá một phần tử (file HB House đang có 2 công tắc cùng mã CT4). */
+function nextCode(prefix, arr, field){
+  field=field||"code";
+  const used=new Set((arr||[]).map(x=>x&&x[field]).filter(Boolean));
+  let n=1; while(used.has(prefix+n)) n++;
+  return prefix+n;
 }
 function addCircuit(name, fl){
   fl=fl||F(); fl.circuits=fl.circuits||[];
   const n=fl.circuits.length+1;
   const k=nextKey(fl);
-  const c={id:"c"+F().seq++, key:k, name:name||("Cụm "+k),
+  if(!k){ toast("Tầng này đã dùng hết 26 chữ cái cụm — hãy xoá bớt cụm không dùng"); return null; }
+  const c={id:"c"+(fl.seq++), key:k, name:name||("Cụm "+k),
     color:CIRCUIT_COLORS[(n-1)%CIRCUIT_COLORS.length]};
   fl.circuits.push(c); return c;
+}
+/* Xoá cụm: gỡ khỏi mọi đèn, mọi công tắc, mọi kịch bản và trạng thái đang tắt.
+   Trước đây KHÔNG hề có hàm này — cụm chỉ có thể tạo, nên rác tích tụ (file HB House còn
+   cụm rỗng "m · Đèn Tiểu cảnh") và 26 chữ cái cạn dần không đòi lại được. */
+function deleteCircuit(id, fl){
+  fl=fl||F();
+  fl.circuits=(fl.circuits||[]).filter(c=>c.id!==id);
+  fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===id) delete l.circuit; }));
+  (fl.switches||[]).forEach(sw=>{ sw.circuits=(sw.circuits||[]).filter(c=>c!==id); });
+  (fl.scenes||[]).forEach(sc=>{ sc.off=(sc.off||[]).filter(c=>c!==id); });
+  fl.liveOff=(fl.liveOff||[]).filter(c=>c!==id);
+}
+/* Cụm không còn đèn nào trên tầng — vô hình trên bản vẽ lẫn trong danh sách, chỉ lộ ra ở PDF */
+function emptyCircuits(fl){
+  fl=fl||F();
+  return (fl.circuits||[]).filter(c=>!fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
 }
 /* NGUYÊN LÝ: đèn chỉ tắt/bật qua CÔNG TẮC, mà công tắc điều khiển CỤM.
    → chỉ MỘT cơ chế: đèn tắt ⟺ cụm của nó đang tắt. Đèn chưa gán cụm = chưa qua
@@ -920,8 +953,9 @@ function migrate(s){
     f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.off; }));
   });
   if(s.showLegend===undefined) s.showLegend=true;
-  if(s.version<6) s.version=6;
-  if(s.version<5) s.version=5;
+  // Nâng phiên bản CUỐI CÙNG, sau mọi khối sửa chữa ở trên. Dòng "if(s.version<5) s.version=5"
+  // trước đây nằm SAU dòng nâng lên 6 nên không bao giờ chạy — đã bỏ.
+  if(s.version<STATE_VERSION) s.version=STATE_VERSION;
   fseq=Math.max(fseq, ...s.floors.map(f=>(+String(f.id||"").replace("f","")||0)+1));
   s.floors.forEach(f=>{ if(!f.id) f.id="f"+(fseq++); });
   // bổ sung loại mới cho thư viện đã lưu từ bản cũ
@@ -969,10 +1003,55 @@ function mergeLibFromState(){
   if(changed) dbPut(LIB_KEY, libCatalog).catch(()=>{});
 }
 function adopt(raw){
+  // Trước khi NÂNG CẤP cấu trúc: cất nguyên bản. migrate() sửa raw tại chỗ nên phải chép TRƯỚC.
+  // Khoá "premigrate_" cố ý khác "backup_" để trimBackups() không bao giờ xoá — đây là phao cuối
+  // nếu một bản migrate về sau làm hỏng dữ liệu.
+  const v0 = raw && raw.version;
+  const pre = (typeof v0==="number" && v0 < STATE_VERSION) ? JSON.stringify(raw) : null;
   state = migrate(raw);
   if(!state.lights||!state.lights.length) state.lights = initialLights();
   state.floors.forEach(f=>{ if(f.bg) bgCache[f.id]={bg:f.bg, bgW:f.bgW, bgH:f.bgH}; });
   mergeLibFromState();   // đưa mẫu đèn tuỳ chỉnh của dự án cũ vào thư viện chung
+  if(pre) dbPut("premigrate_v"+v0+"_"+Date.now(), JSON.parse(pre)).catch(()=>{});
+}
+/* Đọc dữ liệu có kiểm soát. adopt() ném lỗi = KHÔNG được im lặng nạp nguồn khác rồi ghi đè:
+   đó chính là hình dạng của sự cố mất dữ liệu trước đây. Thà dừng và báo. */
+function adoptGuarded(raw, nguon){
+  try{ adopt(raw); return true; }
+  catch(err){
+    console.error("Không đọc được dữ liệu ("+nguon+"):", err);
+    state = newState();
+    blockSave(nguon, raw, err);
+    return false;
+  }
+}
+/* Chặn cứng mọi ghi đè + hiện hộp thoại không tắt được, kèm nút tải nguyên bản ra file để cứu tay */
+function blockSave(nguon, raw, err){
+  saveBlocked = true;
+  clearTimeout(saveTimer);
+  const m=document.createElement("div"); m.className="modal-bg"; m.id="dataErrModal";
+  m.innerHTML=`<div class="modal"><h3 class="serif">Không đọc được dữ liệu đã lưu</h3>
+    <div class="body">
+      <p style="margin:0 0 10px">App không đọc được <b>${escapeHtml(nguon)}</b>. Để tránh ghi đè lên dự
+      án thật, <b>chức năng tự động lưu đã bị tắt</b> cho tới khi anh tải lại trang.</p>
+      <p style="margin:0 0 10px">Dữ liệu gốc <b>vẫn còn nguyên</b> trong máy — chưa có gì bị xoá.</p>
+      <p class="muted" style="margin:0 0 6px;font-size:11px">Chi tiết lỗi: ${escapeHtml(String(err&&err.message||err))}</p>
+    </div>
+    <div class="foot">
+      <button class="btn primary" id="deSave">⤓ Tải nguyên bản ra file</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="deRecover">⟲ Khôi phục…</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  m.querySelector("#deSave").onclick=()=>{
+    try{
+      const blob=new Blob([JSON.stringify(raw)],{type:"application/json"});
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob); a.download="cuu-ho-"+Date.now()+FILE_EXT;
+      a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    }catch(e){ toast("Không tạo được file cứu hộ"); }
+  };
+  m.querySelector("#deRecover").onclick=()=>{ m.remove(); $("#btnRecover").click(); };
 }
 function load(){
   // nạp danh mục đèn chung TRƯỚC để dự án mới (newState) khởi tạo đúng danh mục đã lưu;
@@ -983,21 +1062,28 @@ function load(){
     libCatalog=DEFAULT_LIGHTS.map(l=>({...l}));
     return dbPut(LIB_KEY, libCatalog).catch(()=>{});
   }).catch(()=>{ libCatalog=DEFAULT_LIGHTS.map(l=>({...l})); })
-    .then(()=>dbGet(DB_KEY)).then(v=>{
-    if(v && v.floors && v.floors.some(f=>f.zones&&f.zones.length)){ adopt(v); return; }
+    // dbGet hỏng (IndexedDB không dùng được) → v=null và ĐƯỢC PHÉP quay về phao localStorage.
+    // Nhưng lỗi khi ĐỌC dữ liệu thật thì KHÔNG: adoptGuarded() chặn ghi đè thay vì âm thầm
+    // nạp một bản cũ rồi save() đè lên dự án đang làm — đúng hình dạng sự cố mất dữ liệu cũ.
+    .then(()=>dbGet(DB_KEY).catch(()=>null)).then(v=>{
+    const coND = v && v.floors && v.floors.some(f=>f.zones&&f.zones.length);
+    if(coND){ adoptGuarded(v, "bản lưu tự động"); return; }
     // dữ liệu bản cũ (localStorage): nạp và GIỮ NGUYÊN làm phao dự phòng — không bao giờ xoá
-    const raw=localStorage.getItem(LS_KEY);
-    if(raw){ adopt(JSON.parse(raw)); save(); return; }   // ghi ngay sang IndexedDB
-    if(v){ adopt(v); return; }
-    state=newState();
-  }).catch(()=>{
-    try{ const raw=localStorage.getItem(LS_KEY); if(raw){ adopt(JSON.parse(raw)); return; } }catch(e){}
+    let raw=null;
+    try{ raw=localStorage.getItem(LS_KEY); }catch(e){}
+    if(raw){
+      let parsed=null;
+      try{ parsed=JSON.parse(raw); }catch(e){ parsed=null; }
+      if(parsed){ if(adoptGuarded(parsed, "bản lưu cũ (localStorage)")) save(); return; }
+    }
+    if(v){ adoptGuarded(v, "bản lưu tự động"); return; }
     state=newState();
   });
 }
 /* Lưu: bản hiện tại + xoay vòng 6 bản tự động (mốc thời gian) để cứu khi lỡ tay */
 let saveTimer=null, lastBk=0;
 function save(){
+  if(saveBlocked) return;      // đọc dữ liệu đã thất bại — không được ghi đè lên bản gốc
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{
     const snap=JSON.parse(JSON.stringify(state));
@@ -1029,9 +1115,10 @@ let bgCache={};
 function snapshot(){
   const keep=state.floors.map(f=>{ const b={bg:f.bg, bgW:f.bgW, bgH:f.bgH};
     if(f.bg) bgCache[f.id]=b; f.bg=null; return b; });
-  const s=JSON.stringify(state);
-  state.floors.forEach((f,i)=>{ f.bg=keep[i].bg; });
-  return s;
+  // try/finally BẮT BUỘC: stringify ném (hết bộ nhớ, state phình…) mà không trả bg lại
+  // thì state sống mất sạch ảnh nền của mọi tầng, và lần save() kế tiếp ghi luôn xuống đĩa.
+  try{ return JSON.stringify(state); }
+  finally{ state.floors.forEach((f,i)=>{ f.bg=keep[i].bg; }); }
 }
 function applySnap(s){
   state=JSON.parse(s);
@@ -1146,12 +1233,11 @@ function addSwitchAt(w){
       if(inZone.length) cids=inZone.slice(0,3);
       else if(z.lights.length){
         const c=addCircuit("Đèn "+z.name, fl);
-        z.lights.forEach(l=>l.circuit=c.id);
-        cids=[c.id];
+        if(c){ z.lights.forEach(l=>l.circuit=c.id); cids=[c.id]; }
       }
     }
     // mã CT… (không dùng "S" — trùng mã đèn rọi S1/S2 trên bản vẽ)
-    const sw={id:"s"+fl.seq++, code:"CT"+(fl.switches.length+1), x:w.x, y:w.y, circuits:cids};
+    const sw={id:"s"+fl.seq++, code:nextCode("CT", fl.switches), x:w.x, y:w.y, circuits:cids};
     fl.switches.push(sw); selSwitch=sw.id; selLights=[];
   });
   showHint("Đã đặt công tắc — chọn cụm nó điều khiển ở bảng bên phải · Esc để xong");
@@ -1633,12 +1719,18 @@ function drawOverlay(){
       const off=isOff(l);
       const rot=l.rot||0;
       const g=svg("g",{transform:`translate(${l.x},${l.y}) rotate(${rot})`,
-        "data-zid":z.id,"data-li":li, class:"lightm", style:"cursor:pointer",
+        "data-zid":z.id,"data-li":li, class:"lightm"+(hov&&!sel?" hov":""), style:"cursor:pointer",
         opacity: off? .35 : 1});
-      if(sel||hov){
-        const hr=Math.max((SYM_SIZE[lamp.type]||0.2)*0.75*P, 12*inv);
-        g.appendChild(svg("circle",{r:hr, fill:sel?C_ACCENT:C_ACCENT, "fill-opacity":sel?".16":".08",
-          stroke:C_ACCENT,"stroke-width":(sel?1.6:1)*inv,"stroke-dasharray":sel?"none":`${3*inv},${3*inv}`}));
+      const hr=Math.max((SYM_SIZE[lamp.type]||0.2)*0.75*P, 12*inv);
+      if(sel){
+        g.appendChild(svg("circle",{r:hr, fill:C_ACCENT, "fill-opacity":".16",
+          stroke:C_ACCENT,"stroke-width":1.6*inv,"stroke-dasharray":"none"}));
+      }else if(exportInv==null){
+        // Vòng hover vẽ SẴN nhưng ẩn, bật bằng class .hov — trước đây mỗi lần rê chuột qua
+        // một đèn là render() dựng lại toàn bộ overlay (67 đèn × mọi lớp) nên bị giật.
+        g.appendChild(svg("circle",{r:hr, fill:C_ACCENT, "fill-opacity":".08",
+          stroke:C_ACCENT,"stroke-width":1*inv,"stroke-dasharray":`${3*inv},${3*inv}`,
+          class:"hovr", display:"none", "pointer-events":"none"}));
       }
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
@@ -2127,8 +2219,10 @@ window.addEventListener("pointercancel", cancelDrag);
 
 vp.addEventListener("pointerdown", e=>{
   // các UI nổi trên canvas: KHÔNG được coi là thao tác vẽ — nếu không renderAll() sẽ
-  // thay DOM và nuốt mất sự kiện click của chính nút vừa bấm
-  if(e.target.closest("#zoombar,#scaleTag,#selChip,#floorBar,#sceneBar,#bgPop,#hint,#onboard")) return;
+  // thay DOM và nuốt mất sự kiện click của chính nút vừa bấm.
+  // Dùng CLASS .uifloat thay vì liệt kê id: danh sách id đã quên 2 lần (floorBar, sceneBar),
+  // mỗi lần quên là một nút "bấm không có tác dụng". Thêm UI nổi mới → chỉ cần gắn class.
+  if(e.target.closest(".uifloat")) return;
   if(drag) cancelDrag(); // drag treo từ trước không được phép sống qua cú bấm mới
   const w=screenToWorld(e.clientX,e.clientY);
 
@@ -2211,11 +2305,19 @@ vp.addEventListener("pointerdown", e=>{
 });
 
 window.addEventListener("pointermove", e=>{
-  // hover highlight
+  // hover highlight — chỉ đổi class, KHÔNG render() lại overlay.
+  // Viết theo kiểu tự chữa (so sánh phần tử đang bật với phần tử cần bật) nên vẫn đúng
+  // sau mỗi lần overlay được dựng lại vì lý do khác.
   if(!drag && tool==="select"){
     const hit=hitLight(e.target);
-    const same = (hit&&hoverLight&&hit.zid===hoverLight.zid&&hit.li===hoverLight.li)||(!hit&&!hoverLight);
-    if(!same){ hoverLight=hit; render(); }
+    const ov=$("#overlay");
+    const dangBat=ov.querySelector(".lightm.hov");
+    const canBat=hit? ov.querySelector(`.lightm[data-zid="${hit.zid}"][data-li="${hit.li}"]`) : null;
+    if(dangBat!==canBat){
+      if(dangBat) dangBat.classList.remove("hov");
+      if(canBat) canBat.classList.add("hov");
+    }
+    hoverLight=hit;
   }
   if(!drag) return;
   // pointerup bị nuốt (Alt+Tab giữa drag...): kết thúc drag như một cú nhả chuột bình thường
@@ -2648,6 +2750,15 @@ function renderCircuitList(z){
     ed.title="Đổi tên cụm"; ed.onclick=doRename;
     el.appendChild(ed);
     el.querySelector(".cnm").ondblclick=doRename;
+    // Xoá cụm: đèn KHÔNG mất, chỉ trở về "chưa gán cụm". Cần có để đòi lại chữ cái khi cạn 26.
+    const cdel=document.createElement("button"); cdel.className="ciredit"; cdel.textContent="✕";
+    cdel.title="Xoá cụm "+c.key+" — đèn giữ nguyên, chỉ bỏ gán cụm";
+    cdel.onclick=ev=>{ ev.stopPropagation();
+      const tong=fl.zones.reduce((s,zz)=>s+zz.lights.filter(l=>l.circuit===c.id).length,0);
+      if(!confirm(`Xoá cụm ${c.key} · ${c.name}?\n${tong} đèn sẽ trở về “chưa gán cụm” (đèn không bị xoá).`)) return;
+      mutate(()=>deleteCircuit(c.id, fl));
+      toast(`Đã xoá cụm ${c.key} — Ctrl+Z để hoàn tác`); };
+    el.appendChild(cdel);
     const gp=document.createElement("button"); gp.className="gp"+(off?"":" on");
     gp.title=off?"Đang tắt — bấm bật cụm":"Đang bật — bấm tắt cụm";
     gp.onclick=ev=>{ ev.stopPropagation(); mutate(()=>{
@@ -2664,6 +2775,23 @@ function renderCircuitList(z){
     el.innerHTML=`<i style="background:#D8D0C2"></i><div class="d"><b>Chưa gán cụm</b>
       <small>${unset.length} đèn — chọn rồi gán ở bảng “Đèn đang chọn”</small></div>`;
     el.onclick=()=>{ selSwitch=null; selLights=unset.map(o=>({zid:z.id, li:o.li})); renderAll(); };
+    box.appendChild(el);
+  }
+  // Cụm KHÔNG còn đèn nào trên cả tầng: vô hình trên bản vẽ và trong danh sách theo khu vực,
+  // nhưng vẫn chiếm chữ cái và vẫn in ra hồ sơ. Hiện ở đây để dọn được.
+  const rong=emptyCircuits(fl);
+  if(rong.length){
+    const el=document.createElement("div"); el.className="cir none";
+    el.style.cssText="opacity:.7;cursor:default";
+    el.innerHTML=`<i style="background:#D8D0C2"></i><div class="d"><b>Cụm rỗng</b>
+      <small>${rong.map(c=>escapeHtml(c.key+"·"+c.name)).join(", ")} — không còn đèn nào</small></div>`;
+    const del=document.createElement("button");
+    del.className="ciredit"; del.textContent="✕";
+    del.title="Xoá "+rong.length+" cụm rỗng — đòi lại chữ cái cho cụm mới";
+    del.onclick=ev=>{ ev.stopPropagation();
+      mutate(()=>{ rong.forEach(c=>deleteCircuit(c.id, fl)); });
+      toast(`Đã xoá ${rong.length} cụm rỗng — Ctrl+Z để hoàn tác`); };
+    el.appendChild(del);
     box.appendChild(el);
   }
 }
@@ -2709,7 +2837,7 @@ function refreshSwitchPanel(){
   p.querySelector("#swPress").onclick=()=>pressSwitch(sw.id);
   p.querySelector("#swDel").onclick=()=>deleteSwitch(sw.id);
   p.querySelector("#swAddC").onclick=()=>
-    mutate(()=>{ const c=addCircuit(null, fl); sw.circuits=[...(sw.circuits||[]), c.id]; });
+    mutate(()=>{ const c=addCircuit(null, fl); if(c) sw.circuits=[...(sw.circuits||[]), c.id]; });
 }
 function refreshRight(){
   refreshSwitchPanel();
@@ -2876,8 +3004,8 @@ function buildWallbox(wi){
     const items=selItems(); if(!items.length) return;
     const v=b.dataset.cir;
     if(v==="__new"){
-      let key=""; mutate(()=>{ const c=addCircuit(); key=c.key; items.forEach(({l})=>l.circuit=c.id); });
-      toast(`Đã tách ${items.length} đèn thành cụm ${key} — đổi tên ở mục “Cụm điều khiển” nếu cần`);
+      let key=""; mutate(()=>{ const c=addCircuit(); if(!c) return; key=c.key; items.forEach(({l})=>l.circuit=c.id); });
+      if(key) toast(`Đã tách ${items.length} đèn thành cụm ${key} — đổi tên ở mục “Cụm điều khiển” nếu cần`);
       return;
     }
     mutate(()=>{ items.forEach(({l})=>{ if(v) l.circuit=v; else delete l.circuit; }); });
@@ -3421,10 +3549,20 @@ $("#projFile").addEventListener("change", e=>{
       const raw=JSON.parse(rd.result);
       if(!raw || (!raw.floors && !raw.zones)) throw 0;
       if(!confirm("Mở dự án này? Dự án đang làm sẽ được thay thế (hãy Lưu file trước nếu cần).")) return;
-      bgCache={}; adopt(raw); hist=[]; future=[]; selLights=[]; draft=null;
+      // bgCache phải xoá TRƯỚC adopt (id tầng của file mới trùng id tầng cũ → lẫn ảnh nền),
+      // nhưng nếu adopt ném thì phải TRẢ LẠI: nếu không, dự án đang làm mất sạch ảnh nền
+      // dù người dùng chỉ mới lỡ chọn nhầm một file hỏng.
+      const bgCu=bgCache, stateCu=state;
+      bgCache={};
+      try{ adopt(raw); }
+      catch(err2){ bgCache=bgCu; state=stateCu; throw err2; }
+      hist=[]; future=[]; selLights=[]; draft=null;
       save(); renderAll(); fitView();
       toast(`Đã mở “${state.projectName}” — ${state.floors.length} tầng`);
-    }catch(err){ toast("File không hợp lệ (cần file .inexlight)"); }
+    }catch(err){
+      console.error("Mở file lỗi:", err);
+      toast("Không mở được file — dự án đang làm vẫn nguyên vẹn");
+    }
   };
   rd.readAsText(f);
 });

@@ -1,0 +1,9 @@
+# Dữ liệu dự án THẬT của khách — TUYỆT ĐỐI không đẩy lên repo public.
+# File .inexlight chứa tên khách, mặt bằng (ảnh base64) và toàn bộ thiết kế.
+*.inexlight
+_baseline.json
+_*.json
+
+# Rác hệ thống
+Thumbs.db
+.DS_Store
