@@ -1,0 +1,3707 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InEx Lighting Planner — Bố trí đèn trên mặt bằng</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root{
+    --accent:#C78F57; --accent-dark:#B08040; --accent-soft:#B19777;
+    --ink:#272727; --ink-2:#6E665A; --ink-3:#8A8175;
+    --bg:#FFFFFF; --cream:#F5F1EA; --line:#E7DFD3;
+    --glow:#F2C879;
+    --danger:#B4553C;
+    --shadow:0 1px 3px rgba(39,39,39,.06),0 6px 24px rgba(39,39,39,.06);
+    --serif:'Space Grotesk','Segoe UI',system-ui,sans-serif;  /* display: tiêu đề + số nổi bật */
+    --body:'Inter','Segoe UI',system-ui,sans-serif;
+    --label:'Inter','Segoe UI',system-ui,sans-serif;
+    --mono:'JetBrains Mono',Consolas,monospace;               /* số liệu kỹ thuật */
+  }
+  *{box-sizing:border-box}
+  /* Focus ring cho điều hướng bàn phím — hiện rõ đang ở nút/ô nào (không hiện khi click chuột) */
+  :focus{outline:none}
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+  textarea:focus-visible, [tabindex]:focus-visible, .tool:focus-visible, .cchip:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px; border-radius:6px;
+  }
+  input:focus-visible, select:focus-visible, textarea:focus-visible{outline-offset:0}
+  /* Tôn trọng người tắt hiệu ứng chuyển động */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{transition-duration:.01ms!important; animation-duration:.01ms!important}
+  }
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--cream); color:var(--ink);
+    font-family:var(--body); font-size:14px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .eyebrow,.btn,.tool,label,th,.tag,.kbd{font-family:var(--label)}
+  h1,h2,h3,.serif{font-family:var(--serif); font-weight:500; letter-spacing:.01em}
+  input[type=number]{font-family:var(--mono); font-size:12.5px}
+
+  /* ---------- Layout ---------- */
+  #app{display:flex; flex-direction:column; height:100vh; overflow:hidden}
+  header{
+    display:flex; align-items:center; gap:16px;
+    padding:12px 20px; background:var(--bg); border-bottom:1px solid var(--line);
+    z-index:20;
+  }
+  .brand{display:flex; align-items:center; gap:14px}
+  .wordmark{font-family:var(--serif); font-size:18px; letter-spacing:-.02em; font-weight:700;
+    color:var(--ink); text-decoration:none; white-space:nowrap; transition:opacity .15s}
+  .wordmark:hover{opacity:.72}
+  .wordmark b{font-weight:700; color:var(--accent-dark)}
+  .vdiv{width:1px; height:22px; background:var(--line)}
+  .proj-name{
+    font-family:var(--serif); font-size:15px; color:var(--ink); border:none;
+    background:transparent; border-bottom:1px dashed var(--line); padding:2px 4px; min-width:180px;
+  }
+  .proj-name:focus{outline:none; border-bottom-color:var(--accent)}
+  header .spacer{flex:1}
+  .hbtns{display:flex; gap:7px; flex-wrap:wrap; align-items:center}
+  .hsep{width:1px; align-self:stretch; min-height:22px; background:var(--line); margin:0 2px}
+  .histbtns{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+  .histbtns button{border:none; background:var(--bg); padding:6px 11px; cursor:pointer;
+    font-size:14px; color:var(--ink-2)}
+  .histbtns button:hover{background:var(--cream); color:var(--ink)}
+  .histbtns button:disabled{opacity:.3; cursor:default}
+  .histbtns button+button{border-left:1px solid var(--line)}
+
+  main{flex:1; display:flex; min-height:0; position:relative}
+  aside{background:var(--bg); flex-shrink:0}
+  #left{
+    width:58px; border-right:1px solid var(--line); padding:10px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:7px;
+  }
+  #right{border-left:1px solid var(--line); width:294px; overflow-y:auto}
+  .railbtn{
+    width:40px; height:40px; border:1px solid var(--line); border-radius:10px;
+    background:var(--bg); cursor:pointer; color:var(--ink-2);
+    display:flex; align-items:center; justify-content:center; transition:all .15s;
+  }
+  .railbtn:hover{border-color:var(--accent); color:var(--accent-dark)}
+  .railbtn .ico{width:20px; height:20px}
+  .railsep{width:24px; height:1px; background:var(--line); margin:2px 0}
+  .railtools{display:flex; flex-direction:column; gap:6px}
+  #bgPop{
+    position:absolute; left:66px; top:12px; width:242px; z-index:30;
+    background:var(--bg); border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 4px 20px rgba(39,39,39,.16); padding:14px;
+  }
+  #rightToggle{
+    position:absolute; right:0; top:50%; transform:translateY(-50%); z-index:14;
+    width:19px; height:58px; border:1px solid var(--line); border-right:none;
+    border-radius:9px 0 0 9px; background:var(--bg); cursor:pointer;
+    color:var(--ink-3); font-size:12px; padding:0;
+  }
+  #rightToggle:hover{color:var(--accent-dark)}
+  .panel-sec{padding:13px 14px; border-bottom:1px solid var(--line)}
+  /* khối thu gọn được — panel phải gọn, anh mở đúng thứ cần */
+  details.sec{border-bottom:1px solid var(--line)}
+  details.sec>summary{list-style:none; cursor:pointer; padding:11px 14px;
+    display:flex; align-items:center; gap:8px; user-select:none;
+    font-family:var(--label); text-transform:uppercase; letter-spacing:.08em;
+    font-size:11px; font-weight:700; color:var(--ink-2)}
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary:hover{background:var(--cream)}
+  details.sec>summary::after{content:"›"; margin-left:auto; color:var(--ink-3);
+    font-size:15px; transform:rotate(90deg); transition:transform .15s}
+  details.sec:not([open])>summary::after{transform:rotate(0deg)}
+  details.sec>summary .n{background:var(--cream); border:1px solid var(--line);
+    border-radius:20px; padding:0 7px; font-size:10px; color:var(--ink-2)}
+  details.sec:not([open])>summary .n{background:var(--bg)}
+  .secbody{padding:2px 14px 14px}
+  /* khối ngữ cảnh (đèn/công tắc đang chọn) — nổi bật trên cùng */
+  .ctxsec{background:#FBF7F0; border-bottom:1px solid var(--line);
+    box-shadow:inset 3px 0 0 var(--accent)}
+  .panel-sec:last-child{border-bottom:none}
+  /* Phân cấp chữ: tiêu đề mục (eyebrow) đậm rõ > nhãn field nhỏ nhạt > giá trị nổi bật */
+  .eyebrow{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
+    color:var(--ink-2); margin:0 0 10px; display:flex; align-items:center; gap:8px}
+  .eyebrow .n{background:var(--cream); border:1px solid var(--line); border-radius:20px;
+    padding:0 7px; font-size:10px; color:var(--ink-2)}
+
+  #viewport{
+    flex:1; position:relative; overflow:hidden; background:
+      repeating-conic-gradient(#efe9df 0% 25%, #f5f1ea 0% 50%) 0 0 / 22px 22px;
+    min-width:0; user-select:none; touch-action:none;
+  }
+  #viewport.c-grab{cursor:grab} #viewport.c-grabbing{cursor:grabbing}
+  #viewport.c-cross{cursor:crosshair}
+  #stage{position:absolute; top:0; left:0; transform-origin:0 0}
+  #bg{display:block; user-select:none; -webkit-user-drag:none; pointer-events:none}
+  #overlay{position:absolute; top:0; left:0; overflow:visible}
+
+  /* Onboarding — hướng dẫn khởi đầu khi canvas trống */
+  #onboard{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    z-index:13; pointer-events:none}
+  .ob-card{background:var(--bg); border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 8px 40px rgba(39,39,39,.10); padding:26px 30px; max-width:400px;
+    pointer-events:auto; text-align:left}
+  .ob-eyebrow{font-family:var(--label); text-transform:uppercase; letter-spacing:.14em;
+    font-size:10px; font-weight:700; color:var(--accent-dark); margin-bottom:6px}
+  .ob-card h2{font-family:var(--serif); font-weight:600; font-size:21px; margin:0 0 16px; color:var(--ink)}
+  .ob-steps{list-style:none; margin:0 0 20px; padding:0; display:flex; flex-direction:column; gap:11px}
+  .ob-steps li{display:flex; align-items:center; gap:11px; font-size:13.5px; color:var(--ink-2)}
+  .ob-steps b{width:22px; height:22px; border-radius:50%; background:var(--cream);
+    border:1px solid var(--line); color:var(--accent-dark); font-family:var(--mono);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0}
+  .ob-steps .kbd{margin-left:auto}
+  .ob-actions{display:flex; gap:8px}
+  #hint{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+    background:rgba(39,39,39,.86); color:#fff; font-family:var(--label);
+    letter-spacing:.04em; font-size:12px; padding:8px 16px; border-radius:24px;
+    pointer-events:none; opacity:0; transition:opacity .2s; z-index:15; text-align:center;
+    max-width:80%;
+  }
+  #hint.show{opacity:1}
+  #zoombar{position:absolute; right:14px; bottom:14px; display:flex; gap:6px; z-index:14}
+  /* thanh tầng — mỗi tầng một mặt bằng riêng */
+  #floorBar{position:absolute; left:14px; top:14px; z-index:16; display:flex; gap:5px;
+    align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:4px; box-shadow:var(--shadow); max-width:calc(100% - 28px); overflow-x:auto}
+  #floorBar .fl{border:none; background:transparent; cursor:pointer; border-radius:7px;
+    padding:5px 10px; font-family:var(--label); font-size:11.5px; font-weight:600;
+    color:var(--ink-2); white-space:nowrap; display:flex; align-items:center; gap:6px}
+  #floorBar .fl:hover{background:var(--cream); color:var(--ink)}
+  #floorBar .fl.on{background:var(--accent); color:#fff}
+  #floorBar .fl .fx{opacity:0; font-size:11px; margin-right:-3px}
+  #floorBar .fl:hover .fx{opacity:.65}
+  #floorBar .fl .fx:hover{opacity:1}
+  #floorBar .fl .dot{width:5px; height:5px; border-radius:50%; background:var(--danger); opacity:.55}
+  #floorBar .fl.on .dot{background:#fff; opacity:.8}
+  #floorBar .fladd{border:1px dashed var(--line); background:transparent; cursor:pointer;
+    border-radius:7px; width:28px; height:26px; color:var(--ink-3); font-size:14px; flex-shrink:0}
+  #floorBar .fladd:hover{border-color:var(--accent); color:var(--accent-dark)}
+  /* dải kịch bản — khách bấm xem từng cảnh sáng */
+  #sceneBar{position:absolute; left:14px; bottom:52px; z-index:15; display:flex; gap:5px;
+    align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:4px; box-shadow:var(--shadow); max-width:calc(100% - 28px); overflow-x:auto}
+  #sceneBar .sclbl{font-family:var(--label); font-size:9px; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3); padding:0 6px 0 4px; white-space:nowrap}
+  #sceneBar .sc{border:1px solid var(--line); background:var(--bg); cursor:pointer;
+    border-radius:7px; padding:5px 10px; font-family:var(--label); font-size:11.5px;
+    font-weight:600; color:var(--ink-2); white-space:nowrap; display:flex; align-items:center; gap:6px}
+  #sceneBar .sc:hover{border-color:var(--accent-soft); color:var(--ink)}
+  #sceneBar .sc.on{background:var(--accent); border-color:var(--accent); color:#fff}
+  #sceneBar .sc .sx{opacity:0; font-size:10px}
+  #sceneBar .sc:hover .sx{opacity:.6}
+  #sceneBar .sc .sx:hover{opacity:1}
+  #sceneBar .scadd{border:1px dashed var(--line); background:transparent; cursor:pointer;
+    border-radius:7px; padding:5px 9px; color:var(--ink-3); font-family:var(--label);
+    font-size:11px; font-weight:600; white-space:nowrap}
+  #sceneBar .scadd:hover{border-color:var(--accent); color:var(--accent-dark)}
+  #scaleTag{
+    position:absolute; left:14px; bottom:14px; z-index:14;
+    background:var(--bg); border:1px solid var(--line); border-radius:8px;
+    padding:6px 12px; font-family:var(--label); font-size:11.5px; letter-spacing:.03em;
+    box-shadow:var(--shadow);
+  }
+  #scaleTag b{color:var(--accent-dark); font-weight:500}
+  #scaleTag.warn b{color:var(--danger)}
+  #selChip{
+    position:absolute; bottom:56px; left:50%; transform:translateX(-50%); z-index:16;
+    background:var(--bg); border:1px solid var(--accent-soft); border-radius:26px;
+    box-shadow:0 4px 20px rgba(39,39,39,.18); display:flex; align-items:center; gap:3px;
+    padding:6px 8px 6px 16px; font-family:var(--label); font-size:12.5px; letter-spacing:.04em;
+  }
+  #selChip .cnt{color:var(--accent-dark); margin-right:4px}
+  #selChip button{border:none; background:transparent; cursor:pointer; padding:5px 10px;
+    border-radius:16px; font-family:var(--label); font-size:11.5px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-2)}
+  #selChip button:hover{background:var(--cream); color:var(--ink)}
+  #selChip button.dgr:hover{color:var(--danger)}
+  #selChip .sep{width:1px; height:16px; background:var(--line); margin:0 2px}
+
+  /* ---------- Controls ---------- */
+  .btn{
+    font-family:var(--label); text-transform:uppercase; letter-spacing:.03em; font-size:11px;
+    font-weight:600;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+    padding:8px 13px; border-radius:8px; cursor:pointer; transition:all .15s;
+    display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--accent); color:var(--accent-dark)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btn.primary:hover{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff}
+  .btn.ghost{border-color:transparent; background:transparent; color:var(--ink-2)}
+  .btn.ghost:hover{background:var(--cream); color:var(--ink)}
+  .btn.sm{padding:5px 9px; font-size:10.5px}
+  .btn.danger:hover{border-color:var(--danger); color:var(--danger)}
+  .btn:disabled{opacity:.4; cursor:not-allowed}
+
+  .tool{
+    position:relative; width:40px; height:40px; padding:0; border-radius:10px;
+    border:1px solid var(--line); background:var(--bg); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-2); transition:all .15s;
+  }
+  .tool:hover{border-color:var(--accent-soft); color:var(--accent-dark)}
+  .tool.active{border-color:var(--accent); background:#FBF7F0; color:var(--accent-dark);
+    box-shadow:inset 0 0 0 1px var(--accent)}
+  .tool .ico{width:19px; height:19px; flex-shrink:0}
+  .kbd{background:var(--cream); border:1px solid var(--line); border-radius:5px;
+    font-size:10px; padding:1px 6px; color:var(--ink-2); flex-shrink:0}
+  .tool .kbd{position:absolute; bottom:-5px; right:-5px; font-size:8px; padding:0 4px;
+    background:var(--bg); line-height:1.5}
+
+  label{display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:.05em;
+    font-weight:500; color:var(--ink-3); margin:10px 0 4px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis}
+  input[type=text],input[type=number],input[type=url],select,textarea{
+    width:100%; height:34px; padding:6px 10px; border:1px solid var(--line); border-radius:8px;
+    font-family:var(--body); font-size:13px; color:var(--ink); background:var(--bg);
+  }
+  input:focus,select:focus{outline:none; border-color:var(--accent)}
+  .row{display:flex; gap:10px}
+  .row>div{flex:1}
+  .inline{display:flex; align-items:center; gap:8px}
+  input[type=range]{width:100%; accent-color:var(--accent)}
+  .check{display:flex; align-items:center; gap:8px; font-size:13px; margin-top:10px; cursor:pointer}
+  .check input{accent-color:var(--accent); width:15px; height:15px; cursor:pointer}
+  .seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; height:34px}
+  .seg button{
+    flex:1; border:none; background:var(--bg); padding:0 4px; cursor:pointer;
+    font-family:var(--label); text-transform:uppercase; letter-spacing:.03em;
+    font-size:10.5px; font-weight:600; color:var(--ink-2); white-space:nowrap;
+  }
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--accent); color:#fff}
+  .wlock{width:30px; height:34px; border:1px solid var(--line); border-radius:8px;
+    background:var(--bg); cursor:pointer; font-size:13px; padding:0; flex-shrink:0;
+    filter:grayscale(1); opacity:.6}
+  .wlock:hover{opacity:.9}
+  .wlock.on{border-color:var(--accent); background:#FBF7F0; filter:none; opacity:1}
+
+  /* zone list */
+  .zlist{display:flex; flex-direction:column; gap:6px}
+  .zitem{
+    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+    border:1px solid var(--line); cursor:pointer; background:var(--bg); transition:all .12s;
+  }
+  .zitem:hover{border-color:var(--accent-soft)}
+  .zitem.active{border-color:var(--accent); background:#FBF7F0}
+  .zitem .sw{width:12px; height:12px; border-radius:3px; flex-shrink:0}
+  .zitem .nm{flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .zitem .meta{font-family:var(--label); font-size:10px; color:var(--ink-3); letter-spacing:.03em}
+  .zitem .zx{border:none; background:transparent; color:var(--ink-3); cursor:pointer;
+    padding:0 4px; font-size:13px; opacity:0}
+  .zitem:hover .zx{opacity:1}
+  .zitem .zx:hover{color:var(--danger)}
+  .empty{color:var(--ink-3); font-size:12.5px; font-style:italic; text-align:center; padding:14px 6px}
+
+  /* light groups in zone */
+  .grp{display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px;
+    border:1px solid var(--line); margin-bottom:6px; cursor:pointer; transition:all .12s}
+  .grp:hover{border-color:var(--accent-soft)}
+  .grp.on{border-color:var(--accent); background:#FBF7F0}
+  .grp .th{width:30px; height:30px; border-radius:6px; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--line); background:var(--cream)}
+  .grp svg.th{padding:4px; color:var(--ink-2)}
+  .sym{width:26px; height:26px; color:var(--ink-2); flex-shrink:0}
+  .grp .sym{width:22px; height:22px}
+  .grp .th{width:26px; height:26px}
+  .lp-item .th{width:34px; height:34px}
+  .grp .d{flex:1; min-width:0}
+  .grp .d b{font-weight:normal; font-size:12.5px; display:block; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  .grp .d small{font-family:var(--label); font-size:10px; font-weight:400; color:var(--ink-3); letter-spacing:.01em}
+  .code{font-family:var(--mono); font-size:9.5px; background:var(--cream);
+    border:1px solid var(--line); border-radius:4px; padding:0 4px; margin-right:5px;
+    color:var(--ink-2); display:inline-block; line-height:1.5; vertical-align:1px}
+  .grp.off{opacity:.55}
+  /* công tắc bật/tắt kịch bản: pill trượt kiểu iOS — vùng chạm ≥24px cao (padding trong suốt) */
+  .gp{width:34px; height:26px; border:none; background:transparent; position:relative;
+    padding:0; cursor:pointer; flex-shrink:0}
+  .gp::before{content:""; position:absolute; top:50%; left:0; transform:translateY(-50%);
+    width:31px; height:18px; border-radius:18px; border:1px solid var(--line);
+    background:#D8D0C2; transition:background .15s, border-color .15s}
+  .gp::after{content:""; position:absolute; top:50%; left:2px; transform:translateY(-50%);
+    width:13px; height:13px; border-radius:50%; background:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,.18); transition:left .15s}
+  .gp.on::before{background:var(--accent); border-color:var(--accent)}
+  .gp.on::after{left:16px}
+  .gp.mix::before{background:linear-gradient(90deg, var(--accent) 0 50%, #D8D0C2 50% 100%);
+    border-color:var(--accent-soft)}
+  .gp.mix::after{left:9px}
+  /* tổng hợp dự án: nhóm theo tầng, mỗi khu vực 1 khối riêng */
+  .sumf{display:flex; justify-content:space-between; align-items:center; cursor:pointer;
+    font-family:var(--label); font-size:10px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink-3); padding:7px 2px 5px; margin-top:4px;
+    border-bottom:1px solid var(--line)}
+  .sumf:hover{color:var(--accent-dark)}
+  .sumf.on{color:var(--accent-dark)}
+  .sumf .fmeta{font-family:var(--mono); font-weight:400; letter-spacing:0}
+  .sumf+.sumz{margin-top:7px}
+  .sumz{border:1px solid var(--line); border-radius:10px; margin-bottom:8px;
+    overflow:hidden; background:var(--bg)}
+  .sumz-h{display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--cream)}
+  .sumz-h b{font-weight:600; font-size:12.5px; flex:1; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  .sumz-h .sw{width:10px; height:10px; border-radius:3px; flex-shrink:0}
+  .sumz-h .meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-2); white-space:nowrap}
+  .sumz-r{display:flex; align-items:center; gap:6px; padding:5px 10px;
+    border-top:1px solid #F0EAE0; font-size:12px}
+  .sumz-r .th{width:18px; height:18px; border-radius:4px; object-fit:cover; flex-shrink:0}
+  .sumz-r .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .sumz-r .n{font-family:var(--mono); font-size:11px; color:var(--accent-dark)}
+  .sumz-r .wv{font-family:var(--mono); font-size:11px; color:var(--ink-2);
+    min-width:44px; text-align:right}
+  .sumz-r.off{opacity:.5}
+  .sumz-tot{display:flex; justify-content:space-between; padding:8px 10px;
+    font-family:var(--mono); font-size:11.5px; color:var(--ink);
+    border-top:2px solid var(--line)}
+  .grp .cnt{font-family:var(--serif); font-size:17px; color:var(--accent-dark)}
+  .grp .gx{border:none; background:transparent; color:var(--ink-3); cursor:pointer; font-size:12px;
+    min-width:24px; height:24px; border-radius:6px; flex-shrink:0}
+  .grp .gx:hover{background:var(--cream)}
+  .cir{display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:9px;
+    border:1px solid var(--line); margin-bottom:6px; cursor:pointer; transition:all .12s}
+  .cir:hover{border-color:var(--accent-soft)}
+  .cir.off{opacity:.55}
+  .cir.none{border-style:dashed}
+  .cir>i{width:9px; height:9px; border-radius:3px; flex-shrink:0}
+  .cir .ckey{width:19px; height:19px; border:1.5px solid; border-radius:5px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:11px; font-weight:700}
+  .cir .cnm{cursor:text}
+  .cir .cnm:hover{text-decoration:underline dotted}
+  .cir .ciredit{border:none;background:transparent;color:var(--ink-3);cursor:pointer;
+    font-size:12px;min-width:26px;height:26px;border-radius:6px;flex-shrink:0;opacity:.5}
+  .cir:hover .ciredit{opacity:1}
+  .cir .ciredit:hover{background:var(--cream);color:var(--accent-dark)}
+  /* chip gán cụm nhanh trong "đèn đang chọn" */
+  .chipwrap{display:flex; flex-wrap:wrap; gap:5px; align-items:center}
+  .cchip{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line);
+    background:var(--bg); border-radius:7px; padding:4px 9px; cursor:pointer;
+    font-family:var(--mono); font-size:12px; font-weight:600; color:var(--ink-2)}
+  .cchip i{width:8px; height:8px; border-radius:2px; background:var(--cc,#ccc)}
+  .cchip:hover{border-color:var(--cc,var(--accent-soft))}
+  .cchip.on{border-color:var(--cc,var(--accent)); background:#FBF3E8; color:var(--ink);
+    box-shadow:inset 0 0 0 1px var(--cc,var(--accent))}
+  .cchip.new{font-family:var(--label); font-weight:600; color:var(--accent-dark); border-style:dashed}
+  .chipnote{font-family:var(--label); font-size:9.5px; color:var(--ink-3); font-style:italic}
+  .cir .d{flex:1; min-width:0}
+  .cir .d b{font-weight:normal; font-size:12.5px; display:block; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  .cir .d small{font-family:var(--label); font-size:10px; color:var(--ink-3)}
+  .cirbadge{display:flex; align-items:center; gap:4px; flex-shrink:0; max-width:88px;
+    font-family:var(--label); font-size:9.5px; font-weight:600; color:var(--ink-2);
+    background:var(--cream); border:1px solid var(--line); border-radius:5px; padding:2px 6px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .cirbadge i{width:7px; height:7px; border-radius:2px; flex-shrink:0}
+  .cirbadge.none{color:var(--ink-3); font-weight:400; font-style:italic; background:transparent}
+  .grp .gx:hover{color:var(--danger)}
+
+  /* result cards */
+  .kpis{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:6px}
+  .kpi{background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:8px 10px}
+  .kpi .v{font-family:var(--serif); font-weight:500; font-size:18px; color:var(--ink); line-height:1.1}
+  .kpi .v small{font-size:12px; color:var(--ink-2)}
+  .kpi .k{font-family:var(--label); text-transform:uppercase; letter-spacing:.06em;
+    font-size:9px; font-weight:500; color:var(--ink-3); margin-top:3px}
+  .kpi.hero{grid-column:span 2; background:#FBF3E8; border-color:#EAD9BF}
+  .kpi.hero .v{font-size:22px; color:var(--accent-dark)}
+  .miniflag{font-family:var(--label); font-size:10.5px; letter-spacing:.03em; padding:6px 10px;
+    border-radius:7px; margin-top:8px; display:flex; gap:7px; align-items:flex-start}
+  .miniflag.ok{background:#EEF3EA; color:#4B6B39}
+  .miniflag.warn{background:#FBEFEA; color:var(--danger)}
+  .wallbox{background:var(--cream); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; margin-top:10px; font-size:12.5px}
+  .wallbox b{color:var(--accent-dark); font-weight:normal; font-family:var(--serif); font-size:15px}
+
+  .hidden{display:none!important}
+  .muted{color:var(--ink-3)}
+  @media (max-width:1100px){ #right{width:262px} }
+  @media (max-width:840px){ #right{display:none} }
+
+  /* modal */
+  .modal-bg{position:fixed; inset:0; background:rgba(39,39,39,.4); z-index:50;
+    display:flex; align-items:center; justify-content:center; padding:20px}
+  .modal{background:var(--bg); border-radius:14px; box-shadow:var(--shadow); width:100%;
+    max-width:460px; max-height:88vh; overflow:auto}
+  .modal h3{margin:0; padding:16px 20px; border-bottom:1px solid var(--line); font-size:17px; font-weight:600}
+  .modal .body{padding:18px 20px}
+  .modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px}
+  .lp-item{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--line);
+    border-radius:9px; margin-bottom:7px; cursor:pointer}
+  .lp-item:hover{border-color:var(--accent-soft)}
+  .lp-item.sel{border-color:var(--accent); background:#FBF7F0}
+  .lp-item .d{flex:1; min-width:0}
+  .lp-item .d b{font-family:var(--body); font-weight:normal; font-size:13.5px}
+  .lp-item .d small{display:block; font-family:var(--label); font-size:10.5px; color:var(--ink-3); letter-spacing:.03em}
+  .lp-item .th{width:38px; height:38px; border-radius:7px; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--line); background:var(--cream)}
+  .lp-item svg.th{padding:6px; color:var(--ink-2)}
+  .lp-item .lk{color:var(--accent-dark); text-decoration:none; font-size:13px; padding:2px 4px}
+  .lp-item .ib{border:none; background:transparent; cursor:pointer; color:var(--ink-3); font-size:12.5px; padding:2px 4px}
+  .lp-item .ib:hover{color:var(--ink)}
+  .lp-item .ib.dgr:hover{color:var(--danger)}
+  .thumbprev{width:56px; height:56px; border-radius:8px; object-fit:cover; border:1px solid var(--line); background:var(--cream)}
+
+  /* toast */
+  #toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:#fff; padding:11px 20px; border-radius:24px; font-family:var(--label);
+    letter-spacing:.04em; font-size:12.5px; opacity:0; pointer-events:none; transition:all .25s; z-index:60}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  /* ---------- Print ---------- */
+  #printArea{display:none}
+  @media print{
+    @page{margin:13mm}
+    #app{display:none!important}
+    #printArea{display:block!important}
+    body{background:#fff; color:var(--ink); font-family:var(--body); -webkit-print-color-adjust:exact; print-color-adjust:exact}
+    /* Đầu trang — cùng nhận diện với UI */
+    .pr-head{display:flex; justify-content:space-between; align-items:flex-end;
+      border-bottom:2px solid var(--accent); padding-bottom:9px; margin-bottom:14px}
+    .pr-head .wm{font-family:var(--serif); font-weight:700; font-size:20px; letter-spacing:-.02em; color:var(--ink)}
+    .pr-head .wm b{color:var(--accent-dark); font-weight:700}
+    .pr-head .sub{font-family:var(--label); text-transform:uppercase; letter-spacing:.12em;
+      font-size:9px; font-weight:600; color:var(--ink-3); margin-top:2px}
+    .pr-head .pj{font-family:var(--serif); font-weight:600; font-size:14px}
+    #printArea .plan{max-width:100%; border:1px solid var(--line); border-radius:6px}
+    #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
+      color:var(--ink); display:flex; align-items:center; gap:8px}
+    #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
+
+    table.pr{width:100%; border-collapse:collapse; font-size:10.5px; font-family:var(--body)}
+    table.pr thead{display:table-header-group}          /* lặp tiêu đề khi sang trang */
+    table.pr tr{break-inside:avoid}
+    table.pr th{font-family:var(--label); text-transform:uppercase; letter-spacing:.04em;
+      font-size:8.5px; font-weight:600; text-align:left; color:var(--ink-2);
+      background:var(--cream); padding:6px 7px; border:1px solid var(--line)}
+    table.pr td{padding:5px 7px; border:1px solid var(--line); vertical-align:middle}
+    table.pr td.num,table.pr th.num{text-align:right; font-family:var(--mono); font-size:10px}
+    table.pr th.num{font-family:var(--label)}
+    table.pr img{width:24px; height:24px; object-fit:cover; border-radius:3px; display:block}
+    /* hàng tiêu đề khu vực — tách bạch, hết lẫn dòng */
+    table.pr tr.zh td{background:#F0EBE2; border-top:1.6px solid var(--accent-soft);
+      padding:6px 7px; font-size:10.5px}
+    table.pr tr.zh .zn{font-family:var(--serif); font-weight:600; font-size:11.5px}
+    table.pr tr.zh .zm{font-family:var(--mono); font-size:9.5px; color:var(--ink-2)}
+    table.pr tr.zh .ok{color:#4B6B39; font-weight:600}
+    table.pr tr.zh .no{color:var(--danger); font-weight:600}
+    table.pr tr.tot td{font-weight:700; background:#FBF3E8; border-top:1.6px solid var(--accent)}
+    .pr-code{font-family:var(--mono); font-size:9.5px; background:#fff;
+      border:1px solid var(--line); border-radius:3px; padding:0 4px}
+    .pr-link{color:var(--accent-dark); font-size:9.5px; word-break:break-all}
+    /* Chú thích cho khách hàng */
+    .pr-note{border:1px solid var(--line); border-radius:6px; padding:10px 12px;
+      background:var(--cream); font-size:10px; line-height:1.65}
+    .pr-note dt{font-weight:600; color:var(--ink); display:inline}
+    .pr-note dd{display:inline; margin:0 0 0 3px; color:var(--ink-2)}
+    .pr-note div{margin-bottom:4px}
+    .pr-foot{margin-top:12px; font-family:var(--label); font-size:8.5px; letter-spacing:.04em;
+      color:var(--ink-3); border-top:1px solid var(--line); padding-top:7px}
+    .pr-floor{break-before:page}                 /* mỗi tầng bắt đầu một trang */
+    .pr-floor:first-of-type{break-before:auto}
+  }
+  /* summary table (screen) */
+  table.tbl{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px}
+  table.tbl th{font-family:var(--label); text-transform:uppercase; letter-spacing:.05em; font-size:9.5px;
+    text-align:left; color:var(--ink-3); padding:7px 6px; border-bottom:1px solid var(--line)}
+  table.tbl td{padding:6px; border-bottom:1px solid var(--line); vertical-align:middle}
+  table.tbl tr.tot td{font-weight:bold; border-top:2px solid var(--line)}
+  table.tbl td.num,table.tbl th.num{text-align:right}
+  table.tbl img.th{width:20px; height:20px; object-fit:cover; border-radius:4px; display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <a class="wordmark" href="https://inexdesign.vn/" target="_blank" rel="noopener" title="inexdesign.vn">InEx <b>Lighting</b></a>
+      <span class="vdiv"></span>
+    </div>
+    <input id="projName" class="proj-name" placeholder="Tên dự án…" value="Dự án chưa đặt tên">
+    <div class="spacer"></div>
+    <div class="hbtns">
+      <div class="histbtns">
+        <button id="btnUndo" title="Hoàn tác (Ctrl+Z)">↶</button>
+        <button id="btnRedo" title="Làm lại (Ctrl+Y)">↷</button>
+      </div>
+      <button class="btn sm" id="btnOpenFile" title="Mở dự án từ file .inexlight">⤒ Mở</button>
+      <input type="file" id="projFile" accept=".inexlight,application/json" class="hidden">
+      <button class="btn sm" id="btnSaveFile" title="Lưu dự án ra file (kèm ảnh nền các tầng)">⤓ Lưu file</button>
+      <button class="btn sm" id="btnRecover" title="Khôi phục dự án từ bản lưu tự động">⟲ Khôi phục</button>
+      <span class="hsep"></span>
+      <button class="btn ghost sm" id="btnReset" title="Nạp dự án mẫu để xem thử">Dự án mẫu</button>
+      <button class="btn ghost sm" id="btnClear" title="Bắt đầu dự án trống — xoá hết tầng, khu vực, đèn hiện tại">Dự án mới</button>
+      <span class="hsep"></span>
+      <button class="btn sm" id="btnPng" title="Xuất bản vẽ ra ảnh PNG">Xuất PNG</button>
+      <button class="btn sm" id="btnCsv" title="Xuất bảng thống kê ra CSV (mở bằng Excel)">Xuất CSV</button>
+      <button class="btn primary sm" id="btnPdf" title="Xuất hồ sơ PDF đầy đủ">Xuất PDF</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT: thanh công cụ icon -->
+    <aside id="left">
+      <button class="railbtn" id="btnBgPop" title="Mặt bằng nền & hiển thị">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 15.5l5-5 4.5 4.5 3-3 4.5 4.5"/><circle cx="9" cy="9.5" r="1.3"/></svg>
+      </button>
+      <div class="railsep"></div>
+      <div id="toolbar" class="railtools">
+        <button class="tool active" data-tool="select" title="Chọn — kéo đèn, quét chọn nhiều (V)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4l14 6-6 2-2 6z"/></svg>
+          <span class="kbd">V</span>
+        </button>
+        <button class="tool" data-tool="calibrate" title="Cân tỉ lệ — vẽ đoạn = số mét (C)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12h16M4 9v6M20 9v6"/></svg>
+          <span class="kbd">C</span>
+        </button>
+        <button class="tool" data-tool="rect" title="Khu vực chữ nhật — kéo tạo phòng (R)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+          <span class="kbd">R</span>
+        </button>
+        <button class="tool" data-tool="poly" title="Khu vực đa giác — click đỉnh, Enter đóng (P)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 4l8 5-3 9H7L4 9z"/></svg>
+          <span class="kbd">P</span>
+        </button>
+        <button class="tool" data-tool="light" title="Đặt đèn — click liên tục, Esc xong (L)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M6 6l1.5 1.5M18 18l-1.5-1.5M18 6l-1.5 1.5M6 18l1.5-1.5"/></svg>
+          <span class="kbd">L</span>
+        </button>
+        <button class="tool" data-tool="switch" title="Đặt công tắc — click lên tường (W)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M12 8.5v7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
+          <span class="kbd">W</span>
+        </button>
+      </div>
+      <div class="railsep"></div>
+      <button class="railbtn" id="btnLibrary" title="Thư viện đèn">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.2c.9.8 1.3 1.7 1.3 2.8h5.4c0-1.1.4-2 1.3-2.8A6 6 0 0 0 12 3z"/></svg>
+      </button>
+    </aside>
+    <div id="bgPop" class="hidden">
+      <p class="eyebrow">Mặt bằng nền</p>
+      <button class="btn" style="width:100%" id="btnUpload">⤒ Tải ảnh mặt bằng…</button>
+      <input type="file" id="fileInput" accept="image/*" class="hidden">
+      <div id="bgControls" class="hidden">
+        <label>Độ mờ ảnh nền <span id="opv" class="muted"></span></label>
+        <input type="range" id="opacity" min="10" max="100" value="70">
+        <button class="btn ghost sm" id="btnRemoveBg" style="margin-top:8px">Gỡ ảnh nền</button>
+      </div>
+      <label class="check"><input type="checkbox" id="chkGlow" checked> Hiện vùng rọi sáng</label>
+      <label class="check"><input type="checkbox" id="chkWiring"> Hiện tất cả đường công tắc → đèn</label>
+      <label class="check"><input type="checkbox" id="chkLegend" checked> Hiện bảng chú giải cụm</label>
+      <label>Mã đèn trên bản vẽ</label>
+      <div class="seg" id="lblSeg">
+        <button data-lm="all" title="Ghi mã cạnh mọi đèn">Tất cả</button>
+        <button data-lm="compact" title="Mỗi loại chỉ ghi 1 mã đại diện mỗi khu vực — bản vẽ thoáng">Gọn</button>
+        <button data-lm="off" title="Ẩn hết mã (đèn đang chọn vẫn hiện trong bảng bên phải)">Ẩn</button>
+      </div>
+      <p class="muted" style="font-size:10.5px; margin:12px 0 0; line-height:1.7">
+        Pan: chuột phải / giữa / Space · Ctrl+lăn = zoom<br>
+        Delete xoá · Ctrl+Z hoàn tác · Ctrl+D nhân bản<br>
+        Q/E xoay đèn · T bật/tắt đèn chọn · Mũi tên dịch 5 cm (Shift 25 cm)<br>
+        Double-click: chọn cả loại · Alt+click: chọn đèn bị đè dưới
+      </p>
+    </div>
+
+    <!-- CENTER -->
+    <div id="viewport">
+      <div id="stage">
+        <img id="bg" alt="">
+        <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div id="floorBar"></div>
+      <div id="sceneBar"></div>
+      <div id="scaleTag">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
+      <div id="zoombar">
+        <button class="btn sm" id="zoomOut">−</button>
+        <button class="btn sm" id="zoomFit">Vừa khung</button>
+        <button class="btn sm" id="zoomIn">+</button>
+      </div>
+      <div id="selChip" class="hidden">
+        <span id="selTxt" class="cnt"></span>
+        <button id="chipRotL" title="Xoay trái 15° (phím Q)">↺ Xoay</button>
+        <button id="chipRotR" title="Xoay phải 15° (phím E)">↻</button>
+        <span class="sep"></span>
+        <button id="chipPow" title="Bật/Tắt đèn đang chọn trong kịch bản (phím T)">⏻ Bật/Tắt</button>
+        <span class="sep"></span>
+        <button id="chipDup" title="Nhân bản (Ctrl+D)">⧉ Nhân bản</button>
+        <button id="chipDel" class="dgr" title="Xoá (Delete)">✕ Xoá</button>
+      </div>
+      <div id="hint"></div>
+      <div id="onboard" class="hidden">
+        <div class="ob-card">
+          <div class="ob-eyebrow">Bắt đầu</div>
+          <h2>Bố trí đèn trên mặt bằng</h2>
+          <ol class="ob-steps">
+            <li><b>1</b> Tải ảnh mặt bằng để trace</li>
+            <li><b>2</b> Cân tỉ lệ — vẽ 1 đoạn đã biết chiều dài <span class="kbd">C</span></li>
+            <li><b>3</b> Vẽ khu vực <span class="kbd">R</span> rồi đặt đèn <span class="kbd">L</span></li>
+          </ol>
+          <div class="ob-actions">
+            <button class="btn primary" id="obUpload">⤒ Tải ảnh mặt bằng</button>
+            <button class="btn" id="obSample">Xem dự án mẫu</button>
+          </div>
+        </div>
+      </div>
+      <button id="rightToggle" title="Ẩn/hiện bảng thông số">⟩</button>
+    </div>
+
+    <!-- RIGHT: properties + results -->
+    <aside id="right">
+      <div class="panel-sec">
+        <p class="eyebrow">Khu vực <span class="n" id="zcount">0</span></p>
+        <div class="inline">
+          <select id="zonePick" style="flex:1"></select>
+          <button class="btn sm danger" id="btnZoneDel" title="Xoá khu vực đang chọn">✕</button>
+        </div>
+      </div>
+      <div id="swPanel" class="panel-sec ctxsec hidden"></div>
+      <div id="wallInfo" class="panel-sec ctxsec hidden"></div>
+      <div id="noZone" class="panel-sec">
+        <p class="eyebrow">Thông số & kết quả</p>
+        <p class="empty">Chọn hoặc vẽ một khu vực để cấu hình chiếu sáng và xem số lượng đèn.</p>
+      </div>
+      <div id="zoneProps" class="hidden">
+        <details class="sec" open>
+          <summary>Khu vực</summary>
+          <div class="secbody">
+          <label style="margin-top:2px">Tên khu vực</label>
+          <input type="text" id="zName">
+          <label>Loại phòng · chuẩn lux</label>
+          <select id="zRoom"></select>
+          <div class="row">
+            <div><label>Lux mục tiêu</label><input type="number" id="zLux" min="0" step="10"></div>
+            <div><label>Diện tích</label><input type="text" id="zArea" readonly></div>
+          </div>
+          <div class="row">
+            <div><label>Cao trần (m)</label><input type="number" id="zCeil" min="1.5" step="0.05"></div>
+            <div><label>Hệ số tổn hao</label><input type="number" id="zLoss" min="0.3" max="1" step="0.05" title="Gộp hệ số sử dụng + bảo trì, mặc định 0.7"></div>
+          </div>
+          <button class="btn ghost sm danger" id="btnDelZone" style="width:100%; margin-top:12px">Xoá khu vực này</button>
+          </div>
+        </details>
+
+        <details class="sec" open>
+          <summary>Đèn trong khu vực</summary>
+          <div class="secbody">
+          <div id="grpList"></div>
+          <button class="btn sm" id="btnAddType" style="width:100%; margin-top:4px">+ Chọn loại đèn khác…</button>
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="btnAuto" style="flex:2" title="Rải loại đèn đang chọn cho đủ độ rọi">✧ Tự rải loại này</button>
+            <button class="btn danger" id="btnClearLights" style="flex:1">Xoá hết đèn</button>
+          </div>
+          </div>
+        </details>
+
+        <details class="sec" open>
+          <summary>Cụm điều khiển <span class="n" id="cirCount">0</span></summary>
+          <div class="secbody"><div id="cirList"></div></div>
+        </details>
+
+        <div class="panel-sec">
+          <p class="eyebrow">Kết quả chiếu sáng</p>
+          <div class="kpis">
+            <div class="kpi hero"><div class="v" id="rNeed">–</div><div class="k" id="rNeedK">Cần thêm (loại đang chọn)</div></div>
+            <div class="kpi"><div class="v" id="rActual">–</div><div class="k">Lux đạt / mục tiêu</div></div>
+            <div class="kpi"><div class="v" id="rCount">0</div><div class="k">Đèn đang bật (kịch bản)</div></div>
+            <div class="kpi"><div class="v" id="rWatt">–</div><div class="k">Tổng công suất</div></div>
+            <div class="kpi"><div class="v" id="rDensity">–</div><div class="k">Mật độ W/m²</div></div>
+          </div>
+          <div id="spaceFlag"></div>
+        </div>
+      </div>
+
+      <details class="sec">
+        <summary>Tổng hợp dự án</summary>
+        <div class="secbody"><div id="summary"></div></div>
+      </details>
+    </aside>
+  </main>
+</div>
+
+<div id="printArea"></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   InEx Lighting Planner v2 — single-file, vanilla JS
+   - Ký hiệu đèn theo chuẩn bản vẽ ME: kích thước THẬT theo tỉ lệ (m × px/m)
+   - UX kiểu Rayon: undo/redo, marquee, phím tắt, pan chuột phải/giữa/space
+   - Zone phối nhiều loại đèn; công thức đơn giản N=⌈E·A/(Φ·hệ số)⌉
+   - Vệt đèn trên tường: h = Hc − d/tan(beam/2)
+   Toạ độ "world" = pixel ảnh nền. view{scale,tx,ty}: screen = world·scale + t.
+   ========================================================================= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const SVGNS = "http://www.w3.org/2000/svg";
+const LS_KEY = "inex_lighting_v1";                 // bản cũ — chỉ để nạp lại một lần
+const DB_NAME="inex_lighting", DB_STORE="projects", DB_KEY="current";
+const FILE_EXT=".inexlight";
+const DEFAULT_W = 1600, DEFAULT_H = 1000;
+const LM_PER_W = 100;
+// Màu literal (không dùng CSS var trong SVG overlay — để export PNG giữ đúng màu)
+const C_INK="#3A362F", C_ACCENT="#C78F57", C_ACCENT_D="#B08040", C_GLOW="#F2C879",
+      C_WHITE="#FFFFFF", C_DANGER="#B4553C";
+
+/* ---- Thư viện độ rọi theo loại phòng (TCVN 7114 / EN 12464, lux duy trì) ---- */
+const ROOM_LUX = [
+  {name:"— Tự nhập —", lux:300},
+  {name:"Phòng khách", lux:200},
+  {name:"Phòng ngủ", lux:150},
+  {name:"Bếp (khu nấu)", lux:500},
+  {name:"Bàn ăn", lux:300},
+  {name:"Phòng tắm / WC", lux:200},
+  {name:"Phòng làm việc / Văn phòng", lux:400},
+  {name:"Phòng học", lux:500},
+  {name:"Phòng họp", lux:400},
+  {name:"Hành lang / Lối đi", lux:100},
+  {name:"Sảnh / Tiền sảnh", lux:200},
+  {name:"Showroom / Trưng bày", lux:500},
+  {name:"Cửa hàng / Bán lẻ", lux:400},
+  {name:"Nhà kho", lux:150},
+  {name:"Cầu thang", lux:150},
+];
+
+/* ---- Thư viện đèn mẫu ---- */
+const DEFAULT_LIGHTS = [
+  {id:"dl9",  code:"D1", type:"downlight", name:"Downlight âm trần 9W",  lumen:900,  watt:9,  beam:60,  url:"", thumb:null},
+  {id:"dl12", code:"D2", type:"downlight", name:"Downlight âm trần 12W", lumen:1200, watt:12, beam:60,  url:"", thumb:null},
+  {id:"dl18", code:"D3", type:"downlight", name:"Downlight âm trần 18W", lumen:1800, watt:18, beam:90,  url:"", thumb:null},
+  {id:"pn40", code:"P1", type:"panel",     name:"Panel 600×600 40W",     lumen:4000, watt:40, beam:120, url:"", thumb:null},
+  {id:"tb18", code:"T1", type:"tube",      name:"Tuýp LED 1m2 18W",      lumen:1900, watt:18, beam:150, url:"", thumb:null},
+  {id:"sp7",  code:"S1", type:"spot",      name:"Rọi ray spotlight 7W",  lumen:600,  watt:7,  beam:24,  url:"", thumb:null},
+  {id:"sp12", code:"S2", type:"spot",      name:"Rọi ray spotlight 12W", lumen:1000, watt:12, beam:36,  url:"", thumb:null},
+  {id:"pd6",  code:"PD1",type:"pendant",   name:"Đèn thả trang trí 6W",  lumen:400,  watt:6,  beam:120, url:"", thumb:null},
+  {id:"ch45", code:"CH1",type:"chandelier",name:"Đèn chùm thả bàn ăn 45W",lumen:2500, watt:45, beam:150, url:"", thumb:null},
+  {id:"st10", code:"LD1",type:"strip",     name:"LED dây hắt khe 10W/m", lumen:800,  watt:10, beam:120, url:"", thumb:null},
+];
+const CODE_PREFIX={downlight:"D", panel:"P", tube:"T", spot:"S", pendant:"PD", chandelier:"CH", strip:"LD"};
+/* Mã ký hiệu tự sinh: D1, D2… — phân biệt 2 model cùng loại trên mặt bằng (chuẩn bản vẽ ME) */
+function autoCode(type, lights){
+  const p=CODE_PREFIX[type]||"X"; let n=1;
+  while((lights||state.lights).some(l=>l.code===p+n)) n++;
+  return p+n;
+}
+const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C","#A98C6A","#7E8AA0"];
+/* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
+const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, spot:0.14, pendant:0.28,
+                  chandelier:0.42, strip:1.0};
+
+/* =========================== STATE =========================== */
+let state = null;
+let view = {scale:1, tx:0, ty:0};
+let tool = "select";
+let draft = null;           // {type:'poly'|'rect'|'calibrate', pts:[]}
+let drag = null;            // thao tác kéo hiện tại
+let selLights = [];         // [{zid, li}]
+let selSwitch = null;       // id công tắc đang chọn
+let hoverLight = null;      // {zid, li}
+let spaceHeld = false;
+let hist = [], future = [];
+let focusSnap = null;
+
+/* Mỗi TẦNG có ảnh nền + tỉ lệ + khu vực riêng; thư viện đèn dùng chung cả dự án */
+let fseq=1;
+function newFloor(name, pxPerMeter){
+  return {
+    id:"f"+(fseq++), name:name||"Tầng 1",
+    bg:null, bgW:DEFAULT_W, bgH:DEFAULT_H, bgOpacity:0.7,
+    pxPerMeter:pxPerMeter||null,
+    zones:[], selectedZone:null, seq:1,
+    // điều khiển chiếu sáng: đèn → mạch → công tắc; kịch bản = tổ hợp mạch bật
+    circuits:[], switches:[], scenes:[], liveOff:[], scene:null,
+  };
+}
+const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
+function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
+/* Ký tự cụm a/b/c… — chuẩn bản vẽ ME: đèn ghi mã loại + chữ mạch (VD "D2a") */
+function nextKey(fl){
+  const used=new Set((fl.circuits||[]).map(c=>c.key));
+  for(let i=0;i<26;i++){ const k=String.fromCharCode(97+i); if(!used.has(k)) return k; }
+  return "z";
+}
+function addCircuit(name, fl){
+  fl=fl||F(); fl.circuits=fl.circuits||[];
+  const n=fl.circuits.length+1;
+  const k=nextKey(fl);
+  const c={id:"c"+F().seq++, key:k, name:name||("Cụm "+k),
+    color:CIRCUIT_COLORS[(n-1)%CIRCUIT_COLORS.length]};
+  fl.circuits.push(c); return c;
+}
+/* NGUYÊN LÝ: đèn chỉ tắt/bật qua CÔNG TẮC, mà công tắc điều khiển CỤM.
+   → chỉ MỘT cơ chế: đèn tắt ⟺ cụm của nó đang tắt. Đèn chưa gán cụm = chưa qua
+   công tắc nào = luôn sáng. Muốn 1 đèn bật riêng thì tách nó thành cụm riêng. */
+function isOff(l, fl){
+  fl=fl||F();
+  return !!(l.circuit && (fl.liveOff||[]).includes(l.circuit));
+}
+function switchGang(sw){ return Math.max(1,(sw.circuits||[]).length); }
+/* Đèn do công tắc này điều khiển */
+function lightsOfSwitch(sw, fl){
+  fl=fl||F(); const set=new Set(sw.circuits||[]);
+  const res=[];
+  fl.zones.forEach(z=> z.lights.forEach((l,li)=>{ if(l.circuit&&set.has(l.circuit)) res.push({z,l,li}); }));
+  return res;
+}
+function newState(){
+  return {
+    version:6, projectName:"Dự án chưa đặt tên",
+    showGlow:true, labelMode:"all",
+    lights: DEFAULT_LIGHTS.map(l=>({...l})),
+    floors:[newFloor("Tầng 1")], cur:0,
+  };
+}
+const F = ()=> state.floors[state.cur] || state.floors[0];
+function migrate(s){
+  if(!s.version || s.version<2){
+    (s.zones||[]).forEach(z=>{
+      const lid = z.lightId || "dl12";
+      z.placeLightId = lid;
+      z.lights = (z.lights||[]).map(l=> l.lightId? l : {x:l.x, y:l.y, lightId:lid});
+      z.lossFactor = 0.7;
+      delete z.lightId; delete z.mode; delete z.mf;
+      delete z.rCeil; delete z.rWall; delete z.rFloor;
+    });
+    (s.lights||[]).forEach(l=>{ if(l.url===undefined) l.url=""; if(l.thumb===undefined) l.thumb=null; });
+    s.showGlow = s.showGlow!==false;
+    s.version = 2;
+  }
+  // đảm bảo mọi mẫu đèn có mã ký hiệu (kể cả dữ liệu v2 cũ)
+  (s.lights||[]).forEach(l=>{ if(!l.code) l.code=autoCode(l.type, s.lights); });
+  if(!s.labelMode) s.labelMode="all";
+  // v3: mã đèn mặc định "Tất cả" (nhãn khu vực đã tự né đèn, không cần gọn mã nữa)
+  if(s.version===2){ if(s.labelMode==="compact") s.labelMode="all"; s.version=3; }
+  // scene theo nhóm (sceneOff cũ) → chuyển thành cờ tắt TỪNG ĐÈN
+  (s.zones||[]).forEach(z=>{
+    if(z.sceneOff && z.sceneOff.length){
+      z.lights.forEach(l=>{ if(z.sceneOff.includes(l.lightId)) l.off=true; });
+    }
+    delete z.sceneOff;
+  });
+  // v4: gom dữ liệu 1 mặt bằng cũ thành TẦNG đầu tiên
+  if(s.version<4 || !s.floors){
+    s.floors=[{id:"f1", name:"Tầng 1", bg:s.bg||null,
+      bgW:s.bgW||DEFAULT_W, bgH:s.bgH||DEFAULT_H, bgOpacity:s.bgOpacity??0.7,
+      pxPerMeter:s.pxPerMeter||null, zones:s.zones||[],
+      selectedZone:s.selectedZone||null, seq:s.seq||1}];
+    s.cur=0;
+    delete s.bg; delete s.bgW; delete s.bgH; delete s.bgOpacity;
+    delete s.pxPerMeter; delete s.zones; delete s.selectedZone; delete s.seq;
+    s.version=4;
+  }
+  s.cur=clamp(s.cur||0, 0, s.floors.length-1);
+  // v5: mạch điều khiển + công tắc + kịch bản (mỗi tầng)
+  s.floors.forEach(f=>{
+    f.circuits=f.circuits||[]; f.switches=f.switches||[];
+    f.scenes=f.scenes||[]; f.liveOff=f.liveOff||[];
+    if(f.scene===undefined) f.scene=null;
+    f.circuits.forEach((c,i)=>{ if(!c.key) c.key=String.fromCharCode(97+i); });
+    // v6: bỏ cơ chế tắt lẻ từng đèn (trùng lặp với tắt theo cụm) — điều khiển chỉ qua cụm
+    f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.off; }));
+  });
+  if(s.showLegend===undefined) s.showLegend=true;
+  if(s.version<6) s.version=6;
+  if(s.version<5) s.version=5;
+  fseq=Math.max(fseq, ...s.floors.map(f=>(+String(f.id||"").replace("f","")||0)+1));
+  s.floors.forEach(f=>{ if(!f.id) f.id="f"+(fseq++); });
+  // bổ sung loại mới cho thư viện đã lưu từ bản cũ
+  ["chandelier","strip"].forEach(t=>{
+    if(s.lights && !s.lights.some(l=>l.type===t)){
+      const preset=DEFAULT_LIGHTS.find(d=>d.type===t);
+      if(preset) s.lights.push({...preset});
+    }
+  });
+  return s;
+}
+function worldW(){ return F().bg ? F().bgW : DEFAULT_W; }
+function worldH(){ return F().bg ? F().bgH : DEFAULT_H; }
+function ppm(){ return F().pxPerMeter || 50; }  // fallback để ký hiệu vẫn nhìn được
+
+/* ---- Lưu tự động: IndexedDB (chứa được ảnh nền nhiều tầng; localStorage ~5MB sẽ tràn) ---- */
+let dbP=null;
+function db(){
+  if(dbP) return dbP;
+  dbP=new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=()=>r.result.createObjectStore(DB_STORE);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+  return dbP;
+}
+function dbPut(key,val){ return db().then(d=>new Promise((res,rej)=>{
+  const t=d.transaction(DB_STORE,"readwrite");
+  t.objectStore(DB_STORE).put(val,key); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); })); }
+function dbGet(key){ return db().then(d=>new Promise((res,rej)=>{
+  const t=d.transaction(DB_STORE,"readonly");
+  const q=t.objectStore(DB_STORE).get(key); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); })); }
+
+function adopt(raw){
+  state = migrate(raw);
+  if(!state.lights||!state.lights.length) state.lights = DEFAULT_LIGHTS.map(l=>({...l}));
+  state.floors.forEach(f=>{ if(f.bg) bgCache[f.id]={bg:f.bg, bgW:f.bgW, bgH:f.bgH}; });
+}
+function load(){
+  return dbGet(DB_KEY).then(v=>{
+    if(v && v.floors && v.floors.some(f=>f.zones&&f.zones.length)){ adopt(v); return; }
+    // dữ liệu bản cũ (localStorage): nạp và GIỮ NGUYÊN làm phao dự phòng — không bao giờ xoá
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw){ adopt(JSON.parse(raw)); save(); return; }   // ghi ngay sang IndexedDB
+    if(v){ adopt(v); return; }
+    state=newState();
+  }).catch(()=>{
+    try{ const raw=localStorage.getItem(LS_KEY); if(raw){ adopt(JSON.parse(raw)); return; } }catch(e){}
+    state=newState();
+  });
+}
+/* Lưu: bản hiện tại + xoay vòng 6 bản tự động (mốc thời gian) để cứu khi lỡ tay */
+let saveTimer=null, lastBk=0;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    const snap=JSON.parse(JSON.stringify(state));
+    snap._at=Date.now();
+    dbPut(DB_KEY, snap).then(()=>{
+      if(Date.now()-lastBk < 120000) return;            // mỗi ~2 phút một bản dự phòng
+      lastBk=Date.now();
+      return dbPut("backup_"+lastBk, snap).then(trimBackups);
+    }).catch(()=>toast("Không lưu tự động được — hãy dùng “Lưu file” để giữ dự án"));
+  }, 300);
+}
+function dbKeys(){ return db().then(d=>new Promise((res,rej)=>{
+  const t=d.transaction(DB_STORE,"readonly");
+  const q=t.objectStore(DB_STORE).getAllKeys();
+  q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); })); }
+function dbDel(key){ return db().then(d=>new Promise((res,rej)=>{
+  const t=d.transaction(DB_STORE,"readwrite");
+  t.objectStore(DB_STORE).delete(key); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); })); }
+function trimBackups(){
+  return dbKeys().then(ks=>{
+    const bk=ks.filter(k=>String(k).startsWith("backup_")).sort();
+    return Promise.all(bk.slice(0, Math.max(0,bk.length-6)).map(dbDel));
+  }).catch(()=>{});
+}
+
+/* ---- History: ảnh nền là asset NGOÀI history (nhẹ bộ nhớ + không lệch hệ toạ độ).
+       bgCache giữ ảnh theo id tầng để undo/redo (kể cả khi tầng bị xoá rồi hoàn tác) ---- */
+let bgCache={};
+function snapshot(){
+  const keep=state.floors.map(f=>{ const b={bg:f.bg, bgW:f.bgW, bgH:f.bgH};
+    if(f.bg) bgCache[f.id]=b; f.bg=null; return b; });
+  const s=JSON.stringify(state);
+  state.floors.forEach((f,i)=>{ f.bg=keep[i].bg; });
+  return s;
+}
+function applySnap(s){
+  state=JSON.parse(s);
+  state.floors.forEach(f=>{ const c=bgCache[f.id];
+    if(c){ f.bg=c.bg; f.bgW=c.bgW; f.bgH=c.bgH; } });
+}
+function pushHist(snap){ flushArrowSeq(); hist.push(snap||snapshot()); if(hist.length>60) hist.shift(); future.length=0; updateUndoBtns(); }
+function mutate(fn){ pushHist(); fn(); save(); renderAll(); }
+function undo(){ flushArrowSeq(); if(!hist.length) return; future.push(snapshot()); applySnap(hist.pop()); selLights=[]; draft=null; save(); renderAll(); }
+function redo(){ flushArrowSeq(); if(!future.length) return; hist.push(snapshot()); applySnap(future.pop()); selLights=[]; draft=null; save(); renderAll(); }
+function commitFocus(){ if(focusSnap){ pushHist(focusSnap); focusSnap=null; } }
+/* Chuỗi bấm mũi tên = 1 bước undo: chụp snapshot trước cú đầu, commit sau 700ms yên */
+let arrowSeq=null;
+function flushArrowSeq(){
+  if(!arrowSeq) return;
+  clearTimeout(arrowSeq.timer);
+  hist.push(arrowSeq.snap); if(hist.length>60) hist.shift();
+  future.length=0; arrowSeq=null; updateUndoBtns();
+}
+function nudgeSelected(dx,dy){
+  if(!selLights.length) return;
+  if(!arrowSeq) arrowSeq={snap:snapshot(), timer:null};
+  clearTimeout(arrowSeq.timer);
+  arrowSeq.timer=setTimeout(flushArrowSeq, 700);
+  selLights.forEach(s=>{ const z=getZone(s.zid); const l=z&&z.lights[s.li];
+    if(l){ l.x+=dx; l.y+=dy; } });
+  save(); render(); refreshRight(); renderSummary();
+}
+function updateUndoBtns(){ $("#btnUndo").disabled=!hist.length; $("#btnRedo").disabled=!future.length; }
+
+/* =========================== HELPERS =========================== */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const uid=()=> "z"+(F().seq++);
+const parseNum=v=>{ const n=parseFloat(String(v).replace(",",".")); return isNaN(n)? 0 : n; };
+function getZone(id){ return F().zones.find(z=>z.id===id); }
+function selZone(){ return getZone(F().selectedZone); }
+function lightById(id){ return state.lights.find(l=>l.id===id) || state.lights[0]; }
+function lampLumen(l){ return (l.lumen && l.lumen>0) ? l.lumen : (l.watt||0)*LM_PER_W; }
+function fmt(n,d=0){ if(n==null||isNaN(n)) return "–";
+  return Number(n).toLocaleString("vi-VN",{maximumFractionDigits:d}); }
+function escapeHtml(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function shoelace(pts){
+  let a=0; for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length];
+    a += p.x*q.y - q.x*p.y; } return Math.abs(a)/2;
+}
+function bbox(pts){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  pts.forEach(p=>{x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);});
+  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0};
+}
+function pointInPoly(x,y,pts){
+  let inside=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function distToSeg(p,a,b){
+  const dx=b.x-a.x, dy=b.y-a.y, L2=dx*dx+dy*dy||1e-9;
+  let t=((p.x-a.x)*dx+(p.y-a.y)*dy)/L2; t=clamp(t,0,1);
+  const fx=a.x+t*dx, fy=a.y+t*dy;
+  return {d:Math.hypot(p.x-fx,p.y-fy), fx, fy, a, b, t, len:Math.sqrt(L2)};
+}
+function nearestWall(pt, poly){
+  let best=null;
+  for(let i=0;i<poly.length;i++){
+    const r=distToSeg(pt, poly[i], poly[(i+1)%poly.length]);
+    if(!best||r.d<best.d) best=r;
+  }
+  return best;
+}
+/* fl: tầng chứa zone (mặc định tầng đang xem) — tổng hợp/PDF cần tính cho mọi tầng */
+function areaM2(z, fl){ const p=(fl||F()).pxPerMeter; if(!p) return null;
+  return shoelace(z.poly)/(p*p); }
+function screenToWorld(clientX, clientY){
+  const r = $("#viewport").getBoundingClientRect();
+  return { x:(clientX-r.left-view.tx)/view.scale, y:(clientY-r.top-view.ty)/view.scale };
+}
+
+/* =========================== LIGHTING MATH (đơn giản) =========================== */
+/* Kịch bản chiếu sáng: bật/tắt theo CỤM (liveOff). calc() chỉ tính đèn đang BẬT;
+   thống kê/CSV/PDF luôn đủ toàn bộ (hồ sơ đặt hàng). */
+function zoneGroups(z, includeOff){
+  const m=new Map();
+  z.lights.forEach(l=>{
+    // LED dây: số lượng = TỔNG MÉT (thông số lumen/W khai theo mét)
+    const q = lightById(l.lightId).type==="strip"? Math.max(0.3, l.len||1) : 1;
+    if(!includeOff && isOff(l)) return;
+    const cur=m.get(l.lightId)||{q:0, offQ:0};
+    cur.q+=q; if(isOff(l)) cur.offQ+=q;
+    m.set(l.lightId, cur);
+  });
+  return Array.from(m, ([lid,v])=>{ const lamp=lightById(lid);
+    return {lid, lamp, count:v.q, offCount:v.offQ, lm:v.q*lampLumen(lamp), w:v.q*lamp.watt}; });
+}
+function qtyLabel(g){ return g.lamp.type==="strip"? fmt(g.count,1)+" m" : "×"+g.count; }
+/* fq: số thập phân dấu CHẤM — chỉ dùng cho CSV (dấu phẩy là ký tự phân cột).
+   Mọi chỗ HIỂN THỊ dùng fmt(v,1) để ra chuẩn số tiếng Việt (2,7). */
+function fq(v){ return (+(+v).toFixed(1)).toString(); }
+/* ---- Công tắc ---- */
+function addSwitchAt(w){
+  const fl=F();
+  mutate(()=>{
+    fl.switches=fl.switches||[];
+    // mặc định điều khiển mạch của khu vực chứa/gần điểm đặt; chưa có mạch thì tạo mạch đầu tiên
+    const z=zoneAtPoint(w);
+    let cids=[];
+    if(z){
+      const inZone=[...new Set(z.lights.map(l=>l.circuit).filter(Boolean))];
+      if(inZone.length) cids=inZone.slice(0,3);
+      else if(z.lights.length){
+        const c=addCircuit("Đèn "+z.name, fl);
+        z.lights.forEach(l=>l.circuit=c.id);
+        cids=[c.id];
+      }
+    }
+    // mã CT… (không dùng "S" — trùng mã đèn rọi S1/S2 trên bản vẽ)
+    const sw={id:"s"+fl.seq++, code:"CT"+(fl.switches.length+1), x:w.x, y:w.y, circuits:cids};
+    fl.switches.push(sw); selSwitch=sw.id; selLights=[];
+  });
+  showHint("Đã đặt công tắc — chọn cụm nó điều khiển ở bảng bên phải · Esc để xong");
+}
+function deleteSwitch(id){
+  const fl=F();
+  mutate(()=>{ fl.switches=(fl.switches||[]).filter(s=>s.id!==id);
+    if(selSwitch===id) selSwitch=null; });
+  toast("Đã xoá công tắc — Ctrl+Z để hoàn tác");
+}
+/* Bấm công tắc: bật/tắt các mạch nó điều khiển (đúng như bấm ngoài đời) */
+function pressSwitch(id){
+  const fl=F(); const sw=(fl.switches||[]).find(s=>s.id===id);
+  if(!sw || !(sw.circuits||[]).length){ toast("Công tắc chưa gán cụm nào"); return; }
+  mutate(()=>{
+    fl.liveOff=fl.liveOff||[];
+    const anyOn=sw.circuits.some(c=>!fl.liveOff.includes(c));
+    if(anyOn) sw.circuits.forEach(c=>{ if(!fl.liveOff.includes(c)) fl.liveOff.push(c); });
+    else fl.liveOff=fl.liveOff.filter(c=>!sw.circuits.includes(c));
+    fl.scene=null;   // đã lệch khỏi kịch bản đã lưu
+  });
+}
+/* Kịch bản = tổ hợp mạch đang tắt */
+function applyScene(id){
+  const fl=F();
+  mutate(()=>{
+    if(!id){ fl.liveOff=[]; fl.scene=null; return; }
+    const s=(fl.scenes||[]).find(x=>x.id===id);
+    if(s){ fl.liveOff=[...(s.off||[])]; fl.scene=id; }
+  });
+}
+function saveScene(){
+  const fl=F();
+  const name=prompt("Tên kịch bản (VD: Sinh hoạt, Xem phim, Đêm):",
+    "Kịch bản "+((fl.scenes||[]).length+1));
+  if(name===null || !name.trim()) return;
+  mutate(()=>{
+    fl.scenes=fl.scenes||[];
+    const s={id:"sc"+fl.seq++, name:name.trim(), off:[...(fl.liveOff||[])]};
+    fl.scenes.push(s); fl.scene=s.id;
+  });
+  toast(`Đã lưu kịch bản “${name.trim()}”`);
+}
+function deleteScene(id){
+  const fl=F(); const s=(fl.scenes||[]).find(x=>x.id===id);
+  if(!s || !confirm(`Xoá kịch bản “${s.name}”?`)) return;
+  mutate(()=>{ fl.scenes=fl.scenes.filter(x=>x.id!==id); if(fl.scene===id) fl.scene=null; });
+}
+/* Bật/tắt CỤM của các đèn đang chọn (nút ⏻ trên chip hoặc phím T).
+   Không tắt lẻ được — đúng thực tế: muốn điều khiển riêng thì phải tách cụm riêng. */
+function toggleCircuitsOf(items){
+  const fl=F();
+  const cids=[...new Set(items.map(o=>o.l.circuit).filter(Boolean))];
+  if(!cids.length){
+    toast("Đèn chưa thuộc cụm nào — gán cụm ở bảng “Đèn đang chọn” để điều khiển được");
+    return;
+  }
+  const anyOn=cids.some(c=>!(fl.liveOff||[]).includes(c));
+  mutate(()=>{
+    fl.liveOff=fl.liveOff||[];
+    if(anyOn) cids.forEach(c=>{ if(!fl.liveOff.includes(c)) fl.liveOff.push(c); });
+    else fl.liveOff=fl.liveOff.filter(c=>!cids.includes(c));
+    fl.scene=null;
+  });
+  const keys=cids.map(c=>(circuitById(c)||{}).key||"").join(", ");
+  toast((anyOn?"Đã tắt":"Đã bật")+` cụm ${keys}`);
+}
+function toggleSelected(){
+  const items=selItems();
+  if(items.length) toggleCircuitsOf(items);
+}
+function calc(z){
+  const A = areaM2(z);
+  const lf = z.lossFactor||0.7;
+  const E = z.lux||0;
+  const groups = zoneGroups(z, false);           // chỉ nhóm đang bật
+  const gotLm = groups.reduce((s,g)=>s+g.lm,0);
+  const totW = groups.reduce((s,g)=>s+g.w,0);
+  const count = z.lights.filter(l=>!isOff(l)).length; // số THIẾT BỊ đang bật
+  const needLm = (A&&E)? E*A/lf : null;
+  const actual = A? gotLm*lf/A : null;
+  const active = lightById(z.placeLightId);
+  const remainLm = needLm!=null? needLm-gotLm : null;
+  const phiA = lampLumen(active);
+  const needMore = (remainLm!=null && phiA>0)? Math.max(0, Math.ceil(remainLm/phiA)) : null;
+  return {A, lf, E, groups, gotLm, needLm, remainLm, needMore, actual, totW,
+    density: A? totW/A : null, count, active};
+}
+/* Bán kính vùng rọi tại mặt sàn (world px). Beam kẹp 5–170°; tính từ cao độ LẮP đèn */
+function glowRadius(z, lamp, light){
+  const beam = clamp(lamp.beam||60, 5, 170);
+  const H = clamp((light&&light.mh)||z.ceilH||2.8, 0.2, z.ceilH||2.8);
+  return Math.tan(beam/2*Math.PI/180)*H*ppm();
+}
+/* Ray từ điểm theo hướng dir, tìm giao GẦN NHẤT với cạnh polygon */
+function rayHitPoly(pt, dir, poly){
+  let best=null;
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    const ex=b.x-a.x, ey=b.y-a.y;
+    const den=dir.x*ey - dir.y*ex;
+    if(Math.abs(den)<1e-9) continue;
+    const t=((a.x-pt.x)*ey - (a.y-pt.y)*ex)/den;
+    const s=((a.x-pt.x)*dir.y - (a.y-pt.y)*dir.x)/den;
+    if(t>1e-6 && s>=0 && s<=1 && (!best || t<best.t)){
+      best={t, s, a, b, len:Math.hypot(ex,ey), x:pt.x+dir.x*t, y:pt.y+dir.y*t};
+    }
+  }
+  return best;
+}
+/* Vệt sáng trên tường, hỗ trợ đèn nghiêng (tilt, theo hướng mũi tên rot):
+   tia biên gần tường góc (tilt+β/2), tia xa (tilt−β/2) so phương thẳng đứng.
+   Tia góc φ chạm tường ở cao độ Hc − d/tan(φ) nếu tan(φ) > d/Hc, ngược lại rơi xuống sàn.
+   → vệt trên tường từ hBottom tới hTop (hBottom=0 nghĩa là sáng phủ từ chân tường). */
+function wallMetrics(z, light){
+  if(!F().pxPerMeter) return null;
+  if(!pointInPoly(light.x, light.y, z.poly)) return null;
+  const lamp = lightById(light.lightId);
+  const beam = clamp(lamp.beam||60, 5, 170);
+  const tilt = clamp(light.tilt||0, 0, 80);
+  const Hc = z.ceilH||2.8;
+  let foot, dPx, seg, tFoot;
+  if(tilt>0 || light.aim){ // nghiêng HOẶC đã ghim tường: đo theo HƯỚNG mũi tên (không nhảy tường)
+    const r=(light.rot||0)*Math.PI/180;
+    const hit=rayHitPoly(light, {x:Math.sin(r), y:-Math.cos(r)}, z.poly);
+    if(!hit) return null;
+    foot={x:hit.x, y:hit.y}; dPx=hit.t; seg=hit; tFoot=hit.s;
+  } else {   // chiếu thẳng xuống: tường gần nhất
+    const w=nearestWall(light, z.poly);
+    if(!w) return null;
+    foot={x:w.fx, y:w.fy}; dPx=w.d; seg=w; tFoot=w.t;
+  }
+  const dM = dPx/F().pxPerMeter;
+  // H = cao độ LẮP đèn (mh) — LED dây dưới tủ bếp, đèn thả… khác cao trần
+  const H = clamp(light.mh||Hc, 0.2, Hc);
+  const phiN=(tilt+beam/2)*Math.PI/180, phiF=(tilt-beam/2)*Math.PI/180;
+  const tanN=Math.tan(Math.min(phiN, 1.53));
+  const hits0 = tanN > dM/H;
+  let hTop = hits0? H - dM/tanN : null;
+  let hBottom = hits0? (Math.tan(phiF) > dM/H ? H - dM/Math.tan(phiF) : 0) : null;
+  // tủ sát tường (đỉnh/đáy/sâu): đèn CAO HƠN đỉnh tủ → tường sau tủ bị án ngữ,
+  // vệt hiệu dụng chỉ còn từ đỉnh tủ trở lên; đèn dưới đáy tủ → không bị che
+  const cab = (light.cab && light.cab.top>0 && light.cab.dep>0)? light.cab : null;
+  let hits=hits0, blockedByCab=false, cappedByCab=false;
+  if(cab && hits0 && H>cab.top){
+    if(hTop<=cab.top){ hits=false; blockedByCab=true; hTop=null; hBottom=null; }
+    else if((hBottom||0)<cab.top){ hBottom=cab.top; cappedByCab=true; }
+  }
+  let chord=null;
+  if(hits){
+    const midH = (hTop+(hBottom||0))/2;
+    const slant = Math.hypot(dM, H-midH); // m, khoảng xiên đèn → tâm vệt
+    const halfPx = Math.tan(beam/2*Math.PI/180)*slant*F().pxPerMeter;
+    const tHalf = halfPx/seg.len;
+    const t1=clamp(tFoot-tHalf,0,1), t2=clamp(tFoot+tHalf,0,1);
+    chord={x1:seg.a.x+(seg.b.x-seg.a.x)*t1, y1:seg.a.y+(seg.b.y-seg.a.y)*t1,
+           x2:seg.a.x+(seg.b.x-seg.a.x)*t2, y2:seg.a.y+(seg.b.y-seg.a.y)*t2};
+  }
+  return {dM, hTop, hBottom, hits, foot, chord, lamp, beam, tilt, H, cab, blockedByCab, cappedByCab};
+}
+
+/* Mặt đứng diện tường: trần/sàn/tường + nón sáng từ CAO ĐỘ LẮP đèn + khối tủ (nếu khai) */
+function elevationSVG(z, light){
+  const wm=wallMetrics(z, light);
+  if(!wm) return "";
+  const Hc=z.ceilH||2.8, Hl=wm.H, d=wm.dM, beam=wm.beam, tilt=wm.tilt;
+  const phiN=(tilt+beam/2)*Math.PI/180, phiF=(tilt-beam/2)*Math.PI/180;
+  const tanN=Math.tan(Math.min(phiN,1.53)), tanF=Math.tan(phiF);
+  const xF=Math.max(0, d-Hl*tanF);           // chân tia xa trên sàn (0 = tia xa cũng đập tường)
+  const Wm=Math.max(2.6, xF+0.5, d+0.8, wm.cab? wm.cab.dep+0.6:0), Hm=Hc+0.6;
+  const k=Math.min(270/Wm, 185/Hm), PAD=18;
+  const W=Math.round(Wm*k)+PAD, H=Math.round(Hm*k);
+  const X=m=> +((Wm-m)*k).toFixed(1), Y=m=> +((Hm-m)*k).toFixed(1);
+  const hits=wm.hits, hT=wm.hTop||0, hB=wm.hBottom||0;
+  const F=`font-family="JetBrains Mono,monospace"`;              // số liệu
+  const F2=`font-family="Inter,sans-serif" font-weight="500"`;   // chữ tiếng Việt (mono thiếu glyph "ờ")
+  let cone;
+  if(hits){
+    cone = hB>0.01? `${X(d)},${Y(Hl)} ${X(0)},${Y(hT)} ${X(0)},${Y(hB)}`
+                  : `${X(d)},${Y(Hl)} ${X(0)},${Y(hT)} ${X(0)},${Y(0)} ${X(xF)},${Y(0)}`;
+  } else {
+    cone = `${X(d)},${Y(Hl)} ${X(Math.max(0,d-Hl*tanN))},${Y(0)} ${X(xF)},${Y(0)}`;
+  }
+  // trục quang khi đèn nghiêng
+  let axis="";
+  if(tilt>0){
+    const tanM=Math.tan(tilt*Math.PI/180);
+    const onWall = tanM>d/Hl;
+    const mx=onWall? 0 : d-Hl*tanM, my=onWall? Hl-d/tanM : 0;
+    axis=`<line x1="${X(d)}" y1="${Y(Hl)}" x2="${X(mx)}" y2="${Y(my)}" stroke="#B08040" stroke-width="1" stroke-dasharray="3,3" opacity=".7"/>`;
+  }
+  // khối tủ sát tường (tủ áo: đáy 0; tủ bếp trên: treo)
+  let cabRect="";
+  if(wm.cab){
+    const cb=wm.cab.bot||0;
+    cabRect=`<rect x="${X(wm.cab.dep)}" y="${Y(wm.cab.top)}" width="${(X(0)-X(wm.cab.dep)).toFixed(1)}" height="${(Y(cb)-Y(wm.cab.top)).toFixed(1)}" fill="#EBE3D6" stroke="#8A8175" stroke-width="1.2"/>
+      <line x1="${X(wm.cab.dep)}" y1="${Y(wm.cab.top)}" x2="${X(0)}" y2="${Y(cb)}" stroke="#CFC6B8" stroke-width="1"/>
+      <text x="${(X(wm.cab.dep)+X(0))/2}" y="${(Y(wm.cab.top)+Y(cb))/2+3}" text-anchor="middle" ${F2} font-size="9" fill="#6E665A">tủ</text>`;
+  }
+  // thân treo/gắn khi đèn không nằm sát trần
+  const stem = (Hl < Hc-0.03)
+    ? `<line x1="${X(d)}" y1="${Y(Hc)}" x2="${X(d)}" y2="${Y(Hl)}" stroke="#8A8175" stroke-width="1" stroke-dasharray="2,3"/>`
+    : "";
+  let hatch="";
+  for(let i=0;i<6;i++){ const y0=Hc*(i+0.5)/6;
+    hatch+=`<line x1="${X(0)}" y1="${Y(y0)}" x2="${X(0)+7}" y2="${Y(y0)+7}" stroke="#CFC6B8" stroke-width="1"/>`; }
+  for(let i=0;i<9;i++){ const x0=Wm*(i+0.5)/9;
+    hatch+=`<line x1="${X(x0)}" y1="${Y(0)}" x2="${X(x0)-7}" y2="${Y(0)+7}" stroke="#CFC6B8" stroke-width="1"/>`; }
+  // nhãn cao độ vệt: kẹp trong khung, gộp khi vệt ngắn để không đè nhau
+  let hLabels="";
+  if(hits){
+    const yT=Math.min(Y(hT)+4, Y(0)-8);
+    if(hB>0.05 && (hT-hB)>=0.3){
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${hT.toFixed(2)} m</text>
+        <text x="${X(0)-7}" y="${Math.min(Y(hB)+11, Y(0)-8)}" text-anchor="end" ${F} font-size="10" fill="#B08040">+${hB.toFixed(2)} m</text>`;
+    } else if(hB>0.05){
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${hB.toFixed(2)}→${hT.toFixed(2)} m</text>`;
+    } else {
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11.5" fill="#B08040">+${hT.toFixed(2)} m</text>`;
+    }
+  }
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:8px auto 4px;max-width:100%">
+    <polygon points="${cone}" fill="#F2C879" fill-opacity=".32" stroke="#E0B375" stroke-width="1" stroke-dasharray="4,3"/>
+    ${axis}
+    ${hits? `<line x1="${X(0)}" y1="${Y(hB>0.01?hB:0)}" x2="${X(0)}" y2="${Y(hT)}" stroke="#C78F57" stroke-width="4" stroke-linecap="round"/>`
+      : (wm.blockedByCab? "" :
+        `<text x="${X(Math.max(0,d-Hl*tanN))}" y="${Y(0)-7}" text-anchor="middle" ${F2} font-size="10" fill="#8A8175">mép sáng cách tường ${Math.max(0,d-Hl*tanN).toFixed(2)} m</text>`)}
+    ${hLabels}
+    ${hatch}
+    <line x1="${X(Wm)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(0)}" stroke="#3A362F" stroke-width="2"/>
+    <line x1="${X(0)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(Hc)}" stroke="#3A362F" stroke-width="2.5"/>
+    <line x1="${X(Wm)}" y1="${Y(Hc)}" x2="${X(0)}" y2="${Y(Hc)}" stroke="#8A8175" stroke-width="1.3"/>
+    ${cabRect}
+    ${stem}
+    <g transform="rotate(${tilt} ${X(d)} ${Y(Hl)})"><rect x="${X(d)-6}" y="${Y(Hl)-2}" width="12" height="5" rx="1.5" fill="#3A362F"/></g>
+    <text x="${X(d)-9}" y="${Y(Hl)+16}" text-anchor="end" ${F2} font-size="10" fill="#6E665A">${beam}°${tilt?` · nghiêng ${tilt}°`:""}${Hl<Hc-0.03?` · cao ${Hl.toFixed(2)}m`:""}</text>
+    <line x1="${X(d)}" y1="${Y(Hc)-8}" x2="${X(0)}" y2="${Y(Hc)-8}" stroke="#B08040" stroke-width="1"/>
+    <line x1="${X(d)}" y1="${Y(Hc)-12}" x2="${X(d)}" y2="${Y(Hc)-4}" stroke="#B08040" stroke-width="1"/>
+    <line x1="${X(0)}" y1="${Y(Hc)-12}" x2="${X(0)}" y2="${Y(Hc)-4}" stroke="#B08040" stroke-width="1"/>
+    <text x="${(X(d)+X(0))/2}" y="${Y(Hc)-13}" text-anchor="middle" ${F} font-size="10.5" fill="#B08040">${d.toFixed(2)} m</text>
+    <text x="${X(Wm)+4}" y="${Y(Hc)-5}" ${F2} font-size="9.5" fill="#8A8175">trần ${Hc} m</text>
+    <text x="${X(Wm)+4}" y="${Y(0)-5}" ${F2} font-size="9.5" fill="#8A8175">sàn</text>
+    <text transform="rotate(90 ${W-6} ${Y(Hc/2)})" x="${W-6}" y="${Y(Hc/2)}" text-anchor="middle" ${F2} font-size="9.5" fill="#8A8175">tường</text>
+  </svg>`;
+}
+
+/* =========================== SYMBOLS (chuẩn ME, kích thước thật) =========================== */
+/* Trả về mảng shapes [{tag, attrs, fill?}] toạ độ quanh (0,0), đơn vị world px */
+function symbolShapes(type, P, len){
+  const s=[];
+  if(type==="panel"){
+    const h=0.3*P;
+    s.push({tag:"rect", attrs:{x:-h,y:-h,width:h*2,height:h*2}});
+    s.push({tag:"line", attrs:{x1:-h,y1:-h,x2:h,y2:h}});
+    s.push({tag:"line", attrs:{x1:-h,y1:h,x2:h,y2:-h}});
+  } else if(type==="tube"){
+    const L=0.6*P, w=0.04*P;
+    s.push({tag:"rect", attrs:{x:-L,y:-w,width:L*2,height:w*2}});
+    s.push({tag:"line", attrs:{x1:0,y1:-w*2.4,x2:0,y2:w*2.4}});
+  } else if(type==="spot"){
+    const r=0.05*P;
+    s.push({tag:"circle", attrs:{r:r}, fill:true});
+    s.push({tag:"line", attrs:{x1:0,y1:-r,x2:0,y2:-r-0.2*P}});
+    s.push({tag:"path", attrs:{d:`M${-0.05*P},${-r-0.14*P} L0,${-r-0.22*P} L${0.05*P},${-r-0.14*P}`}});
+  } else if(type==="pendant"){
+    const r=0.14*P, k=r*0.7071;
+    s.push({tag:"circle", attrs:{r:r}});
+    s.push({tag:"line", attrs:{x1:-k,y1:-k,x2:k,y2:k}});
+    s.push({tag:"line", attrs:{x1:-k,y1:k,x2:k,y2:-k}});
+  } else if(type==="chandelier"){ // đèn chùm: vòng + tia toả (khác pendant đơn)
+    const r=0.15*P;
+    s.push({tag:"circle", attrs:{r:r}});
+    s.push({tag:"circle", attrs:{r:0.03*P}, fill:true});
+    for(let i=0;i<6;i++){
+      const a=i*Math.PI/3, c=Math.cos(a), si=Math.sin(a);
+      s.push({tag:"line", attrs:{x1:(r*1.05*c).toFixed(1), y1:(r*1.05*si).toFixed(1),
+        x2:(r*1.45*c).toFixed(1), y2:(r*1.45*si).toFixed(1)}});
+    }
+  } else if(type==="strip"){ // LED dây: đường sóng dài THEO CHIỀU DÀI THẬT (len mét)
+    const L=Math.max(0.3, len||1), half=L*P/2, st=0.1*P;
+    let d=`M${(-half).toFixed(1)},0 Q${(-half+st/2).toFixed(1)},${(-0.06*P).toFixed(1)} ${(-half+st).toFixed(1)},0`;
+    const n=Math.max(1, Math.round(L/0.1)-1);
+    for(let i=1;i<=n;i++) d+=` T${(-half+st+i*st).toFixed(1)},0`;
+    s.push({tag:"path", attrs:{d}});
+  } else { // downlight: vòng tròn + chữ thập xuyên (ký hiệu recessed)
+    const r=0.08*P, e=0.13*P;
+    s.push({tag:"circle", attrs:{r:r}});
+    s.push({tag:"line", attrs:{x1:-e,y1:0,x2:e,y2:0}});
+    s.push({tag:"line", attrs:{x1:0,y1:-e,x2:0,y2:e}});
+  }
+  return s;
+}
+function svg(tag,attrs){ const e=document.createElementNS(SVGNS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+/* Vẽ symbol 2 lớp: halo trắng phía dưới + nét mực phía trên (đọc được trên ảnh nền) */
+function appendSymbol(parent, type, P, strokeW, color, len){
+  const shapes=symbolShapes(type,P,len);
+  [[C_WHITE, strokeW*3],[color, strokeW]].forEach(([col,w],pass)=>{
+    shapes.forEach(sh=>{
+      const a={...sh.attrs, stroke:col, "stroke-width":w, fill:"none",
+        "stroke-linecap":"round", "stroke-linejoin":"round"};
+      if(sh.fill){ if(pass===1){a.fill=col; a.stroke="none";} else {a.fill=col; a.stroke=col;} }
+      parent.appendChild(svg(sh.tag,a));
+    });
+  });
+}
+/* Ký hiệu CÔNG TẮC (chuẩn ME): chấm đặc + cần gạt nghiêng, mỗi nút một gạch.
+   Công tắc là thiết bị trên tường — vẽ theo cỡ tối thiểu đọc được, không thu nhỏ theo tỉ lệ như đèn */
+function switchShapes(sz, gang){
+  const s=[], r=sz*0.28;
+  s.push({tag:"circle", attrs:{r}, fill:true});
+  for(let i=0;i<gang;i++){
+    const o=(i-(gang-1)/2)*sz*0.3;
+    s.push({tag:"line", attrs:{x1:(o*0.7).toFixed(1), y1:(-r*0.7).toFixed(1),
+      x2:(o*0.7+sz*0.62).toFixed(1), y2:(-r*0.7-sz*0.62).toFixed(1)}});
+  }
+  return s;
+}
+function appendSwitch(parent, sz, gang, strokeW, color){
+  const shapes=switchShapes(sz,gang);
+  [[C_WHITE, strokeW*3],[color, strokeW]].forEach(([col,w],pass)=>{
+    shapes.forEach(sh=>{
+      const a={...sh.attrs, stroke:col, "stroke-width":w, fill:"none", "stroke-linecap":"round"};
+      if(sh.fill){ a.fill=col; a.stroke=col; }
+      parent.appendChild(svg(sh.tag,a));
+    });
+  });
+}
+/* Icon ký hiệu cho UI — scale + căn tâm theo từng loại để KHỚP ký hiệu trên mặt bằng
+   (spot có mũi tên dài lệch tâm — phải dịch xuống, không thì bị cắt mất mũi tên) */
+const ICON_SPEC={downlight:{s:0.28,cy:0}, panel:{s:0.64,cy:0}, tube:{s:1.28,cy:0},
+                 spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
+                 chandelier:{s:0.48,cy:0}, strip:{s:1.06,cy:0}};
+function symbolIconSVG(type, cls){
+  const spec=ICON_SPEC[type]||{s:0.3,cy:0};
+  const P=24/spec.s;
+  const el=document.createElementNS(SVGNS,"svg");
+  el.setAttribute("viewBox","-14 -14 28 28"); el.setAttribute("class",cls||"sym");
+  const g=svg("g",{transform:`translate(0,${(-spec.cy*P).toFixed(1)})`});
+  symbolShapes(type,P).forEach(sh=>{
+    const a={...sh.attrs, stroke:"currentColor","stroke-width":1.4,fill:sh.fill?"currentColor":"none",
+      "stroke-linecap":"round","stroke-linejoin":"round"};
+    g.appendChild(svg(sh.tag,a));
+  });
+  el.appendChild(g);
+  return el;
+}
+/* Thumbnail sản phẩm — TÁCH BIỆT với ký hiệu, chỉ là ảnh minh hoạ */
+function thumbEl(lamp){
+  if(!lamp.thumb) return null;
+  const im=document.createElement("img"); im.className="th"; im.src=lamp.thumb; return im;
+}
+
+/* =========================== RENDER =========================== */
+function render(){
+  const stage=$("#stage");
+  stage.style.transform = `translate(${view.tx}px,${view.ty}px) scale(${view.scale})`;
+  const bg=$("#bg");
+  if(F().bg){ if(bg.getAttribute("src")!==F().bg) bg.src=F().bg;
+    bg.style.width=F().bgW+"px"; bg.style.height=F().bgH+"px";
+    bg.style.opacity=F().bgOpacity; bg.classList.remove("hidden"); }
+  else { bg.removeAttribute("src"); bg.classList.add("hidden"); }
+  const ov=$("#overlay");
+  ov.setAttribute("width", worldW()); ov.setAttribute("height", worldH());
+  ov.setAttribute("viewBox", `0 0 ${worldW()} ${worldH()}`);
+  drawOverlay();
+  renderScaleTag();
+  updateSelChip();
+  // onboarding: chỉ hiện khi dự án hoàn toàn trống (chưa ảnh nền, chưa khu vực)
+  const empty = !F().bg && !F().zones.length && exportInv==null;
+  $("#onboard").classList.toggle("hidden", !empty);
+}
+
+let exportInv=null; // khi xuất PNG/PDF: cỡ nhãn/nét cố định theo ảnh, bỏ selection/guides
+function drawOverlay(){
+  const ov=$("#overlay"); ov.innerHTML="";
+  const inv = exportInv!=null? exportInv : 1/view.scale;
+  const P = ppm();
+  const symW = Math.max(0.015*P, 0.9*inv);   // nét ký hiệu: theo tỉ lệ, tối thiểu ~1px màn hình
+
+  const defs=svg("defs",{});
+  defs.innerHTML=`<radialGradient id="glowGrad"><stop offset="0%" stop-color="${C_GLOW}" stop-opacity=".5"/><stop offset="70%" stop-color="${C_GLOW}" stop-opacity=".18"/><stop offset="100%" stop-color="${C_GLOW}" stop-opacity="0"/></radialGradient>`
+    + F().zones.map(z=>`<clipPath id="zclip-${z.id}"><polygon points="${z.poly.map(p=>p.x+","+p.y).join(" ")}"/></clipPath>`).join("");
+  ov.appendChild(defs);
+
+  if(!F().bg){
+    ov.appendChild(svg("rect",{x:0,y:0,width:worldW(),height:worldH(),
+      fill:"#ffffff",opacity:".5",stroke:"#E7DFD3","stroke-width":inv}));
+  }
+
+  const isSel=(zid,li)=> exportInv==null && selLights.some(s=>s.zid===zid&&s.li===li);
+
+  // ---- lớp 1: zone fill/stroke ----
+  F().zones.forEach(z=>{
+    const active = z.id===F().selectedZone;
+    const pstr = z.poly.map(p=>`${p.x},${p.y}`).join(" ");
+    ov.appendChild(svg("polygon",{points:pstr, fill:z.color, "fill-opacity":active?".12":".06",
+      stroke:z.color, "stroke-width":(active?2.2:1.4)*inv, "stroke-linejoin":"round",
+      "data-zone":z.id, class:"zonepoly"}));
+  });
+
+  // ---- lớp 2: glow ----
+  if(state.showGlow) F().zones.forEach(z=>{
+    if(!z.lights.length) return;
+    // ánh sáng không xuyên tường: cắt toàn bộ quầng sáng theo ranh khu vực
+    const gz=svg("g",{"clip-path":`url(#zclip-${z.id})`});
+    z.lights.forEach(l=>{
+      if(isOff(l)) return; // đèn tắt trong kịch bản: không có quầng sáng
+      const lamp=lightById(l.lightId), r=glowRadius(z,lamp,l);
+      let gx=l.x, gy=l.y;
+      const tl=clamp(l.tilt||0,0,80);
+      if(tl>0){ // đèn nghiêng: tâm vệt dịch theo hướng mũi tên, không vượt quá tường
+        const rr=(l.rot||0)*Math.PI/180;
+        const dir={x:Math.sin(rr), y:-Math.cos(rr)};
+        let offG=clamp(l.mh||z.ceilH||2.8,0.2,z.ceilH||2.8)*Math.tan(tl*Math.PI/180)*P;
+        const hit=rayHitPoly(l, dir, z.poly);
+        if(hit) offG=Math.min(offG, hit.t);
+        gx+=dir.x*offG; gy+=dir.y*offG;
+      }
+      const g=svg("g",{transform:`translate(${gx},${gy}) rotate(${l.rot||0})`});
+      if(lamp.type==="panel"){
+        g.appendChild(svg("rect",{x:-r*0.8,y:-r*0.8,width:r*1.6,height:r*1.6,rx:r*0.15,fill:"url(#glowGrad)"}));
+      } else if(lamp.type==="tube"){
+        g.appendChild(svg("ellipse",{cx:0,cy:0,rx:r*1.3,ry:r*0.6,fill:"url(#glowGrad)"}));
+      } else if(lamp.type==="strip"){ // dải sáng dọc theo chiều dài dây thật
+        g.appendChild(svg("ellipse",{cx:0,cy:0,
+          rx:Math.max(0.3,l.len||1)*P/2+r*0.25, ry:r*0.45, fill:"url(#glowGrad)"}));
+      } else {
+        g.appendChild(svg("circle",{cx:0,cy:0,r:r,fill:"url(#glowGrad)"}));
+      }
+      gz.appendChild(g);
+    });
+    ov.appendChild(gz);
+  });
+
+  // ---- lớp 3: vệt tường cho đèn được chọn (1 đèn) ----
+  if(exportInv==null && selLights.length===1 && F().pxPerMeter){
+    const {zid,li}=selLights[0]; const z=getZone(zid);
+    if(z && z.lights[li]){
+      const wm=wallMetrics(z, z.lights[li]);
+      if(wm){
+        const l=z.lights[li];
+        ov.appendChild(svg("line",{x1:l.x,y1:l.y,x2:wm.foot.x,y2:wm.foot.y,
+          stroke:C_ACCENT_D,"stroke-width":1.2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
+        if(wm.chord){
+          ov.appendChild(svg("line",{x1:wm.chord.x1,y1:wm.chord.y1,x2:wm.chord.x2,y2:wm.chord.y2,
+            stroke:C_GLOW,"stroke-width":Math.max(0.06*P,3*inv),"stroke-linecap":"round",opacity:".85"}));
+        }
+        // MỘT label duy nhất, đặt SAU LƯNG đèn (phía ngược tường) — vùng luôn trống,
+        // không đè ký hiệu/vòng chọn kể cả khi đèn sát tường
+        const dx=l.x-wm.foot.x, dy=l.y-wm.foot.y, len=Math.hypot(dx,dy)||1;
+        const ux=dx/len, uy=dy/len;
+        const off=Math.max((SYM_SIZE[wm.lamp.type]||0.2)*P*0.9, 26*inv);
+        const txt = wm.hits? (wm.hBottom>0.05
+              ? `${wm.dM.toFixed(2)}m · hắt tường +${wm.hBottom.toFixed(2)}→${wm.hTop.toFixed(2)}m`
+              : `${wm.dM.toFixed(2)}m · hắt tường +${wm.hTop.toFixed(2)}m`)
+            : `${wm.dM.toFixed(2)}m · chưa hắt tới tường`;
+        // neo ĐẦU chuỗi theo hướng thoát — chữ mọc ra xa đèn, không tràn ngược lên ký hiệu
+        const anchor = ux>0.35? "start" : ux<-0.35? "end" : "middle";
+        addLabel(ov, l.x+ux*off, l.y+uy*off+4*inv, txt, 11*inv,
+          wm.hits?C_ACCENT_D:"#8A8175", inv, anchor);
+      }
+    }
+  }
+
+  // ---- lớp 4: ký hiệu đèn (kích thước thật) ----
+  const lblMode=state.labelMode||"compact";
+  F().zones.forEach(z=>{
+    const seenCode=new Set(); // chế độ "Gọn": mỗi loại chỉ ghi mã 1 lần / khu vực
+    // nếu ≥2 model CÙNG loại (cùng ký hiệu) trong khu vực → mã là thứ duy nhất
+    // phân biệt chúng, phải ghi ĐỦ cho các model đó kể cả ở chế độ Gọn
+    const typeModels={};
+    z.lights.forEach(l=>{ const t=lightById(l.lightId).type;
+      (typeModels[t]=typeModels[t]||new Set()).add(l.lightId); });
+    z.lights.forEach((l,li)=>{
+      const lamp=lightById(l.lightId);
+      const sel=isSel(z.id,li);
+      const hov=exportInv==null && hoverLight && hoverLight.zid===z.id && hoverLight.li===li;
+      const off=isOff(l);
+      const rot=l.rot||0;
+      const g=svg("g",{transform:`translate(${l.x},${l.y}) rotate(${rot})`,
+        "data-zid":z.id,"data-li":li, class:"lightm", style:"cursor:pointer",
+        opacity: off? .35 : 1});
+      if(sel||hov){
+        const hr=Math.max((SYM_SIZE[lamp.type]||0.2)*0.75*P, 12*inv);
+        g.appendChild(svg("circle",{r:hr, fill:sel?C_ACCENT:C_ACCENT, "fill-opacity":sel?".16":".08",
+          stroke:C_ACCENT,"stroke-width":(sel?1.6:1)*inv,"stroke-dasharray":sel?"none":`${3*inv},${3*inv}`}));
+      }
+      // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
+      const cir=l.circuit? circuitById(l.circuit) : null;
+      const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : (cir? cir.color : C_INK);
+      appendSymbol(g, lamp.type, P, symW, symColor, l.len);
+      // vùng bắt chuột (ẩn) — LED dây thêm dải hit dọc theo chiều dài
+      const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
+      g.appendChild(svg("circle",{r:hitR, fill:"transparent", class:"hit"}));
+      if(lamp.type==="strip"){
+        const Lp=Math.max(0.3, l.len||1)*P;
+        g.appendChild(svg("rect",{x:-Lp/2, y:-Math.max(0.12*P,10*inv), width:Lp,
+          height:Math.max(0.24*P,20*inv), fill:"transparent", class:"hit"}));
+      }
+      ov.appendChild(g);
+      // mã ký hiệu cạnh đèn (D1, S2…) — theo chế độ nhãn: Tất cả / Gọn (1 mã mỗi loại) / Ẩn
+      let showCode = !!lamp.code && lblMode!=="off";
+      if(showCode && lblMode==="compact" && !sel){
+        const shared = typeModels[lamp.type] && typeModels[lamp.type].size>1;
+        if(!shared){ // loại chỉ có 1 model: 1 mã đại diện là đủ
+          if(seenCode.has(l.lightId)) showCode=false;
+          else seenCode.add(l.lightId);
+        }
+      }
+      if(showCode){
+        let lx, ly, anch="start";
+        if(lamp.type==="strip"||lamp.type==="tube"){
+          // loại dài: mã đặt SÁT cạnh dây, vuông góc trục theo hướng xoay
+          const rr=rot*Math.PI/180, offp=0.1*P+9*inv;
+          lx=l.x-Math.sin(rr)*offp; ly=l.y+Math.cos(rr)*offp+3*inv; anch="middle";
+        } else {
+          const so=(SYM_SIZE[lamp.type]||0.2)*P*0.55;
+          lx=l.x+so+3*inv; ly=l.y+so+8*inv;
+        }
+        // mã loại + CHỮ CỤM (chuẩn ME: "D2a") — kéo được để né chỗ đè
+        addDragLabel(ov, "L", z.id+":"+li, lx+(l.lx||0), ly+(l.ly||0),
+          lamp.code+(cir&&cir.key? cir.key:""), 8.5*inv,
+          off? "#BDB4A6" : (sel? C_ACCENT_D : (cir? cir.color : "#6E665A")), inv, anch);
+      }
+    });
+  });
+
+  // ---- lớp 4b: CÔNG TẮC + đường điều khiển tới đèn (nét đứt kiểu bản vẽ ME) ----
+  const fl=F();
+  (fl.switches||[]).forEach((sw,si)=>{
+    const sel = selSwitch===sw.id;
+    const sz = Math.max(0.11*P, 15*inv);
+    // đường điều khiển: hiện khi chọn công tắc hoặc bật "hiện tất cả"
+    if(sel || state.showWiring){
+      lightsOfSwitch(sw, fl).forEach(({l})=>{
+        const mx=(sw.x+l.x)/2, my=(sw.y+l.y)/2;
+        const nx=-(l.y-sw.y), ny=(l.x-sw.x);
+        const len=Math.hypot(nx,ny)||1;
+        const bow=Math.min(len*0.12, 40*inv);
+        const c=circuitById(l.circuit, fl);
+        ov.appendChild(svg("path",{
+          d:`M${sw.x},${sw.y} Q${mx+nx/len*bow},${my+ny/len*bow} ${l.x},${l.y}`,
+          fill:"none", stroke:(c&&c.color)||C_ACCENT_D,
+          "stroke-width":(sel?1.4:1)*inv, "stroke-dasharray":`${5*inv},${4*inv}`,
+          opacity:sel?.9:.45}));
+      });
+    }
+    const g=svg("g",{transform:`translate(${sw.x},${sw.y})`, "data-sw":sw.id,
+      class:"switchm", style:"cursor:pointer"});
+    if(sel) g.appendChild(svg("circle",{r:sz*0.95, fill:C_ACCENT, "fill-opacity":".16",
+      stroke:C_ACCENT, "stroke-width":1.6*inv}));
+    const anyOn=(sw.circuits||[]).some(cid=>!(fl.liveOff||[]).includes(cid));
+    appendSwitch(g, sz, switchGang(sw), Math.max(0.012*P, 0.9*inv),
+      sel? C_ACCENT_D : (anyOn? C_INK : "#A9A093"));
+    g.appendChild(svg("circle",{r:Math.max(sz*0.9, 13*inv), fill:"transparent", class:"hit"}));
+    ov.appendChild(g);
+    if(lblMode!=="off"){
+      // Nhãn công tắc = CHỮ CỤM nó điều khiển (a,b,c) — chuẩn ME, không ghi CT1 (thừa).
+      // Chưa gán cụm → hiện "?" mờ để biết công tắc cần cấu hình. Mã CT giữ ở bảng PDF + panel.
+      const keys=(sw.circuits||[]).map(cid=>(circuitById(cid,fl)||{}).key||"").filter(Boolean).join("");
+      addDragLabel(ov, "W", sw.id, sw.x+sz*0.5+3*inv+(sw.lx||0), sw.y+sz*0.75+7*inv+(sw.ly||0),
+        keys||"?", 8.5*inv,
+        sel?C_ACCENT_D:(keys?"#6E665A":"#C0B8AA"), inv, "start");
+    }
+  });
+
+  // ---- lớp 5: nhãn khu vực — thẻ nhãn LUÔN nằm trong zone của nó, né đèn, hạ cấp khi chật ----
+  F().zones.forEach(z=>{
+    const bb=bbox(z.poly);
+    const active=z.id===F().selectedZone;
+    const wpx = exportInv!=null? Infinity : bb.w*view.scale; // bề rộng zone trên MÀN HÌNH
+    if(wpx<70 && !active) return;                 // zone quá nhỏ: ẩn nhãn (chọn zone sẽ hiện)
+    const c=calc(z);
+    const ok = c.actual!=null && c.actual>=c.E*0.9;
+    let line2 = (c.E && (wpx>=150 || active))? (c.actual!=null
+      ? `${Math.round(c.actual)}/${c.E} lx · ${c.count} đèn · ${fmt(c.totW)}W`
+      : `chuẩn ${c.E} lx`) : null;
+    const sizeOf=l2=>({
+      lw: Math.max(z.name.length*6.4, (l2||"").length*5.0)*inv + 16*inv,
+      lh: (l2? 31 : 19)*inv,
+    });
+    // Thẻ đầy đủ nếu có chỗ thoáng; phòng chật thì HẠ CẤP còn tên (lux vẫn ở panel phải)
+    const full=sizeOf(line2), pFull = line2? placeZoneLabel(z, full.lw, full.lh, inv) : null;
+    let lw=full.lw, lh=full.lh, pos=pFull;
+    if(!line2 || !pFull || !pFull.ok){
+      const sh=sizeOf(null), pSh=placeZoneLabel(z, sh.lw, sh.lh, inv);
+      // ưu tiên thẻ tên (nhỏ, dễ né) trừ khi thẻ đầy đủ vẫn thoáng hơn
+      if(pSh && (!pFull || pSh.ok || pSh.c>pFull.c)){ line2=null; lw=sh.lw; lh=sh.lh; pos=pSh; }
+    }
+    if(!pos && active) pos={x:bb.x0+5*inv, y:bb.y0+5*inv};
+    if(!pos) return;                              // quá chật: panel bên phải vẫn có đủ thông số
+    pos={x:pos.x+(z.lx||0), y:pos.y+(z.ly||0)};   // offset kéo tay
+    drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv);
+  });
+
+  // ---- lớp 5b: BẢNG CHÚ GIẢI CỤM — góc bản vẽ, vào cả PNG/PDF ----
+  drawLegend(ov, inv, P);
+
+  // ---- lớp 6: snap guides khi kéo ----
+  if(drag && drag.mode==="lights" && drag.guides){
+    drag.guides.forEach(gd=>{
+      if(gd.type==="v") ov.appendChild(svg("line",{x1:gd.x,y1:0,x2:gd.x,y2:worldH(),
+        stroke:C_ACCENT,"stroke-width":inv,"stroke-dasharray":`${4*inv},${4*inv}`,opacity:".7"}));
+      else ov.appendChild(svg("line",{x1:0,y1:gd.y,x2:worldW(),y2:gd.y,
+        stroke:C_ACCENT,"stroke-width":inv,"stroke-dasharray":`${4*inv},${4*inv}`,opacity:".7"}));
+    });
+  }
+
+  // ---- lớp 7: draft & marquee ----
+  if(draft){
+    if(draft.type==="calibrate" && draft.pts.length){
+      const p=draft.pts;
+      if(p.length>=2){
+        ov.appendChild(svg("line",{x1:p[0].x,y1:p[0].y,x2:p[1].x,y2:p[1].y,
+          stroke:C_ACCENT,"stroke-width":2.4*inv,"stroke-dasharray":`${6*inv},${5*inv}`}));
+      }
+      p.forEach(pt=> ov.appendChild(svg("circle",{cx:pt.x,cy:pt.y,r:5*inv,fill:C_ACCENT})));
+    }
+    if(draft.type==="poly" && draft.pts.length){
+      const pstr=draft.pts.map(p=>`${p.x},${p.y}`).join(" ");
+      ov.appendChild(svg("polyline",{points:pstr,fill:"none",stroke:C_ACCENT,
+        "stroke-width":2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
+      draft.pts.forEach(pt=>ov.appendChild(svg("circle",{cx:pt.x,cy:pt.y,r:4.5*inv,fill:C_ACCENT})));
+    }
+    if(draft.type==="rect" && draft.pts.length===2){
+      const [a,b]=draft.pts;
+      ov.appendChild(svg("rect",{x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),
+        width:Math.abs(b.x-a.x),height:Math.abs(b.y-a.y),fill:C_ACCENT,"fill-opacity":".1",
+        stroke:C_ACCENT,"stroke-width":2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
+    }
+    if(draft.type==="strip" && draft.pts.length===2){
+      const [a,b]=draft.pts;
+      ov.appendChild(svg("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:C_ACCENT,
+        "stroke-width":Math.max(0.05*P,2.5*inv),"stroke-linecap":"round",
+        "stroke-dasharray":`${5*inv},${4*inv}`}));
+      if(F().pxPerMeter){
+        addLabel(ov,(a.x+b.x)/2,(a.y+b.y)/2-11*inv,
+          (Math.hypot(b.x-a.x,b.y-a.y)/ppm()).toFixed(2)+" m", 10.5*inv, C_ACCENT_D, inv);
+      }
+    }
+  }
+  if(drag && drag.mode==="marquee"){
+    const {x0,y0,x1,y1}=marqueeRect(drag);
+    ov.appendChild(svg("rect",{x:x0,y:y0,width:x1-x0,height:y1-y0,
+      fill:C_ACCENT,"fill-opacity":".07",stroke:C_ACCENT,
+      "stroke-width":inv,"stroke-dasharray":`${4*inv},${3*inv}`}));
+  }
+}
+/* text trần (không viền) — dùng khi đã có nền thẻ phía dưới */
+function addText(parent, x, y, txt, size, color, anchor, weight){
+  const t=svg("text",{x, y, "text-anchor":anchor||"start",
+    "font-family":"'Inter',sans-serif", "font-weight":weight||500,
+    "font-size":size, fill:color, style:"letter-spacing:.01em; pointer-events:none"});
+  t.textContent=txt;
+  parent.appendChild(t);
+}
+/* Tìm chỗ đặt nhãn khu vực: LUÔN trong polygon của chính nó (không tràn sang khu vực khác),
+   quét lưới ưu tiên góc trên-trái, chọn ô đầu tiên thoáng đèn; không có thì lấy ô thoáng nhất */
+function placeZoneLabel(z, lw, lh, inv){
+  const bb=bbox(z.poly), pad=5*inv;
+  if(bb.w-2*pad < lw || bb.h-2*pad < lh) return null;
+  const N=7, stepX=(bb.w-2*pad-lw)/(N-1), stepY=(bb.h-2*pad-lh)/(N-1);
+  const inside=(x,y)=> pointInPoly(x,y,z.poly) && pointInPoly(x+lw,y,z.poly)
+    && pointInPoly(x,y+lh,z.poly) && pointInPoly(x+lw,y+lh,z.poly)
+    && pointInPoly(x+lw/2,y+lh/2,z.poly);
+  const clearance=(x,y)=>{
+    let mn=Infinity;
+    z.lights.forEach(l=>{
+      const dx=Math.max(x-l.x, 0, l.x-(x+lw)), dy=Math.max(y-l.y, 0, l.y-(y+lh));
+      mn=Math.min(mn, Math.hypot(dx,dy));
+    });
+    return mn;
+  };
+  const need=13*inv;
+  let best=null;
+  for(let gy=0; gy<N; gy++) for(let gx=0; gx<N; gx++){
+    const x=bb.x0+pad+gx*stepX, y=bb.y0+pad+gy*stepY;
+    if(!inside(x,y)) continue;
+    const c=clearance(x,y);
+    if(c>=need) return {x,y,c,ok:true};   // thoáng đèn → lấy ngay (thứ tự quét ưu tiên trên-trái)
+    if(!best || c>best.c) best={x,y,c,ok:false};
+  }
+  return best;                            // không ô nào thoáng → ô thoáng nhất
+}
+/* Thẻ nhãn khu vực: nền sáng + thanh màu trùng màu zone → thuộc về phòng nào là rõ ngay.
+   Kéo được (offset z.lx/ly); pos đã gồm offset. */
+function drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv){
+  const g=svg("g",{class:"dlbl","data-k":"Z","data-r":z.id, style:"cursor:move"});
+  g.appendChild(svg("rect",{x:pos.x, y:pos.y, width:lw, height:lh, rx:3*inv,
+    fill:"#FFFFFF", "fill-opacity":"0.92", stroke:z.color, "stroke-width":1*inv}));
+  g.appendChild(svg("rect",{x:pos.x, y:pos.y, width:2.5*inv, height:lh, fill:z.color}));
+  const tx=pos.x+8*inv;
+  const t1=svg("text",{x:tx, y:pos.y+(line2? 12.5*inv : 12*inv), "text-anchor":"start",
+    "font-family":"'Inter',sans-serif","font-weight":600,"font-size":11*inv, fill:z.color,
+    style:"pointer-events:none"}); t1.textContent=z.name; g.appendChild(t1);
+  if(line2){ const t2=svg("text",{x:tx, y:pos.y+24.5*inv, "text-anchor":"start",
+    "font-family":"'Inter',sans-serif","font-weight":500,"font-size":8.5*inv,
+    fill:ok? "#4B6B39":C_DANGER, style:"pointer-events:none"}); t2.textContent=line2; g.appendChild(t2); }
+  ov.appendChild(g);
+}
+/* Bảng chú giải cụm điều khiển — góc trên-phải bản vẽ, đúng kiểu legend của bản vẽ ME */
+function drawLegend(ov, inv, P){
+  const fl=F();
+  if(state.showLegend===false) return;
+  const rows=(fl.circuits||[]).filter(c=> fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
+  if(!rows.length) return;
+  const rh=15*inv, pad=8*inv, hh=15*inv;
+  const w=Math.max(150*inv, ...rows.map(c=>(c.name.length*5.6+58)*inv));
+  const h=hh+rows.length*rh+pad;
+  const x=worldW()-w-12*inv+(fl.lx||0), y=12*inv+(fl.ly||0);   // offset kéo tay
+  const parent=ov;
+  const g=svg("g",{class:"dlbl","data-k":"LG","data-r":fl.id, style:"cursor:move"});
+  ov=g;                                                        // vẽ mọi thứ vào group
+  g.appendChild(svg("rect",{x, y, width:w, height:h, rx:3*inv,
+    fill:"#FFFFFF", "fill-opacity":"0.93", stroke:"#CFC6B8", "stroke-width":1*inv}));
+  addText(g, x+pad, y+11*inv, "CỤM ĐIỀU KHIỂN", 8*inv, "#8A8175", "start", 700);
+  g.appendChild(svg("line",{x1:x, y1:y+hh, x2:x+w, y2:y+hh, stroke:"#E7DFD3","stroke-width":1*inv}));
+  rows.forEach((c,i)=>{
+    const ry=y+hh+i*rh+11*inv;
+    const off=(fl.liveOff||[]).includes(c.id);
+    ov.appendChild(svg("rect",{x:x+pad, y:ry-7*inv, width:8*inv, height:8*inv, rx:2*inv,
+      fill:c.color, "fill-opacity":off?".35":"1"}));
+    addText(ov, x+pad+13*inv, ry, c.key, 9*inv, c.color, "start", 700);
+    addText(ov, x+pad+24*inv, ry, c.name+(off?" (tắt)":""), 9*inv,
+      off?"#A9A093":"#3A362F", "start", 500);
+    const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+    addText(ov, x+w-pad, ry, `${n} đèn`, 8.5*inv, "#8A8175", "end", 400);
+  });
+  parent.appendChild(g);
+}
+/* Nhãn KÉO ĐƯỢC: mã đèn/công tắc/tên khu vực — offset thủ công lưu trên object.
+   kind: L (đèn) / W (công tắc) / Z (khu vực); ref định danh. */
+function labelObj(kind, ref){
+  if(kind==="L"){ const i=ref.indexOf(":"); const z=getZone(ref.slice(0,i));
+    return z&&z.lights[+ref.slice(i+1)]; }
+  if(kind==="W") return (F().switches||[]).find(s=>s.id===ref);
+  if(kind==="Z") return getZone(ref);
+  if(kind==="LG") return state.floors.find(f=>f.id===ref);  // bảng chú giải: offset trên tầng
+  return null;
+}
+function addDragLabel(ov, kind, ref, x, y, txt, size, color, inv, anchor){
+  const g=svg("g",{class:"dlbl","data-k":kind,"data-r":ref, style:"cursor:move"});
+  const w=txt.length*size*0.62, h=size*1.3;
+  const rx = anchor==="end"? x-w : anchor==="middle"? x-w/2 : x;
+  g.appendChild(svg("rect",{x:rx-3*inv, y:y-h+3*inv, width:w+6*inv, height:h+3*inv,
+    rx:3*inv, fill:"transparent", class:"lblhit"}));
+  const t=svg("text",{x, y, "text-anchor":anchor||"start",
+    "font-family":"'Inter',sans-serif","font-weight":600,"font-size":size, fill:color,
+    stroke:"#FFFFFF","stroke-width":2.4*inv,"paint-order":"stroke",
+    style:"letter-spacing:.01em; pointer-events:none"});
+  t.textContent=txt;
+  g.appendChild(t);
+  ov.appendChild(g);
+}
+/* text có viền trắng (paint-order) để đọc được trên nền ảnh */
+function addLabel(parent, x, y, txt, size, color, inv, anchor){
+  // Inter cho nhãn (JetBrains Mono thiếu glyph dấu tiếng Việt phức như "ờ")
+  const t=svg("text",{x,y,"text-anchor":anchor||"middle",
+    "font-family":"'Inter',sans-serif","font-weight":"500","font-size":size, fill:color,
+    stroke:"#FFFFFF","stroke-width":2.4*inv, "paint-order":"stroke",
+    style:"letter-spacing:.04em; pointer-events:none"});
+  t.textContent=txt;
+  parent.appendChild(t);
+}
+function renderScaleTag(){
+  const el=$("#scaleTxt"), tag=$("#scaleTag");
+  if(F().pxPerMeter){ el.textContent=`1 m = ${F().pxPerMeter.toFixed(1)} px`; tag.classList.remove("warn"); }
+  else { el.textContent="chưa cân — nhấn C để cân tỉ lệ"; tag.classList.add("warn"); }
+}
+function updateSelChip(){
+  const chip=$("#selChip");
+  if(selLights.length){
+    chip.classList.remove("hidden");
+    const ids=new Set(selLights.map(s=>{ const z=getZone(s.zid);
+      return z&&z.lights[s.li]? z.lights[s.li].lightId : null; }).filter(Boolean));
+    let t=selLights.length+" đèn";
+    if(ids.size===1){ const lamp=lightById([...ids][0]);
+      if(lamp) t=selLights.length+" × "+(lamp.code||lamp.name); }
+    $("#selTxt").textContent=t;
+  }
+  else chip.classList.add("hidden");
+}
+/* ---- TẦNG ---- */
+function switchFloor(i){
+  if(i===state.cur || !state.floors[i]) return;
+  state.cur=i; selLights=[]; draft=null; drag=null;
+  save(); renderAll(); fitView();
+}
+function addFloor(){
+  mutate(()=>{
+    // kế thừa tỉ lệ tầng hiện tại (thường cùng bộ bản vẽ) — vẫn cân lại được bằng C
+    const f=newFloor("Tầng "+(state.floors.length+1), F().pxPerMeter);
+    state.floors.push(f); state.cur=state.floors.length-1; selLights=[];
+  });
+  fitView();
+  toast(F().pxPerMeter? "Đã thêm tầng — tải ảnh mặt bằng lên (tỉ lệ đã chép từ tầng trước)"
+                      : "Đã thêm tầng — tải ảnh mặt bằng rồi cân tỉ lệ");
+}
+function deleteFloor(i){
+  if(state.floors.length<=1){ toast("Dự án cần ít nhất 1 tầng"); return; }
+  const f=state.floors[i];
+  const n=f.zones.reduce((s,z)=>s+z.lights.length,0);
+  if(!confirm(`Xoá “${f.name}”${n?` (${f.zones.length} khu vực, ${n} đèn)`:""}?`)) return;
+  mutate(()=>{
+    state.floors.splice(i,1);
+    state.cur=clamp(state.cur>=i? state.cur-1 : state.cur, 0, state.floors.length-1);
+    selLights=[];
+  });
+  fitView();
+  toast("Đã xoá tầng — Ctrl+Z để hoàn tác");
+}
+function renameFloor(i){
+  const f=state.floors[i];
+  const v=prompt("Tên tầng:", f.name);
+  if(v!==null && v.trim()) mutate(()=>{ f.name=v.trim(); });
+}
+function renderFloorBar(){
+  const bar=$("#floorBar"); bar.innerHTML="";
+  state.floors.forEach((f,i)=>{
+    const b=document.createElement("button");
+    b.className="fl"+(i===state.cur?" on":"");
+    b.title="Click: chuyển tầng · Double-click: đổi tên";
+    const n=f.zones.reduce((s,z)=>s+z.lights.length,0);
+    b.innerHTML=`${escapeHtml(f.name)}<span class="meta" style="opacity:.6;font-size:10px">${n||""}</span>`;
+    if(!f.pxPerMeter && f.zones.length){
+      const d=document.createElement("span"); d.className="dot"; d.title="Tầng này chưa cân tỉ lệ"; b.appendChild(d);
+    }
+    b.onclick=()=>switchFloor(i);
+    b.ondblclick=(e)=>{ e.stopPropagation(); renameFloor(i); };
+    if(state.floors.length>1){
+      const x=document.createElement("span"); x.className="fx"; x.textContent="✕";
+      x.title="Xoá tầng";
+      x.onclick=(e)=>{ e.stopPropagation(); deleteFloor(i); };
+      b.appendChild(x);
+    }
+    bar.appendChild(b);
+  });
+  const add=document.createElement("button");
+  add.className="fladd"; add.textContent="+"; add.title="Thêm tầng / mặt bằng mới";
+  add.onclick=addFloor;
+  bar.appendChild(add);
+}
+
+function renderSceneBar(){
+  const fl=F(), bar=$("#sceneBar");
+  const hasCtl=(fl.circuits||[]).length>0;
+  bar.classList.toggle("hidden", !hasCtl);
+  if(!hasCtl){ bar.innerHTML=""; return; }
+  const dirty=(fl.liveOff||[]).length>0 && !fl.scene;
+  let h=`<span class="sclbl">Kịch bản</span>
+    <button class="sc${!fl.scene&&!(fl.liveOff||[]).length?" on":""}" data-sc="">Tất cả bật</button>`;
+  (fl.scenes||[]).forEach(s=>{
+    h+=`<button class="sc${fl.scene===s.id?" on":""}" data-sc="${s.id}">${escapeHtml(s.name)}
+      <span class="sx" data-del="${s.id}">✕</span></button>`;
+  });
+  h+=`<button class="scadd" id="scAdd">${dirty?"⤓ Lưu cảnh này":"+ Kịch bản"}</button>`;
+  bar.innerHTML=h;
+  bar.querySelectorAll(".sc").forEach(b=> b.onclick=e=>{
+    if(e.target.dataset.del){ e.stopPropagation(); deleteScene(e.target.dataset.del); return; }
+    applyScene(b.dataset.sc||null);
+  });
+  bar.querySelector("#scAdd").onclick=saveScene;
+}
+function renderAll(){
+  render(); renderFloorBar(); renderSceneBar(); renderZoneList(); refreshRight(); renderSummary(); updateUndoBtns();
+  // đồng bộ các control ngoài right-panel sau undo/redo/nạp dữ liệu
+  const pn=$("#projName"); if(document.activeElement!==pn) pn.value=state.projectName;
+  $("#opacity").value=Math.round((F().bgOpacity||0.7)*100);
+  $("#opv").textContent=Math.round((F().bgOpacity||0.7)*100)+"%";
+  $("#chkGlow").checked=state.showGlow!==false;
+  $("#chkWiring").checked=!!state.showWiring;
+  $("#chkLegend").checked=state.showLegend!==false;
+  syncLblSeg();
+  $("#bgControls").classList.toggle("hidden", !F().bg);
+}
+
+/* =========================== VIEW =========================== */
+function zoomAt(factor, px, py){
+  const r=$("#viewport").getBoundingClientRect();
+  if(px==null){ px=r.width/2; py=r.height/2; }
+  const wx=(px-view.tx)/view.scale, wy=(py-view.ty)/view.scale;
+  view.scale = clamp(view.scale*factor, 0.05, 8);
+  view.tx = px - wx*view.scale; view.ty = py - wy*view.scale;
+  render();
+}
+function fitView(){
+  const r=$("#viewport").getBoundingClientRect();
+  const pad=40;
+  view.scale = clamp(Math.min((r.width-pad)/worldW(), (r.height-pad)/worldH()),0.05,8);
+  view.tx = (r.width - worldW()*view.scale)/2;
+  view.ty = (r.height - worldH()*view.scale)/2;
+  render();
+}
+
+/* =========================== TOOLS =========================== */
+function setTool(t){
+  tool=t; draft=null;
+  $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
+  updateCursor();
+  const z=selZone();
+  const hints={
+    calibrate:"Click 2 điểm trên một cạnh đã biết chiều dài · Esc để huỷ",
+    rect:"Kéo chuột để tạo khu vực · Esc để huỷ",
+    poly:"Click từng đỉnh · double-click hoặc Enter để đóng · Esc để huỷ",
+    switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
+    light: z? (lightById(z.placeLightId).type==="strip"
+              ? "Kéo để vẽ dây theo chiều dài thật · click 1 lần = 1 m · Esc để xong"
+              : `Click trong khu vực để đặt “${lightById(z.placeLightId).name}” · Esc để xong`)
+            : "Chọn một khu vực trước, rồi click để đặt đèn",
+  };
+  if(hints[t]) showHint(hints[t]); else hideHint();
+  render();
+}
+function updateCursor(){
+  const vp=$("#viewport");
+  vp.classList.remove("c-grab","c-grabbing","c-cross");
+  if(drag&&drag.mode==="pan") vp.classList.add("c-grabbing");
+  else if(spaceHeld) vp.classList.add("c-grab");
+  else if(tool!=="select") vp.classList.add("c-cross");
+}
+let hintTimer=null;
+function showHint(txt){ const h=$("#hint"); h.textContent=txt; h.classList.add("show"); }
+function hideHint(){ $("#hint").classList.remove("show"); }
+
+/* =========================== POINTER =========================== */
+const vp=$("#viewport");
+vp.addEventListener("contextmenu", e=>e.preventDefault());
+
+vp.addEventListener("wheel", e=>{
+  e.preventDefault();
+  const r=vp.getBoundingClientRect();
+  if(e.ctrlKey||e.metaKey){
+    zoomAt(e.deltaY<0?1.12:1/1.12, e.clientX-r.left, e.clientY-r.top);
+  } else if(e.shiftKey){
+    view.tx -= e.deltaY; render();
+  } else {
+    view.tx -= e.deltaX; view.ty -= e.deltaY; render();
+  }
+},{passive:false});
+
+function marqueeRect(d){
+  const a=d.start, b=d.cur;
+  return {x0:Math.min(a.x,b.x), y0:Math.min(a.y,b.y), x1:Math.max(a.x,b.x), y1:Math.max(a.y,b.y)};
+}
+function hitLight(target){
+  const g=target.closest? target.closest(".lightm") : null;
+  return g? {zid:g.dataset.zid, li:+g.dataset.li} : null;
+}
+/* Mọi đèn nằm dưới con trỏ, theo thứ tự vẽ (phần tử cuối = trên cùng) — cho Alt+click xuyên lớp */
+function lightsAtPoint(w){
+  const P=ppm(), inv=1/view.scale, res=[];
+  F().zones.forEach(z=> z.lights.forEach((l,li)=>{
+    const lamp=lightById(l.lightId);
+    const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
+    if(Math.hypot(w.x-l.x, w.y-l.y)<=hitR) res.push({zid:z.id, li});
+  }));
+  return res;
+}
+
+/* Huỷ drag đang treo (mất focus, pointerup bị nuốt): trả đèn về vị trí gốc */
+function cancelDrag(){
+  if(!drag) return;
+  if(drag.mode==="lights" && drag.orig){
+    drag.orig.forEach(o=>{ const z=getZone(o.zid);
+      if(z&&z.lights[o.li]){ z.lights[o.li].x=o.x; z.lights[o.li].y=o.y; } });
+  }
+  if(drag.mode==="rect"||drag.mode==="strip") draft=null;
+  drag=null; updateCursor(); render();
+}
+window.addEventListener("blur", ()=>{ spaceHeld=false; cancelDrag(); updateCursor(); });
+window.addEventListener("pointercancel", cancelDrag);
+
+vp.addEventListener("pointerdown", e=>{
+  // các UI nổi trên canvas: KHÔNG được coi là thao tác vẽ — nếu không renderAll() sẽ
+  // thay DOM và nuốt mất sự kiện click của chính nút vừa bấm
+  if(e.target.closest("#zoombar,#scaleTag,#selChip,#floorBar,#sceneBar,#bgPop,#hint,#onboard")) return;
+  if(drag) cancelDrag(); // drag treo từ trước không được phép sống qua cú bấm mới
+  const w=screenToWorld(e.clientX,e.clientY);
+
+  // pan: chuột giữa, chuột phải, hoặc space+trái
+  if(e.button===1 || e.button===2 || (e.button===0&&spaceHeld)){
+    drag={mode:"pan", sx:e.clientX, sy:e.clientY, tx:view.tx, ty:view.ty};
+    updateCursor(); return;
+  }
+  if(e.button!==0) return;
+
+  if(tool==="calibrate"){
+    if(!draft||draft.type!=="calibrate") draft={type:"calibrate",pts:[]};
+    draft.pts.push(w);
+    if(draft.pts.length===2) openCalibrateModal();
+    render(); return;
+  }
+  if(tool==="rect"){ draft={type:"rect",pts:[w,{...w}]}; drag={mode:"rect"}; render(); return; }
+  if(tool==="poly"){
+    if(!draft||draft.type!=="poly") draft={type:"poly",pts:[]};
+    const last=draft.pts[draft.pts.length-1];
+    if(!last || Math.hypot(w.x-last.x,w.y-last.y)>3/view.scale) draft.pts.push(w);
+    render(); return;
+  }
+  if(tool==="switch"){ addSwitchAt(w); return; }
+  if(tool==="light"){
+    const z=zoneAtPoint(w);
+    if(z && lightById(z.placeLightId).type==="strip"){
+      // LED dây: kéo để vẽ theo chiều dài thật
+      drag={mode:"strip", zid:z.id}; draft={type:"strip", pts:[w,{...w}]}; render(); return;
+    }
+    addLightAt(w); return;
+  }
+
+  // ---- select tool ----
+  // kéo NHÃN (mã đèn / công tắc / tên khu vực) ra chỗ trống
+  const dlb=e.target.closest? e.target.closest(".dlbl") : null;
+  if(dlb){
+    const o=labelObj(dlb.dataset.k, dlb.dataset.r);
+    if(o){ drag={mode:"label", obj:o, start:w, ox:o.lx||0, oy:o.ly||0,
+      preSnap:snapshot(), moved:false}; render(); return; }
+  }
+  const swg=e.target.closest? e.target.closest(".switchm") : null;
+  if(swg){
+    selSwitch=swg.dataset.sw; selLights=[];
+    const sw=(F().switches||[]).find(s=>s.id===selSwitch);
+    drag={mode:"switch", start:w, moved:false, preSnap:snapshot(), ox:sw.x, oy:sw.y};
+    renderAll(); return;
+  }
+  // Alt+click: xuyên chọn đèn bị đè bên dưới (mỗi lần click xuống 1 lớp, xoay vòng)
+  if(e.altKey){
+    const stack=lightsAtPoint(w);
+    if(stack.length){
+      e.preventDefault();
+      const cur=(selLights.length===1)? selLights[0] : null;
+      const idx=cur? stack.findIndex(s=>s.zid===cur.zid&&s.li===cur.li) : -1;
+      const next= idx>=0? stack[(idx-1+stack.length)%stack.length] : stack[stack.length-1];
+      selLights=[next]; F().selectedZone=next.zid;
+      drag={mode:"lights", start:w, moved:false, preSnap:snapshot(),
+        orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+      renderAll(); return;
+    }
+  }
+  const hit=hitLight(e.target);
+  if(hit){
+    selSwitch=null;
+    const already=selLights.some(s=>s.zid===hit.zid&&s.li===hit.li);
+    if(e.shiftKey){
+      if(already){ drag={mode:"shift-toggle-off", hit, start:w}; return; }
+      selLights.push(hit);
+    } else if(!already){
+      selLights=[hit];
+    }
+    F().selectedZone=hit.zid;
+    drag={mode:"lights", start:w, moved:false, preSnap:snapshot(),
+      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+    renderAll(); return;
+  }
+  const zp=e.target.closest? e.target.closest(".zonepoly") : null;
+  drag={mode:"maybe-marquee", start:w, cur:w, zidHit: zp? zp.dataset.zone : null, shift:e.shiftKey};
+});
+
+window.addEventListener("pointermove", e=>{
+  // hover highlight
+  if(!drag && tool==="select"){
+    const hit=hitLight(e.target);
+    const same = (hit&&hoverLight&&hit.zid===hoverLight.zid&&hit.li===hoverLight.li)||(!hit&&!hoverLight);
+    if(!same){ hoverLight=hit; render(); }
+  }
+  if(!drag) return;
+  // pointerup bị nuốt (Alt+Tab giữa drag...): kết thúc drag như một cú nhả chuột bình thường
+  if(e.pointerType!=="touch" && e.buttons===0){ handlePointerUp(e); return; }
+  if(drag.mode==="pan"){
+    view.tx=drag.tx+(e.clientX-drag.sx); view.ty=drag.ty+(e.clientY-drag.sy);
+    render(); return;
+  }
+  const w=screenToWorld(e.clientX,e.clientY);
+  // shift+kéo bắt đầu trên đèn đã chọn → chuyển thành kéo cả nhóm (không phải toggle)
+  if(drag.mode==="shift-toggle-off" && Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>4/view.scale){
+    drag={mode:"lights", start:drag.start, moved:false, preSnap:snapshot(),
+      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+  }
+  if(drag.mode==="rect"&&draft){ draft.pts[1]=w; render(); return; }
+  if(drag.mode==="strip"&&draft){ draft.pts[1]=w; render(); return; }
+  if(drag.mode==="label"){
+    drag.obj.lx=drag.ox+(w.x-drag.start.x); drag.obj.ly=drag.oy+(w.y-drag.start.y);
+    if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
+    render(); return;
+  }
+  if(drag.mode==="switch"){
+    const sw=(F().switches||[]).find(s=>s.id===selSwitch);
+    if(sw){ sw.x=drag.ox+(w.x-drag.start.x); sw.y=drag.oy+(w.y-drag.start.y);
+      if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
+      render(); }
+    return;
+  }
+  if(drag.mode==="maybe-marquee"){
+    if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>4/view.scale){ drag.mode="marquee"; drag.cur=w; render(); }
+    return;
+  }
+  if(drag.mode==="marquee"){ drag.cur=w; render(); return; }
+  if(drag.mode==="lights"){
+    let dx=w.x-drag.start.x, dy=w.y-drag.start.y;
+    drag.guides=[];
+    // snap thẳng hàng khi kéo 1 đèn
+    if(drag.orig.length===1){
+      const o=drag.orig[0]; const z=getZone(o.zid);
+      const nx=o.x+dx, ny=o.y+dy, tol=7/view.scale;
+      let bestX=null,bestY=null;
+      z.lights.forEach((ol,i)=>{ if(i===o.li) return;
+        if(bestX===null||Math.abs(ol.x-nx)<Math.abs(bestX-nx)) if(Math.abs(ol.x-nx)<tol) bestX=ol.x;
+        if(bestY===null||Math.abs(ol.y-ny)<Math.abs(bestY-ny)) if(Math.abs(ol.y-ny)<tol) bestY=ol.y;
+      });
+      if(bestX!==null){ dx=bestX-o.x; drag.guides.push({type:"v",x:bestX}); }
+      if(bestY!==null){ dy=bestY-o.y; drag.guides.push({type:"h",y:bestY}); }
+    }
+    drag.orig.forEach(o=>{ const z=getZone(o.zid); if(z&&z.lights[o.li]){
+      z.lights[o.li].x=o.x+dx; z.lights[o.li].y=o.y+dy; } });
+    if(Math.hypot(dx,dy)>2/view.scale) drag.moved=true;
+    render(); return;
+  }
+});
+
+function handlePointerUp(e){
+  if(!drag) return;
+  const d=drag; drag=null; updateCursor();
+  if(d.mode==="pan") return;
+  if(d.mode==="rect"&&draft&&draft.type==="rect"){
+    const [a,b]=draft.pts; draft=null;
+    if(Math.abs(b.x-a.x)>8 && Math.abs(b.y-a.y)>8){
+      createZone([{x:a.x,y:a.y},{x:b.x,y:a.y},{x:b.x,y:b.y},{x:a.x,y:b.y}]);
+      setTool("select");
+    } else render();
+    return;
+  }
+  if(d.mode==="strip"&&draft&&draft.type==="strip"){
+    const [a,b]=draft.pts; draft=null;
+    const z=getZone(d.zid);
+    if(z){
+      const distM=Math.hypot(b.x-a.x, b.y-a.y)/ppm();
+      F().selectedZone=z.id;
+      if(distM<0.3){ // click đơn: đặt đoạn 1 m nằm ngang
+        mutate(()=>{ z.lights.push({x:a.x, y:a.y, lightId:z.placeLightId, len:1}); });
+      } else {
+        const rotD=Math.round((Math.atan2(b.y-a.y, b.x-a.x)*180/Math.PI+360)%360);
+        mutate(()=>{ z.lights.push({x:(a.x+b.x)/2, y:(a.y+b.y)/2,
+          lightId:z.placeLightId, len:+distM.toFixed(2), rot:rotD}); });
+        toast(`Đã đặt dây ${distM.toFixed(2)} m — sửa số trong ô "Dài dây" nếu cần`);
+      }
+    }
+    render(); return;
+  }
+  if(d.mode==="shift-toggle-off"){
+    selLights=selLights.filter(s=>!(s.zid===d.hit.zid&&s.li===d.hit.li));
+    render(); return;
+  }
+  if(d.mode==="lights"){
+    if(d.moved){ pushHist(d.preSnap); save(); refreshRight(); renderSummary(); }
+    render(); return;
+  }
+  if(d.mode==="switch"){
+    if(d.moved){ pushHist(d.preSnap); save(); }
+    render(); return;
+  }
+  if(d.mode==="label"){
+    if(d.moved){ pushHist(d.preSnap); save(); } else showHint("Kéo để dời nhãn · double-click để trả về tự động");
+    render(); return;
+  }
+  if(d.mode==="maybe-marquee"){
+    // click đơn: chọn zone hoặc bỏ chọn; shift+click chỗ trống giữ nguyên selection
+    if(!d.shift){
+      selLights=[]; selSwitch=null;
+      F().selectedZone = d.zidHit || null;
+      renderAll();
+    }
+    return;
+  }
+  if(d.mode==="marquee"){
+    const r=marqueeRect(d);
+    const found=[];
+    F().zones.forEach(z=>z.lights.forEach((l,li)=>{
+      if(l.x>=r.x0&&l.x<=r.x1&&l.y>=r.y0&&l.y<=r.y1) found.push({zid:z.id,li});
+    }));
+    selLights = d.shift? selLights.concat(found.filter(f=>!selLights.some(s=>s.zid===f.zid&&s.li===f.li))) : found;
+    if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
+    renderAll(); return;
+  }
+}
+window.addEventListener("pointerup", handlePointerUp);
+
+vp.addEventListener("dblclick", e=>{
+  if(tool==="poly"&&draft&&draft.type==="poly"&&draft.pts.length>=3){ closePoly(); return; }
+  // double-click nhãn đã kéo → trả về vị trí tự động
+  const dlb=e.target.closest? e.target.closest(".dlbl") : null;
+  if(dlb){ const o=labelObj(dlb.dataset.k, dlb.dataset.r);
+    if(o && (o.lx||o.ly)){ mutate(()=>{ delete o.lx; delete o.ly; });
+      toast("Đã trả nhãn về vị trí tự động"); return; }
+  }
+  // double-click 1 đèn: chọn TẤT CẢ đèn cùng loại trong khu vực (kiểu Figma select-same)
+  if(tool==="select"){
+    const hit=hitLight(e.target);
+    if(hit){
+      const z=getZone(hit.zid); const lid=z&&z.lights[hit.li]&&z.lights[hit.li].lightId;
+      if(lid){
+        F().selectedZone=z.id;
+        selLights=z.lights.map((l,li)=> l.lightId===lid? {zid:z.id,li} : null).filter(Boolean);
+        renderAll();
+      }
+    }
+  }
+});
+function closePoly(){
+  let pts=draft.pts.slice();
+  // bỏ điểm trùng cuối (double-click sinh 2 điểm sát nhau)
+  while(pts.length>3){
+    const a=pts[pts.length-1], b=pts[pts.length-2];
+    if(Math.hypot(a.x-b.x,a.y-b.y)<5/view.scale) pts.pop(); else break;
+  }
+  draft=null;
+  if(pts.length>=3){ createZone(pts); }
+  setTool("select");
+}
+
+/* =========================== KEYBOARD =========================== */
+window.addEventListener("keydown", e=>{
+  if(e.target instanceof Element && e.target.matches("input,select,textarea")) return;
+  const k=e.key.toLowerCase();
+  // modal đang mở: chỉ nhận Esc để đóng, chặn mọi phím tắt tác động ra phía sau
+  const modal=document.querySelector(".modal-bg");
+  if(modal){ if(k==="escape" && modal.__close) modal.__close(); return; }
+  // đang kéo: chỉ nhận Esc để huỷ phép kéo, chặn Delete/Ctrl+Z... (index stale, vỡ history)
+  if(drag){ if(k==="escape") cancelDrag(); return; }
+  if(e.code==="Space"&&!spaceHeld){ spaceHeld=true; updateCursor(); e.preventDefault(); return; }
+  if((e.ctrlKey||e.metaKey)&&k==="z"&&!e.shiftKey&&draft&&draft.type==="poly"&&draft.pts.length){
+    e.preventDefault(); draft.pts.pop(); if(!draft.pts.length) draft=null; render(); return;
+  }
+  if((e.ctrlKey||e.metaKey)&&k==="z"){ e.preventDefault(); e.shiftKey? redo():undo(); return; }
+  if((e.ctrlKey||e.metaKey)&&k==="y"){ e.preventDefault(); redo(); return; }
+  if((e.ctrlKey||e.metaKey)&&k==="d"){ e.preventDefault(); duplicateSelected(); return; }
+  if((e.ctrlKey||e.metaKey)&&k==="a"){ e.preventDefault(); selectAllLights(); return; }
+  if(e.ctrlKey||e.metaKey) return;
+  switch(k){
+    case "v": setTool("select"); break;
+    case "c": setTool("calibrate"); break;
+    case "r": setTool("rect"); break;
+    case "p": setTool("poly"); break;
+    case "l": setTool("light"); break;
+    case "w": setTool("switch"); break;
+    case "g": $("#chkGlow").checked=!state.showGlow; state.showGlow=!state.showGlow; save(); render(); break;
+    case "q": rotateSelected(-15); break;
+    case "e": rotateSelected(15); break;
+    case "t": if(selSwitch) pressSwitch(selSwitch); else toggleSelected(); break;
+    case "escape":
+      if(!$("#bgPop").classList.contains("hidden")){ $("#bgPop").classList.add("hidden"); }
+      else if(draft){ draft=null; setTool("select"); }
+      else if(tool!=="select"){ setTool("select"); }
+      else if(selSwitch){ selSwitch=null; renderAll(); }
+      else if(selLights.length){ selLights=[]; render(); }
+      else if(F().selectedZone){ F().selectedZone=null; renderAll(); }
+      break;
+    case "enter":
+      if(tool==="poly"&&draft&&draft.pts.length>=3) closePoly();
+      break;
+    case "delete": case "backspace":
+      e.preventDefault();
+      if(selSwitch) deleteSwitch(selSwitch);
+      else if(selLights.length) deleteSelected();
+      else if(F().selectedZone){ deleteZone(F().selectedZone); toast("Đã xoá khu vực — Ctrl+Z để hoàn tác"); }
+      break;
+    case "arrowup": case "arrowdown": case "arrowleft": case "arrowright": {
+      if(!selLights.length) break;
+      e.preventDefault();
+      const st=(e.shiftKey?0.25:0.05)*ppm();
+      nudgeSelected(k==="arrowleft"?-st:k==="arrowright"?st:0,
+                    k==="arrowup"?-st:k==="arrowdown"?st:0);
+      break; }
+    case "+": case "=": zoomAt(1.2); break;
+    case "-": zoomAt(1/1.2); break;
+    case "0": fitView(); break;
+  }
+});
+window.addEventListener("keyup", e=>{
+  if(e.code==="Space"){ spaceHeld=false; updateCursor(); }
+});
+
+function deleteSelected(){
+  if(!selLights.length) return;
+  mutate(()=>{
+    const byZone={};
+    selLights.forEach(s=>{ (byZone[s.zid]=byZone[s.zid]||[]).push(s.li); });
+    for(const zid in byZone){
+      const z=getZone(zid); if(!z) continue;
+      byZone[zid].sort((a,b)=>b-a).forEach(i=>z.lights.splice(i,1));
+    }
+    selLights=[];
+  });
+  toast("Đã xoá — Ctrl+Z để hoàn tác");
+}
+function duplicateSelected(){
+  if(!selLights.length) return;
+  const off=0.3*ppm();
+  mutate(()=>{
+    const copies=[];
+    selLights.forEach(s=>{
+      const z=getZone(s.zid); const l=z.lights[s.li];
+      z.lights.push({...l, x:l.x+off, y:l.y+off});
+      copies.push({zid:s.zid, li:z.lights.length-1});
+    });
+    selLights=copies;
+  });
+}
+function rotateSelected(deg){
+  if(!selLights.length) return;
+  mutate(()=>{
+    selLights.forEach(s=>{ const z=getZone(s.zid); const l=z.lights[s.li];
+      if(l) l.rot=((l.rot||0)+deg+360)%360; });
+  });
+}
+function selectAllLights(){
+  const z=selZone();
+  if(z) selLights=z.lights.map((_,li)=>({zid:z.id,li}));
+  else { selLights=[]; F().zones.forEach(z2=>z2.lights.forEach((_,li)=>selLights.push({zid:z2.id,li}))); }
+  render();
+}
+
+/* =========================== CALIBRATE =========================== */
+function openCalibrateModal(){
+  const [a,b]=draft.pts;
+  const distPx=Math.hypot(b.x-a.x,b.y-a.y);
+  const m=document.createElement("div"); m.className="modal-bg";
+  m.innerHTML=`<div class="modal" style="max-width:340px"><h3 class="serif">Cân tỉ lệ</h3>
+    <div class="body">
+      <p style="margin:0 0 4px; font-size:13px" class="muted">Đoạn vừa vẽ (${Math.round(distPx)} px) ngoài thực tế dài:</p>
+      <div class="inline"><input type="number" id="calVal" value="4" min="0.1" step="0.1" style="flex:1"> <span>mét</span></div>
+      <div class="inline" style="gap:6px; margin-top:10px">
+        ${[0.8,1,1.2,2,3,4,5].map(v=>`<button class="btn sm cal-p" data-v="${v}">${v}</button>`).join("")}
+      </div>
+    </div>
+    <div class="foot"><span style="flex:1"></span>
+      <button class="btn" id="calCancel">Huỷ</button>
+      <button class="btn primary" id="calOk">Áp dụng</button>
+    </div></div>`;
+  document.body.appendChild(m);
+  const done=()=>{ m.remove(); draft=null; setTool("select"); };
+  m.__close=done;
+  let downOnBg=false;
+  m.addEventListener("pointerdown", e=>{ downOnBg=(e.target===m); });
+  m.addEventListener("click", e=>{ if(e.target===m && downOnBg) done(); });
+  m.querySelectorAll(".cal-p").forEach(b=>b.onclick=()=>{ m.querySelector("#calVal").value=b.dataset.v; });
+  m.querySelector("#calCancel").onclick=done;
+  const apply=()=>{
+    const mv=parseNum(m.querySelector("#calVal").value);
+    if(mv>0){ mutate(()=>{ F().pxPerMeter=distPx/mv; });
+      toast("Đã cân tỉ lệ: 1 m = "+F().pxPerMeter.toFixed(1)+" px"); }
+    done();
+  };
+  m.querySelector("#calOk").onclick=apply;
+  m.querySelector("#calVal").addEventListener("keydown",e=>{ if(e.key==="Enter") apply(); });
+  m.querySelector("#calVal").focus(); m.querySelector("#calVal").select();
+}
+
+/* =========================== ZONES =========================== */
+function createZone(poly){
+  mutate(()=>{
+    const z={
+      id:uid(), name:"Khu vực "+(F().zones.length+1),
+      color:ZONE_COLORS[F().zones.length%ZONE_COLORS.length],
+      poly, roomIdx:1, lux:ROOM_LUX[1].lux, ceilH:2.8, workH:0.8, lossFactor:0.7,
+      placeLightId: state.lights[0]? state.lights[0].id : "dl12",
+      lights:[],
+    };
+    F().zones.push(z); F().selectedZone=z.id; selLights=[];
+  });
+  toast("Đã tạo khu vực"+(F().pxPerMeter?"":" — nhớ cân tỉ lệ (C) để tính diện tích"));
+}
+function deleteZone(id){
+  mutate(()=>{
+    F().zones=F().zones.filter(z=>z.id!==id);
+    selLights=selLights.filter(s=>s.zid!==id);
+    if(F().selectedZone===id) F().selectedZone=null;
+  });
+}
+function selectZone(id){
+  F().selectedZone=id; selLights=[];
+  renderAll();
+}
+function renderZoneList(){
+  $("#zcount").textContent=F().zones.length;
+  const s=$("#zonePick");
+  const opts=['<option value="">— Chọn khu vực —</option>'];
+  F().zones.forEach(z=>{
+    const A=areaM2(z);
+    opts.push(`<option value="${z.id}">${escapeHtml(z.name)} · ${z.lights.length}đ${A?` · ${A.toFixed(1)}m²`:""}</option>`);
+  });
+  s.innerHTML=opts.join("");
+  s.value=F().selectedZone||"";
+}
+
+/* =========================== LIGHT PLACEMENT =========================== */
+function zoneAtPoint(w){
+  let z=selZone();
+  if(!z || !pointInPoly(w.x,w.y,z.poly)){
+    z=F().zones.find(zz=>pointInPoly(w.x,w.y,zz.poly));
+  }
+  return z||null;
+}
+function addLightAt(w){
+  // đặt vào zone chứa điểm click (ưu tiên zone đang chọn)
+  const z=zoneAtPoint(w);
+  if(!z){ toast("Hãy click bên trong một khu vực"); return; }
+  F().selectedZone=z.id;
+  mutate(()=>{ z.lights.push({x:w.x,y:w.y,lightId:z.placeLightId}); });
+  showHint(`Đã đặt ${z.lights.length} đèn · click tiếp để thêm, Esc để xong`);
+}
+function gridPts(z, n){
+  if(n<=0) return [];
+  const bb=bbox(z.poly);
+  const aspect=bb.w/Math.max(bb.h,1);
+  let cols=Math.max(1,Math.round(Math.sqrt(n*aspect)));
+  let rows=Math.max(1,Math.ceil(n/cols));
+  let cand=[], iter=0;
+  while(cand.length<n && iter<6){
+    cand=[];
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const x=bb.x0+bb.w*(c+0.5)/cols, y=bb.y0+bb.h*(r+0.5)/rows;
+      if(pointInPoly(x,y,z.poly)) cand.push({x,y});
+    }
+    if(cand.length<n){ cols++; rows++; iter++; }
+  }
+  return cand.slice(0,n);
+}
+function autoLayout(){
+  const z=selZone(); if(!z) return;
+  const c=calc(z);
+  if(!c.A||!c.E){ toast("Cần cân tỉ lệ (C) và nhập lux mục tiêu trước"); return; }
+  const active=c.active;
+  const actLights=z.lights.filter(l=>l.lightId===active.id);
+  if(actLights.length && actLights.every(l=>isOff(l))){
+    toast(`Nhóm ${active.code||active.name} đang tắt hết trong kịch bản — bật lại trước khi rải`); return; }
+  const phiA=lampLumen(active);
+  if(!(phiA>0)){ toast("Đèn đang chọn chưa khai quang thông / công suất"); return; }
+  const othersLm = c.groups.filter(g=>g.lid!==active.id).reduce((s,g)=>s+g.lm,0);
+  const targetLm = c.needLm - othersLm;
+  const n = Math.max(0, Math.ceil(targetLm/phiA));
+  if(n===0){ toast("Các đèn khác đã đủ quang thông — không cần thêm loại này"); return; }
+  let placed=0;
+  mutate(()=>{
+    const others=z.lights.filter(l=>l.lightId!==active.id);
+    // tránh đặt trùng chỗ đèn loại khác
+    const pts=gridPts(z,n).filter(p=> !others.some(o=>Math.hypot(o.x-p.x,o.y-p.y)<0.25*ppm()));
+    const need = n-pts.length;
+    if(need>0){ // nếu bị lọc mất, lấy thêm từ lưới dày hơn
+      const extra=gridPts(z,n*2).filter(p=> !pts.some(q=>q.x===p.x&&q.y===p.y)
+        && !others.some(o=>Math.hypot(o.x-p.x,o.y-p.y)<0.25*ppm())).slice(0,need);
+      pts.push(...extra);
+    }
+    placed=pts.length;
+    z.lights=others.concat(pts.map(p=>({x:p.x,y:p.y,lightId:active.id})));
+    selLights=[];
+  });
+  toast(placed<n? `Chỉ rải được ${placed}/${n} đèn — hình khu vực hẹp, bổ sung tay các vị trí còn thiếu`
+               : `Đã rải ${placed} đèn “${active.name}”`);
+}
+
+/* =========================== RIGHT PANEL =========================== */
+function fillRoomSelect(){
+  const s=$("#zRoom"); s.innerHTML="";
+  ROOM_LUX.forEach((r,i)=>{ const o=document.createElement("option"); o.value=i;
+    o.textContent=r.name+(i?` (${r.lux} lux)`:""); s.appendChild(o); });
+}
+/* Các CỤM ĐIỀU KHIỂN có đèn trong khu vực này — click để chọn đúng cụm trên bản vẽ */
+function renderCircuitList(z){
+  const fl=F(), box=$("#cirList"); box.innerHTML="";
+  $("#cirCount").textContent=(fl.circuits||[])
+    .filter(c=>z.lights.some(l=>l.circuit===c.id)).length;
+  const rows=(fl.circuits||[]).map(c=>({c,
+    lights:z.lights.map((l,li)=>({l,li})).filter(o=>o.l.circuit===c.id)}))
+    .filter(r=>r.lights.length);
+  const unset=z.lights.map((l,li)=>({l,li})).filter(o=>!o.l.circuit);
+  if(!rows.length && !unset.length){
+    box.innerHTML='<p class="empty" style="padding:4px">Chưa có đèn.</p>'; return;
+  }
+  rows.forEach(({c,lights})=>{
+    const off=(fl.liveOff||[]).includes(c.id);
+    const w=lights.reduce((s,{l})=>{ const lp=lightById(l.lightId);
+      return s+(lp.type==="strip"?(l.len||1):1)*lp.watt; },0);
+    const sws=(fl.switches||[]).filter(s=>(s.circuits||[]).includes(c.id)).map(s=>s.code).join(", ");
+    const el=document.createElement("div");
+    el.className="cir"+(off?" off":"");
+    el.title="Click: chọn đúng cụm đèn này trên bản vẽ";
+    el.innerHTML=`<b class="ckey" style="color:${c.color};border-color:${c.color}">${c.key}</b>
+      <div class="d"><b class="cnm">${escapeHtml(c.name)}</b>
+        <small>${lights.length} đèn · ${fmt(w)} W${sws? " · "+sws : " · <i>chưa gắn công tắc</i>"}</small></div>`;
+    const doRename=ev=>{ ev.stopPropagation();
+      const v=prompt("Tên cụm "+c.key+" (mô tả hiện trong chú giải, VD: Đèn trần khách):", c.name);
+      if(v!==null && v.trim()) mutate(()=>{ c.name=v.trim(); }); };
+    const ed=document.createElement("button"); ed.className="ciredit"; ed.textContent="✎";
+    ed.title="Đổi tên cụm"; ed.onclick=doRename;
+    el.appendChild(ed);
+    el.querySelector(".cnm").ondblclick=doRename;
+    const gp=document.createElement("button"); gp.className="gp"+(off?"":" on");
+    gp.title=off?"Đang tắt — bấm bật cụm":"Đang bật — bấm tắt cụm";
+    gp.onclick=ev=>{ ev.stopPropagation(); mutate(()=>{
+      fl.liveOff=fl.liveOff||[];
+      if(off) fl.liveOff=fl.liveOff.filter(x=>x!==c.id); else fl.liveOff.push(c.id);
+      fl.scene=null; }); };
+    el.appendChild(gp);
+    el.onclick=()=>{ selSwitch=null; selLights=lights.map(o=>({zid:z.id, li:o.li})); renderAll(); };
+    box.appendChild(el);
+  });
+  if(unset.length){
+    const el=document.createElement("div"); el.className="cir none";
+    el.title="Click: chọn các đèn chưa gán cụm";
+    el.innerHTML=`<i style="background:#D8D0C2"></i><div class="d"><b>Chưa gán cụm</b>
+      <small>${unset.length} đèn — chọn rồi gán ở bảng “Đèn đang chọn”</small></div>`;
+    el.onclick=()=>{ selSwitch=null; selLights=unset.map(o=>({zid:z.id, li:o.li})); renderAll(); };
+    box.appendChild(el);
+  }
+}
+/* Panel CÔNG TẮC — hiện khi chọn 1 công tắc trên bản vẽ */
+function refreshSwitchPanel(){
+  const fl=F(), p=$("#swPanel");
+  const sw=(fl.switches||[]).find(s=>s.id===selSwitch);
+  p.classList.toggle("hidden", !sw);
+  if(!sw) return;
+  const ctrl=lightsOfSwitch(sw, fl);
+  const onNow=(sw.circuits||[]).some(c=>!(fl.liveOff||[]).includes(c));
+  const w=ctrl.reduce((s,{l})=>{ const lp=lightById(l.lightId);
+    return s+(lp.type==="strip"? (l.len||1):1)*lp.watt; },0);
+  p.innerHTML=`<p class="eyebrow">Công tắc ${escapeHtml(sw.code||"")} · ${switchGang(sw)} nút</p>
+    <div class="inline" style="gap:8px">
+      <button class="btn ${onNow?"primary":""}" id="swPress" style="flex:1">⏻ ${onNow?"Đang bật — bấm tắt":"Đang tắt — bấm bật"}</button>
+      <button class="btn sm danger" id="swDel" title="Xoá công tắc">✕</button>
+    </div>
+    <label>Điều khiển cụm nào</label>
+    <div id="swCircuits"></div>
+    <button class="btn ghost sm" id="swAddC" style="width:100%; margin-top:6px">+ Cụm mới</button>
+    <p class="muted" style="font-size:11px; margin:9px 0 0; line-height:1.6">
+      Điều khiển <b>${ctrl.length}</b> đèn · ${fmt(w)} W. Nét đứt trên bản vẽ nối tới đúng các đèn này.</p>`;
+  const box=p.querySelector("#swCircuits");
+  if(!(fl.circuits||[]).length){
+    box.innerHTML='<p class="empty" style="padding:4px">Chưa có cụm nào. Chọn đèn trên bản vẽ rồi bấm chip a/b/c ở bảng “Đèn đang chọn” để tạo cụm.</p>';
+  }
+  (fl.circuits||[]).forEach(c=>{
+    const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+    const on=(sw.circuits||[]).includes(c.id);
+    const el=document.createElement("label"); el.className="check"; el.style.marginTop="6px";
+    el.innerHTML=`<input type="checkbox" ${on?"checked":""}>
+      <b style="font-family:var(--mono);font-size:11px;color:${c.color}">${c.key}</b>
+      <span style="flex:1">${escapeHtml(c.name)}</span>
+      <span class="muted" style="font-family:var(--mono);font-size:10.5px">${n} đèn</span>`;
+    el.querySelector("input").onchange=e=>mutate(()=>{
+      sw.circuits=sw.circuits||[];
+      if(e.target.checked) sw.circuits.push(c.id);
+      else sw.circuits=sw.circuits.filter(x=>x!==c.id);
+    });
+    box.appendChild(el);
+  });
+  p.querySelector("#swPress").onclick=()=>pressSwitch(sw.id);
+  p.querySelector("#swDel").onclick=()=>deleteSwitch(sw.id);
+  p.querySelector("#swAddC").onclick=()=>
+    mutate(()=>{ const c=addCircuit(null, fl); sw.circuits=[...(sw.circuits||[]), c.id]; });
+}
+function refreshRight(){
+  refreshSwitchPanel();
+  refreshSelPanel();
+  const z=selZone();
+  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || selLights.length>0);
+  $("#zoneProps").classList.toggle("hidden", !z);
+  if(!z) return;
+  // không ghi đè ô user đang gõ (đang focus) — tránh nuốt ký tự kiểu "0.5" → "0.75"
+  const setVal=(sel,v)=>{ const el=$(sel); if(document.activeElement!==el) el.value=v; };
+  setVal("#zName", z.name);
+  setVal("#zRoom", z.roomIdx??0);
+  setVal("#zLux", z.lux);
+  const A=areaM2(z); $("#zArea").value=A? fmt(A,2)+" m²" : "chưa cân tỉ lệ";
+  setVal("#zCeil", z.ceilH);
+  setVal("#zLoss", z.lossFactor??0.7);
+
+  // groups — hiện TẤT CẢ nhóm (kể cả đang tắt kịch bản, để bật lại được)
+  const c=calc(z);
+  const allGroups=zoneGroups(z, true);
+  const gl=$("#grpList"); gl.innerHTML="";
+  if(!allGroups.length) gl.innerHTML='<p class="empty" style="padding:6px">Chưa có đèn — nhấn L rồi click vào khu vực, hoặc “Tự rải”.</p>';
+  // Mục này là DANH SÁCH VẬT TƯ (loại nào, mấy cái, mấy W) — KHÔNG điều khiển ở đây.
+  // Bật/tắt thuộc về cụm (một loại đèn có thể nằm ở nhiều cụm → công tắc theo loại là vô nghĩa).
+  allGroups.forEach(g=>{
+    const el=document.createElement("div");
+    el.className="grp"+(g.lid===z.placeLightId?" on":"");
+    el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ";
+    el.appendChild(symbolIconSVG(g.lamp.type));
+    const gth=thumbEl(g.lamp); if(gth) el.appendChild(gth);
+    const d=document.createElement("div"); d.className="d";
+    d.innerHTML=`<b><span class="code">${escapeHtml(g.lamp.code||"")}</span>${escapeHtml(g.lamp.name)}</b><small>${fmt(lampLumen(g.lamp))} lm · ${g.lamp.watt}W · ${g.lamp.beam}°${g.lamp.type==="strip"?" · 1 điểm = 1 m":""}</small>`;
+    el.appendChild(d);
+    // chỉ báo loại này nằm ở CỤM nào (CHỈ ĐỌC: a, b… — gán cụm làm ở "Đèn đang chọn")
+    const keys=[...new Set(z.lights.filter(l=>l.lightId===g.lid)
+      .map(l=> l.circuit? ((circuitById(l.circuit)||{}).key||null) : null))];
+    const ks=keys.filter(Boolean).sort();
+    const cb=document.createElement("span"); cb.className="cirbadge";
+    if(ks.length){
+      cb.innerHTML=ks.map(k=>{ const c1=(F().circuits||[]).find(x=>x.key===k);
+        return `<i style="background:${c1?c1.color:"#ccc"}"></i>${k}`; }).join("")
+        + (keys.includes(null)? `<span style="opacity:.45">+</span>` : "");
+      cb.title="Loại này thuộc cụm: "+ks.join(", ")
+        +(keys.includes(null)? " · còn đèn chưa gán cụm":"");
+    } else { cb.className+=" none"; cb.textContent="—"; cb.title="Chưa gán cụm"; }
+    el.appendChild(cb);
+    const cnt=document.createElement("span"); cnt.className="cnt"; cnt.textContent=qtyLabel(g);
+    el.appendChild(cnt);
+    const gx=document.createElement("button"); gx.className="gx"; gx.textContent="✕"; gx.title="Xoá hết đèn loại này";
+    gx.onclick=(ev)=>{ ev.stopPropagation();
+      mutate(()=>{ z.lights=z.lights.filter(l=>l.lightId!==g.lid); selLights=[]; }); };
+    el.appendChild(gx);
+    el.onclick=()=>{ // chọn nhóm trên canvas + đặt làm loại đang dùng
+      z.placeLightId=g.lid;
+      selLights=z.lights.map((l,li)=> l.lightId===g.lid? {zid:z.id,li} : null).filter(Boolean);
+      save(); renderAll();
+    };
+    gl.appendChild(el);
+  });
+  // hàng "loại đang đặt" nếu chưa có đèn nào loại đó
+  if(!allGroups.some(g=>g.lid===z.placeLightId)){
+    const lamp=c.active;
+    const el=document.createElement("div"); el.className="grp on";
+    el.appendChild(symbolIconSVG(lamp.type));
+    const fth=thumbEl(lamp); if(fth) el.appendChild(fth);
+    const d=document.createElement("div"); d.className="d";
+    d.innerHTML=`<b><span class="code">${escapeHtml(lamp.code||"")}</span>${escapeHtml(lamp.name)}</b><small>loại đang đặt · chưa có trên bản vẽ</small>`;
+    el.appendChild(d);
+    gl.appendChild(el);
+  }
+
+  renderCircuitList(z);
+
+  // KPIs
+  $("#rNeed").textContent = c.needMore!=null? (c.needMore>0? "+"+c.needMore : "Đủ ✓") : "–";
+  $("#rNeedK").textContent = "Cần thêm · "+c.active.name;
+  $("#rActual").innerHTML = c.actual!=null? `${fmt(c.actual)}<small> / ${c.E} lux</small>` : "–";
+  $("#rCount").textContent = c.count;
+  $("#rWatt").innerHTML = `${fmt(c.totW)}<small> W</small>`;
+  $("#rDensity").innerHTML = c.density!=null? `${fmt(c.density,1)}<small> W/m²</small>` : "–";
+
+  // cờ trạng thái
+  const flag=$("#spaceFlag"); flag.innerHTML="";
+  // trạng thái kịch bản đọc theo CỤM (đơn vị điều khiển thật), không theo loại đèn
+  const offC=(F().circuits||[]).filter(c=>(F().liveOff||[]).includes(c.id)
+    && z.lights.some(l=>l.circuit===c.id));
+  if(offC.length){
+    flag.innerHTML+=`<div class="miniflag" style="background:#F0EBE2;color:var(--ink-2)">⏻ Đang tắt cụm ${
+      offC.map(c=>`<b>${c.key}</b> ${escapeHtml(c.name)}`).join(" · ")} — lux dưới đây tính theo đèn đang bật.</div>`;
+  }
+  if(c.actual!=null && c.E){
+    const ratio=c.actual/c.E;
+    if(ratio<0.9) flag.innerHTML+=`<div class="miniflag warn">⚠ Thiếu sáng: đạt ${fmt(c.actual)}/${c.E} lux — cần thêm ~${fmt(c.remainLm)} lm.</div>`;
+    else if(ratio>1.5) flag.innerHTML+=`<div class="miniflag warn">⚠ Dư sáng nhiều (${fmt(c.actual)} lux) — cân nhắc giảm đèn hoặc dimmer.</div>`;
+    else flag.innerHTML+=`<div class="miniflag ok">✓ Đạt ${fmt(c.actual)} lux (mục tiêu ${c.E}).</div>`;
+  }
+
+}
+/* Khối ngữ cảnh "Đèn đang chọn" — nằm trên cùng panel, độc lập với khu vực đang chọn */
+function refreshSelPanel(){
+  const wi=$("#wallInfo");
+  const ok = selLights.length>=1 && selItems().length===selLights.length;
+  if(!ok){ wi.classList.add("hidden"); return; }
+  wi.classList.remove("hidden");
+  if(wi.dataset.built!=="1") buildWallbox(wi);
+  updateWallbox();
+}
+
+/* ---- Khối "1 đèn được chọn": vị trí chính xác + nghiêng + mặt đứng.
+   Build 1 lần, về sau chỉ update giá trị — để không phá focus ô đang gõ ---- */
+function selOne(){
+  if(selLights.length!==1) return null;
+  const z=getZone(selLights[0].zid); const l=z&&z.lights[selLights[0].li];
+  return l? {z,l} : null;
+}
+/* Mọi đèn đang chọn — dùng để gán cụm điều khiển cho đúng nhóm đèn anh quét chọn */
+function selItems(){
+  return selLights.map(s=>{ const z=getZone(s.zid); const l=z&&z.lights[s.li];
+    return l? {z,l} : null; }).filter(Boolean);
+}
+function buildWallbox(wi){
+  wi.dataset.built="1";
+  wi.innerHTML=`
+    <p class="eyebrow" id="selHdr" style="margin-bottom:6px">Đèn đang chọn</p>
+    <label style="margin-top:0">Gán vào cụm</label>
+    <div id="selCir" class="chipwrap"></div>
+    <div id="oneOnly">
+    <div class="row" style="margin-top:8px">
+      <div><label style="margin-top:0">X (m)</label><input type="number" id="wX" step="0.05"></div>
+      <div><label style="margin-top:0">Y (m)</label><input type="number" id="wY" step="0.05"></div>
+      <div><label style="margin-top:0">Tới tường</label>
+        <div class="inline" style="gap:4px">
+          <input type="number" id="wD" step="0.05" min="0.05" style="flex:1">
+          <button id="wLock" class="wlock" title="Ghim bức tường đang đo — kéo đèn ra xa vẫn đo đúng tường này, không nhảy sang vách đối diện">📌</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:.8"><label>Cao lắp (m)</label><input type="number" id="wMh" step="0.05" placeholder="trần"></div>
+      <div style="flex:1.7"><label>Nghiêng đèn <span id="wTiltV" class="muted"></span></label>
+        <input type="range" id="wTilt" min="0" max="60" step="5" style="margin-top:10px"></div>
+    </div>
+    <div class="row hidden" id="wLenRow">
+      <div><label>Dài dây (m)</label><input type="number" id="wLen" step="0.1" min="0.3"></div>
+      <div style="flex:2.2"></div>
+    </div>
+    <label>Tủ sát tường</label>
+    <div class="seg" id="cabSeg">
+      <button data-cab="none">Không</button>
+      <button data-cab="kitchen">Bếp trên</button>
+      <button data-cab="wardrobe">Tủ áo</button>
+    </div>
+    <div class="row hidden" id="cabFine">
+      <div><label>Đỉnh (m)</label><input type="number" id="wCabT" step="0.05"></div>
+      <div><label>Đáy (m)</label><input type="number" id="wCabB" step="0.05"></div>
+      <div><label>Sâu (m)</label><input type="number" id="wCabD" step="0.05"></div>
+    </div>
+    <div id="elevBox"></div>
+    <div id="wallTxt" style="margin-top:2px"></div>
+    </div>`;
+  // gán cụm cho ĐÚNG các đèn đang chọn — click chip a/b/c (tách 6 đèn thành cụm 4 + 2)
+  wi.querySelector("#selCir").addEventListener("click", e=>{
+    const b=e.target.closest("[data-cir]"); if(!b) return;
+    const items=selItems(); if(!items.length) return;
+    const v=b.dataset.cir;
+    if(v==="__new"){
+      let key=""; mutate(()=>{ const c=addCircuit(); key=c.key; items.forEach(({l})=>l.circuit=c.id); });
+      toast(`Đã tách ${items.length} đèn thành cụm ${key} — đổi tên ở mục “Cụm điều khiển” nếu cần`);
+      return;
+    }
+    mutate(()=>{ items.forEach(({l})=>{ if(v) l.circuit=v; else delete l.circuit; }); });
+  });
+  const upd=fn=>{ const c=selOne(); if(!c) return; fn(c);
+    save(); render(); renderZoneList(); renderSummary(); updateWallbox(); };
+  wi.querySelector("#wX").addEventListener("input",e=>upd(c=>{
+    const bb=bbox(c.z.poly); c.l.x=bb.x0+Math.max(0,parseNum(e.target.value))*ppm(); }));
+  wi.querySelector("#wY").addEventListener("input",e=>upd(c=>{
+    const bb=bbox(c.z.poly); c.l.y=bb.y0+Math.max(0,parseNum(e.target.value))*ppm(); }));
+  wi.querySelector("#wD").addEventListener("input",e=>upd(c=>{
+    const wm=wallMetrics(c.z,c.l); if(!wm) return;
+    const v=Math.max(0.05,parseNum(e.target.value));
+    if((c.l.tilt||0)>0 || c.l.aim){ // trượt dọc trục chiếu (ngược hướng mũi tên)
+      const r=(c.l.rot||0)*Math.PI/180;
+      c.l.x=wm.foot.x-Math.sin(r)*v*ppm(); c.l.y=wm.foot.y+Math.cos(r)*v*ppm();
+    } else {             // trượt dọc pháp tuyến tường gần nhất
+      const dx=c.l.x-wm.foot.x, dy=c.l.y-wm.foot.y, len=Math.hypot(dx,dy)||1;
+      c.l.x=wm.foot.x+dx/len*v*ppm(); c.l.y=wm.foot.y+dy/len*v*ppm();
+    }
+  }));
+  // ghim tường: đo theo hướng mũi tên kể cả khi kéo đèn ra xa (check vệt lên tủ áo)
+  wi.querySelector("#wLock").addEventListener("click", ()=>{
+    const c=selOne(); if(!c) return;
+    mutate(()=>{
+      if(c.l.aim){ c.l.aim=false; }
+      else {
+        c.l.aim=true;
+        if(!(c.l.tilt>0)){ // hướng mũi tên về đúng bức tường đang hiển thị
+          const w=nearestWall(c.l, c.z.poly);
+          if(w){ const dx=w.fx-c.l.x, dy=w.fy-c.l.y;
+            if(dx||dy) c.l.rot=Math.round((Math.atan2(dx,-dy)*180/Math.PI+360)%360); }
+        }
+      }
+    });
+    toast(c.l.aim? "Đã ghim tường — kéo đèn thoải mái, vẫn đo tường này"
+                 : "Bỏ ghim — quay lại đo tường gần nhất");
+  });
+  wi.querySelector("#wTilt").addEventListener("input",e=>upd(c=>{
+    const nv=+e.target.value;
+    if(nv>0 && !(c.l.tilt>0) && !c.l.aim){
+      // bắt đầu nghiêng: hướng mũi tên về ĐÚNG bức tường đang hiển thị (tường gần nhất)
+      // để không nhảy sang mảng tường khác; muốn đổi tường thì xoay Q/E sau
+      const w=nearestWall(c.l, c.z.poly);
+      if(w){ const dx=w.fx-c.l.x, dy=w.fy-c.l.y;
+        if(dx||dy) c.l.rot=Math.round((Math.atan2(dx,-dy)*180/Math.PI+360)%360); }
+    }
+    c.l.tilt=nv;
+  }));
+  wi.querySelector("#wMh").addEventListener("input",e=>upd(c=>{
+    const v=parseNum(e.target.value);
+    c.l.mh = v>0? clamp(v, 0.2, c.z.ceilH||2.8) : null; // trống = gắn trần
+  }));
+  wi.querySelector("#wLen").addEventListener("input",e=>upd(c=>{
+    const v=parseNum(e.target.value);
+    if(v>0) c.l.len=clamp(v, 0.3, 50); // dây dài ra/ngắn lại quanh tâm
+  }));
+  // preset tủ: 1 click là xong, ô số chỉ để tinh chỉnh
+  wi.querySelectorAll("#cabSeg button").forEach(b=> b.addEventListener("click", ()=>{
+    const c=selOne(); if(!c) return;
+    mutate(()=>{
+      const v=b.dataset.cab;
+      if(v==="none") c.l.cab=null;
+      else if(v==="kitchen") c.l.cab={top:2.25, bot:1.45, dep:0.35};
+      else c.l.cab={top:Math.min(2.4,(c.z.ceilH||2.8)-0.05), bot:0, dep:0.6};
+    });
+  }));
+  const updCab=()=>upd(c=>{
+    const t=parseNum(wi.querySelector("#wCabT").value);
+    const b=parseNum(wi.querySelector("#wCabB").value);
+    const dp=parseNum(wi.querySelector("#wCabD").value);
+    c.l.cab = (t>0 && dp>0)? {top:t, bot:clamp(b,0,t), dep:dp} : null;
+  });
+  ["wCabT","wCabB","wCabD"].forEach(id=>
+    wi.querySelector("#"+id).addEventListener("input", updCab));
+  ["wX","wY","wD","wTilt","wMh","wLen","wCabT","wCabB","wCabD"].forEach(id=>
+    wi.querySelector("#"+id).addEventListener("change", commitFocus));
+}
+function updateWallbox(){
+  const wi=$("#wallInfo");
+  if(wi.dataset.built!=="1") return;
+  const items=selItems();
+  if(!items.length) return;
+  // ---- phần dùng chung cho MỌI số lượng đèn chọn: cụm điều khiển ----
+  const cids=[...new Set(items.map(o=>o.l.circuit||""))];
+  const fl=F();
+  wi.querySelector("#selHdr").textContent = items.length===1
+    ? `Đèn đang chọn · ${lightById(items[0].l.lightId).code||""}`
+    : `${items.length} đèn đang chọn`;
+  // chip a/b/c: chip đang chọn = cụm chung của mọi đèn được chọn (mix = không chip nào sáng)
+  const sc=wi.querySelector("#selCir");
+  const cur = cids.length===1? cids[0] : null;
+  sc.innerHTML=
+    `<button class="cchip${!cur&&cids.length<=1?" on":""}" data-cir="" title="Bỏ khỏi mọi cụm">○ chưa gán</button>`
+    + (fl.circuits||[]).map(c2=>
+        `<button class="cchip${cur===c2.id?" on":""}" data-cir="${c2.id}"
+          style="--cc:${c2.color}" title="${escapeHtml(c2.name)}"><i></i>${c2.key}</button>`).join("")
+    + `<button class="cchip new" data-cir="__new" title="Tạo cụm mới cho các đèn này">+ cụm</button>`
+    + (cids.length>1? `<span class="chipnote">nhiều cụm — chọn để gộp</span>`:"");
+  const c=selOne();
+  wi.querySelector("#oneOnly").classList.toggle("hidden", !c);
+  if(!c) return;
+  const setV=(id,v)=>{ const el=wi.querySelector("#"+id); if(document.activeElement!==el) el.value=v; };
+  const bb=bbox(c.z.poly);
+  setV("wX", ((c.l.x-bb.x0)/ppm()).toFixed(2));
+  setV("wY", ((c.l.y-bb.y0)/ppm()).toFixed(2));
+  wi.querySelector("#wTiltV").textContent="· "+(c.l.tilt||0)+"°";
+  setV("wTilt", c.l.tilt||0);
+  setV("wMh", c.l.mh!=null? c.l.mh : "");
+  const isStrip = lightById(c.l.lightId).type==="strip";
+  wi.querySelector("#wLenRow").classList.toggle("hidden", !isStrip);
+  if(isStrip) setV("wLen", +(c.l.len||1).toFixed(2));
+  const lockBtn=wi.querySelector("#wLock");
+  lockBtn.classList.toggle("on", !!c.l.aim);
+  lockBtn.title = c.l.aim? "Đang ghim tường này — bấm để bỏ ghim (đo tường gần nhất)"
+    : "Ghim bức tường đang đo — kéo đèn ra xa vẫn đo đúng tường này";
+  const cabMode = !c.l.cab? "none" : (c.l.cab.bot>0.2? "kitchen" : "wardrobe");
+  wi.querySelectorAll("#cabSeg button").forEach(b=> b.classList.toggle("on", b.dataset.cab===cabMode));
+  wi.querySelector("#cabFine").classList.toggle("hidden", cabMode==="none");
+  setV("wCabT", c.l.cab? c.l.cab.top : "");
+  setV("wCabB", c.l.cab? c.l.cab.bot : "");
+  setV("wCabD", c.l.cab? c.l.cab.dep : "");
+  const eb=wi.querySelector("#elevBox"), tx=wi.querySelector("#wallTxt");
+  const wm=wallMetrics(c.z,c.l);
+  if(!wm){ setV("wD",""); eb.innerHTML="";
+    tx.innerHTML=`<span class="muted">Đèn đang ngoài khu vực — chỉnh X/Y hoặc kéo đèn vào trong.</span>`; return; }
+  setV("wD", wm.dM.toFixed(2));
+  eb.innerHTML=elevationSVG(c.z,c.l);
+  const pre = c.l.mh!=null? `Lắp cao <b>${wm.H.toFixed(2)} m</b> · cách tường <b>${wm.dM.toFixed(2)} m</b>`
+                          : `Đèn cách tường <b>${wm.dM.toFixed(2)} m</b>`;
+  const maxD = wm.H*Math.tan(Math.min(wm.tilt+wm.beam/2,86)*Math.PI/180);
+  if(wm.blockedByCab){
+    tx.innerHTML = `${pre} — <span class="muted">chùm sáng bị tủ (đỉnh ${wm.cab.top} m) che, không hắt tới tường. Hạ cao lắp, tăng nghiêng hoặc đưa đèn ra xa mặt tủ.</span>`;
+  } else if(wm.hits){
+    tx.innerHTML = (wm.hBottom>0.05
+        ? `${pre} — ánh sáng hắt lên tường từ cao độ <b>+${wm.hBottom.toFixed(2)} m</b> đến <b>+${wm.hTop.toFixed(2)} m</b>.`
+        : `${pre} — ánh sáng hắt lên tường tới cao độ <b>+${wm.hTop.toFixed(2)} m</b> tính từ sàn.`)
+      + (wm.cappedByCab? ` <span class="muted">(phần dưới +${wm.cab.top} m bị tủ án ngữ)</span>`:"");
+  } else {
+    tx.innerHTML = `${pre} — <span class="muted">chưa hắt tới tường. Đưa đèn lại gần dưới ${maxD.toFixed(2)} m hoặc tăng góc nghiêng.</span>`;
+  }
+}
+
+function bindRight(){
+  // chụp snapshot khi focus vào input để undo được thay đổi thuộc tính
+  document.addEventListener("focusin", e=>{
+    if(e.target.matches("#right input, #right select, #projName")) focusSnap=snapshot();
+  });
+  const commit=commitFocus;
+  const upd=(f)=>{ const z=selZone(); if(!z) return; f(z); save(); render(); refreshRight(); renderZoneList(); renderSummary(); };
+  $("#zName").addEventListener("input", e=>upd(z=>z.name=e.target.value));
+  $("#zName").addEventListener("change", commit);
+  $("#zRoom").addEventListener("change", e=>{ commit(); upd(z=>{ z.roomIdx=+e.target.value; if(z.roomIdx>0) z.lux=ROOM_LUX[z.roomIdx].lux; }); });
+  $("#zLux").addEventListener("input", e=>upd(z=>z.lux=parseNum(e.target.value)));
+  $("#zLux").addEventListener("change", commit);
+  $("#zCeil").addEventListener("input", e=>upd(z=>z.ceilH=parseNum(e.target.value)||2.8));
+  $("#zCeil").addEventListener("change", commit);
+  $("#zLoss").addEventListener("input", e=>upd(z=>z.lossFactor=clamp(parseNum(e.target.value)||0.7,0.3,1)));
+  $("#zLoss").addEventListener("change", commit);
+  $("#btnAuto").addEventListener("click", autoLayout);
+  $("#btnClearLights").addEventListener("click", ()=>{ const z=selZone(); if(!z) return;
+    mutate(()=>{ z.lights=[]; selLights=[]; }); toast("Đã xoá đèn — Ctrl+Z để hoàn tác"); });
+  $("#btnDelZone").addEventListener("click", ()=>{ const z=selZone(); if(z){ deleteZone(z.id); toast("Đã xoá khu vực — Ctrl+Z để hoàn tác"); } });
+  $("#btnAddType").addEventListener("click", ()=>openLibrary(true));
+}
+
+/* =========================== SUMMARY =========================== */
+/* Hồ sơ xuất (CSV/PDF): luôn tính TOÀN BỘ đèn — kịch bản đầy đủ, bất kể nhóm đang tắt */
+function projectRows(){
+  const rows=[]; let tot={n:0,w:0,area:0};
+  state.floors.forEach(fl=>{
+    fl.zones.forEach(z=>{
+      const A=areaM2(z, fl), lf=z.lossFactor||0.7;
+      const groups=zoneGroups(z, true);
+      const allLm=groups.reduce((s,g)=>s+g.lm,0);
+      const actual=A? allLm*lf/A : null;
+      groups.forEach((g,i)=>{
+        rows.push({floor:fl.name, zone:i===0?z.name:"", zoneFull:z.name, lamp:g.lamp, count:g.count,
+          watt:g.lamp.watt, totW:g.w, area:i===0?A:null, lux:i===0?z.lux:null,
+          actual:i===0?actual:null});
+        tot.n+=g.count; tot.w+=g.w;
+      });
+      if(!groups.length){
+        rows.push({floor:fl.name, zone:z.name, zoneFull:z.name, lamp:null, count:0, watt:0, totW:0,
+          area:A, lux:z.lux, actual:null});
+      }
+      tot.area+=(A||0);
+    });
+  });
+  return {rows,tot};
+}
+function renderSummary(){
+  const wrap=$("#summary");
+  if(!state.floors.some(f=>f.zones.length)){ wrap.innerHTML='<p class="empty">Chưa có dữ liệu tổng hợp.</p>'; return; }
+  let n=0, w=0, area=0, html="";
+  const multi=state.floors.length>1;
+  state.floors.forEach((fl,fi)=>{
+   if(multi){
+     const fn=fl.zones.reduce((s,z)=>s+z.lights.length,0);
+     html+=`<div class="sumf${fi===state.cur?" on":""}" data-fi="${fi}">
+       <span>${escapeHtml(fl.name)}</span><span class="fmeta">${fn} đèn</span></div>`;
+   }
+   fl.zones.forEach(z=>{
+    const A=areaM2(z, fl);
+    const groups=zoneGroups(z, true);
+    const zn=z.lights.length, zw=groups.reduce((s,g)=>s+g.w,0);
+    n+=zn; w+=zw; area+=(A||0);
+    html+=`<div class="sumz">
+      <div class="sumz-h"><span class="sw" style="background:${z.color}"></span>
+        <b>${escapeHtml(z.name)}</b><span class="meta">${zn} đèn · ${fmt(zw)} W</span></div>`;
+    if(!groups.length) html+=`<div class="sumz-r"><span class="nm muted" style="font-style:italic">chưa có đèn</span></div>`;
+    groups.forEach(g=>{
+      // tổng hợp = bảng VẬT TƯ: liệt kê đủ, không lẫn trạng thái bật/tắt của kịch bản
+      const th=g.lamp.thumb? `<img class="th" src="${g.lamp.thumb}">` : "";
+      html+=`<div class="sumz-r">${th}<span class="code">${escapeHtml(g.lamp.code||"")}</span>
+        <span class="nm">${escapeHtml(g.lamp.name)}</span>
+        <span class="n">${qtyLabel(g)}</span><span class="wv">${fmt(g.w)} W</span></div>`;
+    });
+    html+=`</div>`;
+   });
+  });
+  html+=`<div class="sumz-tot"><span>Tổng${multi?" toàn dự án":""} · ${fmt(area,1)} m²</span><span>${n} đèn · ${fmt(w)} W</span></div>`;
+  wrap.innerHTML=html;
+  wrap.querySelectorAll(".sumf").forEach(el=> el.onclick=()=>switchFloor(+el.dataset.fi));
+}
+
+/* =========================== LIBRARY =========================== */
+let libSel=null;
+function openLibrary(pickMode){
+  const z=selZone();
+  libSel = z? z.placeLightId : null;
+  const m=document.createElement("div"); m.className="modal-bg"; m.id="libModal";
+  m.innerHTML=`<div class="modal"><h3 class="serif">Thư viện đèn</h3>
+    <div class="body" id="libBody"></div>
+    <div class="foot">
+      <button class="btn ghost" id="libAdd">+ Thêm đèn</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="libCancel">Đóng</button>
+      ${z?'<button class="btn primary" id="libUse">Dùng cho khu vực</button>':""}
+    </div></div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove();
+  m.__close=close;
+  // chỉ đóng khi NHẤN và NHẢ đều trên nền mờ — kéo chuột từ trong form ra ngoài không văng modal
+  let downOnBg=false;
+  m.addEventListener("pointerdown", e=>{ downOnBg=(e.target===m); });
+  m.addEventListener("click", e=>{ if(e.target===m && downOnBg) close(); });
+  m.querySelector("#libCancel").onclick=close;
+  const useBtn=m.querySelector("#libUse");
+  if(useBtn) useBtn.onclick=()=>{ const zz=selZone();
+    if(zz&&libSel){ zz.placeLightId=libSel; save(); renderAll();
+      if(pickMode) toast("Đã chọn — nhấn L để đặt hoặc “Tự rải loại này”"); }
+    close(); };
+  m.querySelector("#libAdd").onclick=()=>lightForm(null);
+  renderLib();
+
+  function renderLib(){
+    const b=m.querySelector("#libBody"); b.innerHTML="";
+    state.lights.forEach(l=>{
+      const el=document.createElement("div"); el.className="lp-item"+(l.id===libSel?" sel":"");
+      el.appendChild(symbolIconSVG(l.type));
+      const lth=thumbEl(l); if(lth) el.appendChild(lth);
+      const d=document.createElement("div"); d.className="d";
+      d.innerHTML=`<b><span class="code">${escapeHtml(l.code||"")}</span>${escapeHtml(l.name)}</b><small>${fmt(lampLumen(l))} lm · ${l.watt}W · ${l.beam}° · ${typeLabel(l.type)}</small>`;
+      el.appendChild(d);
+      if(/^https?:\/\//i.test(l.url||"")){ const a=document.createElement("a"); a.className="lk"; a.href=l.url;
+        a.target="_blank"; a.rel="noopener"; a.title=l.url; a.textContent="↗";
+        a.onclick=ev=>ev.stopPropagation(); el.appendChild(a); }
+      const ed=document.createElement("button"); ed.className="ib"; ed.textContent="✎"; ed.title="Sửa";
+      ed.onclick=ev=>{ ev.stopPropagation(); lightForm(l); };
+      el.appendChild(ed);
+      const del=document.createElement("button"); del.className="ib dgr"; del.textContent="✕"; del.title="Xoá mẫu";
+      del.onclick=ev=>{ ev.stopPropagation();
+        if(state.lights.length<=1){ toast("Cần giữ ít nhất 1 mẫu"); return; }
+        mutate(()=>{ // xoá mẫu remap toàn bộ đèn đã đặt → phải undo được
+          state.lights=state.lights.filter(x=>x.id!==l.id);
+          F().zones.forEach(zz=>{
+            if(zz.placeLightId===l.id) zz.placeLightId=state.lights[0].id;
+            zz.lights.forEach(pl=>{ if(pl.lightId===l.id) pl.lightId=state.lights[0].id; });
+          });
+        });
+        if(libSel===l.id) libSel=state.lights[0].id;
+        renderLib();
+      };
+      el.appendChild(del);
+      el.onclick=()=>{ libSel=l.id; renderLib(); };
+      b.appendChild(el);
+    });
+  }
+  function lightForm(existing){
+    const b=m.querySelector("#libBody");
+    const l=existing||{name:"",type:"downlight",beam:60,lumen:"",watt:12,url:"",thumb:null};
+    b.innerHTML=`
+      <div class="inline" style="gap:12px">
+        <img id="nfThumbPrev" class="thumbprev ${l.thumb?"":"hidden"}" src="${l.thumb||""}">
+        <svg id="nfThumbIcon" class="thumbprev ${l.thumb?"hidden":""}" viewBox="-14 -14 28 28" style="color:var(--ink-2);padding:10px"></svg>
+        <div style="flex:1">
+          <button class="btn sm" id="nfThumbBtn" style="width:100%">⤒ Ảnh thumbnail…</button>
+          <input type="file" id="nfThumbFile" accept="image/*" class="hidden">
+          <button class="btn ghost sm ${l.thumb?"":"hidden"}" id="nfThumbDel" style="width:100%; margin-top:5px">Gỡ ảnh</button>
+        </div>
+      </div>
+      <label>Tên đèn</label><input id="nfName" type="text" value="${escapeHtml(l.name)}" placeholder="VD: Downlight COB 15W">
+      <div class="row"><div><label>Mã ký hiệu</label><input id="nfCode" type="text" maxlength="5" value="${escapeHtml(l.code||autoCode(l.type||"downlight"))}" style="font-family:var(--mono)"></div>
+      <div><label>Loại</label><select id="nfType">
+        ${["downlight","panel","tube","spot","pendant","chandelier","strip"].map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${typeLabel(t)}</option>`).join("")}
+      </select></div><div><label>Góc chiếu (°)</label><input id="nfBeam" type="number" value="${l.beam}"></div></div>
+      <div class="row"><div><label>Quang thông (lm)</label><input id="nfLm" type="number" value="${l.lumen||""}" placeholder="trống = quy đổi từ W"></div>
+      <div><label>Công suất (W)</label><input id="nfW" type="number" value="${l.watt}"></div></div>
+      <label>Link sản phẩm</label><input id="nfUrl" type="url" value="${escapeHtml(l.url||"")}" placeholder="https://…">
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn primary" id="nfSave">${existing?"Cập nhật":"Lưu đèn"}</button>
+        <button class="btn ghost" id="nfBack">Quay lại</button>
+      </div>`;
+    let thumb=l.thumb;
+    const icon=b.querySelector("#nfThumbIcon");
+    const refreshIcon=()=>{ icon.innerHTML="";
+      const tmp=symbolIconSVG(b.querySelector("#nfType").value);
+      icon.innerHTML=tmp.innerHTML; };
+    refreshIcon();
+    b.querySelector("#nfType").addEventListener("change",refreshIcon);
+    b.querySelector("#nfThumbBtn").onclick=()=>b.querySelector("#nfThumbFile").click();
+    b.querySelector("#nfThumbFile").addEventListener("change",e=>{
+      const f=e.target.files[0]; if(!f) return;
+      const rd=new FileReader();
+      rd.onload=()=>{ const img=new Image();
+        img.onerror=()=>toast("File không phải ảnh hợp lệ");
+        img.onload=()=>{
+          const S=96, cv=document.createElement("canvas"); cv.width=S; cv.height=S;
+          const ctx=cv.getContext("2d");
+          const sc=Math.max(S/img.width,S/img.height);
+          ctx.drawImage(img,(S-img.width*sc)/2,(S-img.height*sc)/2,img.width*sc,img.height*sc);
+          thumb=cv.toDataURL("image/jpeg",0.8);
+          const pv=b.querySelector("#nfThumbPrev"); pv.src=thumb; pv.classList.remove("hidden");
+          icon.classList.add("hidden"); b.querySelector("#nfThumbDel").classList.remove("hidden");
+        };
+        img.src=rd.result; };
+      rd.readAsDataURL(f);
+    });
+    b.querySelector("#nfThumbDel").onclick=()=>{ thumb=null;
+      b.querySelector("#nfThumbPrev").classList.add("hidden");
+      icon.classList.remove("hidden");
+      b.querySelector("#nfThumbDel").classList.add("hidden"); };
+    b.querySelector("#nfBack").onclick=renderLib;
+    b.querySelector("#nfSave").onclick=()=>{
+      let u=b.querySelector("#nfUrl").value.trim();
+      if(u && !/^[a-z][a-z0-9+.-]*:/i.test(u)) u="https://"+u;    // thêm scheme nếu thiếu
+      if(u && !/^https?:\/\//i.test(u)){ toast("Link chỉ nhận http/https"); u=""; }
+      const data={
+        name: b.querySelector("#nfName").value.trim()||"Đèn tuỳ chỉnh",
+        code: (b.querySelector("#nfCode").value.trim()||autoCode(b.querySelector("#nfType").value)).toUpperCase().slice(0,5),
+        type: b.querySelector("#nfType").value,
+        beam: clamp(parseNum(b.querySelector("#nfBeam").value)||60, 5, 170),
+        lumen: Math.max(0, parseNum(b.querySelector("#nfLm").value)),
+        watt: Math.max(0, parseNum(b.querySelector("#nfW").value)),
+        url: u,
+        thumb,
+      };
+      if(!(data.lumen>0) && !(data.watt>0)){ toast("Cần khai quang thông hoặc công suất"); return; }
+      mutate(()=>{
+        if(existing){ Object.assign(existing,data); }
+        else { const nl={id:"c"+Date.now(), ...data}; state.lights.push(nl); libSel=nl.id; }
+      });
+      renderLib();
+    };
+  }
+}
+function typeLabel(t){ return {downlight:"Downlight",panel:"Panel",tube:"Tuýp",spot:"Rọi/Spot",
+  pendant:"Đèn thả",chandelier:"Đèn chùm",strip:"LED dây"}[t]||t; }
+
+/* =========================== BACKGROUND =========================== */
+$("#btnUpload").onclick=()=>$("#fileInput").click();
+$("#obUpload").onclick=()=>$("#fileInput").click();
+$("#obSample").onclick=()=>loadSeed();
+$("#fileInput").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const img=new Image();
+    img.onerror=()=>toast("File không phải ảnh hợp lệ (JPG/PNG…)");
+    img.onload=()=>{
+      const max=1600; let w=img.naturalWidth,h=img.naturalHeight;
+      const sc=Math.min(1, max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      F().bg=cv.toDataURL("image/jpeg",0.72); F().bgW=w; F().bgH=h;
+      bgCache[F().id]={bg:F().bg, bgW:w, bgH:h};
+      $("#bgControls").classList.remove("hidden");
+      save(); fitView(); renderAll();
+      toast(`Đã tải mặt bằng cho ${F().name} — nhấn C để cân tỉ lệ`);
+    };
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+  e.target.value="";
+});
+$("#opacity").addEventListener("input", e=>{ F().bgOpacity=e.target.value/100;
+  $("#opv").textContent=e.target.value+"%"; $("#bg").style.opacity=F().bgOpacity; save(); });
+$("#btnRemoveBg").onclick=()=>{ if(confirm(`Gỡ ảnh nền của ${F().name}? Các khu vực đã vẽ vẫn giữ.`)){
+  F().bg=null; delete bgCache[F().id];
+  $("#bgControls").classList.add("hidden"); save(); fitView(); } };
+$("#chkGlow").addEventListener("change", e=>{ state.showGlow=e.target.checked; save(); render(); });
+$("#chkWiring").addEventListener("change", e=>{ state.showWiring=e.target.checked; save(); render(); });
+$("#chkLegend").addEventListener("change", e=>{ state.showLegend=e.target.checked; save(); render(); });
+$$("#lblSeg button").forEach(b=> b.onclick=()=>{
+  state.labelMode=b.dataset.lm; save(); render(); syncLblSeg();
+});
+function syncLblSeg(){
+  $$("#lblSeg button").forEach(b=>
+    b.classList.toggle("on", b.dataset.lm===(state.labelMode||"compact")));
+}
+
+/* =========================== EXPORT =========================== */
+function composite(){
+  return new Promise((resolve)=>{
+    const W=worldW(), H=worldH();
+    const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+    const ctx=cv.getContext("2d");
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
+    const drawOv=()=>{
+      // vẽ lại overlay ở chế độ xuất: nhãn/nét cố định theo cỡ ảnh, không dính selection
+      exportInv = Math.max(W,H)/1200;
+      drawOverlay();
+      const ovClone=$("#overlay").cloneNode(true);
+      exportInv=null; drawOverlay();
+      ovClone.setAttribute("xmlns",SVGNS); ovClone.setAttribute("width",W); ovClone.setAttribute("height",H);
+      const s=new XMLSerializer().serializeToString(ovClone);
+      const img2=new Image();
+      img2.onload=()=>{ ctx.drawImage(img2,0,0,W,H); resolve(cv.toDataURL("image/png")); };
+      img2.onerror=()=>resolve(cv.toDataURL("image/png"));
+      img2.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s);
+    };
+    if(F().bg){ const b=new Image();
+      b.onload=()=>{ ctx.globalAlpha=F().bgOpacity; ctx.drawImage(b,0,0,W,H); ctx.globalAlpha=1; drawOv(); };
+      b.onerror=drawOv; b.src=F().bg; }
+    else drawOv();
+  });
+}
+function downloadURL(url,name){ const a=document.createElement("a"); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); }
+function safeName(){ return (state.projectName||"inex-lighting").replace(/[^\wÀ-ỹ -]/g,"").trim().replace(/\s+/g,"-")||"inex-lighting"; }
+function csvCell(s){ s=String(s??"");
+  if(/^[=+\-@]/.test(s)) s="'"+s; // chặn formula injection khi mở bằng Excel
+  return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; }
+
+$("#btnPng").onclick=async()=>{ const url=await composite();
+  downloadURL(url, safeName()+"-"+F().name.replace(/\s+/g,"-")+".png"); toast("Đã xuất ảnh PNG"); };
+
+/* ---- Lưu / mở dự án dạng FILE: mang đi máy khác, gửi đồng nghiệp, backup ---- */
+$("#btnSaveFile").onclick=()=>{
+  const blob=new Blob([JSON.stringify(state)],{type:"application/json"});
+  downloadURL(URL.createObjectURL(blob), safeName()+FILE_EXT);
+  toast("Đã lưu file dự án — mở lại bằng nút “Mở”");
+};
+/* ---- Khôi phục: quét MỌI nguồn còn sót trong trình duyệt này ---- */
+function scanRecovery(){
+  const found=[];
+  // localStorage (bản cũ + mọi key liên quan)
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(!/inex|light/i.test(k)) continue;
+    try{
+      const raw=JSON.parse(localStorage.getItem(k));
+      if(raw && (raw.floors||raw.zones)) found.push({src:"Bộ nhớ cũ trình duyệt", key:k, raw});
+    }catch(e){}
+  }
+  return dbKeys().then(ks=>Promise.all(ks.map(k=>dbGet(k).then(v=>({k,v})))))
+    .then(list=>{
+      list.forEach(({k,v})=>{
+        if(!v || (!v.floors && !v.zones)) return;
+        found.push({src: k===DB_KEY? "Bản đang lưu" : "Bản dự phòng tự động", key:k, raw:v});
+      });
+      return found;
+    }).catch(()=>found);
+}
+function describe(raw){
+  const floors = raw.floors || [{name:"Tầng 1", zones:raw.zones||[]}];
+  const zones = floors.reduce((s,f)=>s+(f.zones?.length||0),0);
+  const lights = floors.reduce((s,f)=>s+(f.zones||[]).reduce((a,z)=>a+(z.lights?.length||0),0),0);
+  const imgs = floors.filter(f=>f.bg).length;
+  return {name:raw.projectName||"(không tên)", floors:floors.length, zones, lights, imgs,
+    at: raw._at? new Date(raw._at).toLocaleString("vi-VN") : null};
+}
+$("#btnRecover").onclick=()=>{
+  const m=document.createElement("div"); m.className="modal-bg";
+  m.innerHTML=`<div class="modal"><h3 class="serif">Khôi phục dự án</h3>
+    <div class="body" id="rcBody"><p class="empty">Đang quét…</p></div>
+    <div class="foot"><span style="flex:1"></span><button class="btn" id="rcClose">Đóng</button></div></div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove(); m.__close=close;
+  let downBg=false;
+  m.addEventListener("pointerdown",e=>{ downBg=(e.target===m); });
+  m.addEventListener("click",e=>{ if(e.target===m&&downBg) close(); });
+  m.querySelector("#rcClose").onclick=close;
+  scanRecovery().then(found=>{
+    const b=m.querySelector("#rcBody");
+    if(!found.length){
+      b.innerHTML=`<p style="font-size:13px;line-height:1.7">Không tìm thấy bản lưu nào trong trình duyệt này.<br><br>
+        <b>Hãy thử:</b><br>• Mở app đúng bằng cách anh vẫn dùng (nếu hay mở bằng file thì mở lại đúng file đó — dữ liệu lưu riêng theo từng cách mở).<br>
+        • Nếu có file <b>.inexlight</b> đã lưu, dùng nút <b>⤒ Mở</b>.</p>`;
+      return;
+    }
+    found.sort((a,b2)=>(b2.raw._at||0)-(a.raw._at||0));
+    b.innerHTML="";
+    found.forEach(f=>{
+      const d=describe(f.raw);
+      const el=document.createElement("div"); el.className="lp-item";
+      el.innerHTML=`<div class="d"><b>${escapeHtml(d.name)}</b>
+        <small>${f.src}${d.at? " · "+d.at:""} — ${d.floors} tầng · ${d.zones} khu vực · ${d.lights} đèn${d.imgs? " · "+d.imgs+" ảnh nền":""}</small></div>
+        <button class="btn primary sm">Nạp</button>`;
+      el.querySelector("button").onclick=()=>{
+        if(!confirm(`Nạp “${d.name}” (${d.lights} đèn)? Dự án đang mở sẽ bị thay thế.`)) return;
+        bgCache={}; adopt(JSON.parse(JSON.stringify(f.raw)));
+        hist=[]; future=[]; selLights=[]; draft=null;
+        save(); renderAll(); fitView(); close();
+        toast(`Đã khôi phục “${state.projectName}” — hãy bấm “⤓ Lưu file” để giữ an toàn`);
+      };
+      b.appendChild(el);
+    });
+  });
+};
+$("#btnOpenFile").onclick=()=>$("#projFile").click();
+$("#projFile").addEventListener("change", e=>{
+  const f=e.target.files[0]; e.target.value="";
+  if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const raw=JSON.parse(rd.result);
+      if(!raw || (!raw.floors && !raw.zones)) throw 0;
+      if(!confirm("Mở dự án này? Dự án đang làm sẽ được thay thế (hãy Lưu file trước nếu cần).")) return;
+      bgCache={}; adopt(raw); hist=[]; future=[]; selLights=[]; draft=null;
+      save(); renderAll(); fitView();
+      toast(`Đã mở “${state.projectName}” — ${state.floors.length} tầng`);
+    }catch(err){ toast("File không hợp lệ (cần file .inexlight)"); }
+  };
+  rd.readAsText(f);
+});
+
+$("#btnCsv").onclick=()=>{
+  const {rows,tot}=projectRows();
+  const head=["Tầng","Khu vực","Mã","Loại đèn","Số lượng","ĐVT","W/đèn","Tổng W","Lumen/đèn","Diện tích (m²)","Lux tiêu chuẩn","Lux đạt","Link sản phẩm"];
+  const lines=[head.join(",")];
+  let units=0, meters=0;
+  rows.forEach(r=>{
+    const isStrip=r.lamp&&r.lamp.type==="strip";
+    if(r.lamp){ if(isStrip) meters+=r.count; else units+=r.count; }
+    lines.push([csvCell(r.floor||""), csvCell(r.zoneFull), csvCell(r.lamp?r.lamp.code||"":""),
+      csvCell(r.lamp?r.lamp.name:"—"), r.lamp? fq(r.count) : "", isStrip?"m":(r.lamp?"bộ":""),
+      r.watt||"", r.totW||"", r.lamp?lampLumen(r.lamp):"",
+      r.area!=null?r.area.toFixed(2):"", r.lux??"", r.actual!=null?Math.round(r.actual):"",
+      csvCell(r.lamp?r.lamp.url||"":"")].join(","));
+  });
+  lines.push(["TỔNG","",""," ",fq(units),"bộ","",tot.w,"",tot.area.toFixed(2),"","",""].join(","));
+  if(meters) lines.push(["TỔNG LED dây","",""," ",fq(meters),"m","","","","","","",""].join(","));
+  lines.push([""],["Dự án",csvCell(state.projectName)].join(","));
+  const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  downloadURL(URL.createObjectURL(blob), safeName()+".csv"); toast("Đã xuất CSV");
+};
+
+$("#btnPdf").onclick=async()=>{ await buildPrintDoc(); setTimeout(()=>window.print(), 60); };
+/* Dựng nội dung trang in (tách riêng để test được mà không mở hộp thoại in) */
+async function buildPrintDoc(){
+  const d=new Date();
+  const dstr=`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  const unitOf=lamp=> lamp.type==="strip"? "m" : "bộ";
+  const qty=(u,m)=>[u? `${fmt(u,1)} bộ`:null, m? `${fmt(m,1)} m LED dây`:null]
+    .filter(Boolean).join(" · ") || "0";
+  // ảnh bản vẽ TỪNG TẦNG — vẽ ở trạng thái BẬT HẾT (hồ sơ phải thể hiện đủ đèn),
+  // tạm chuyển tầng + tắt kịch bản đang xem, xong trả nguyên trạng
+  const cur0=state.cur, sel0=selLights, sw0=selSwitch;
+  const live0=state.floors.map(f=>f.liveOff||[]);
+  selLights=[]; selSwitch=null;
+  state.floors.forEach(f=>f.liveOff=[]);
+  const imgs=[];
+  for(let i=0;i<state.floors.length;i++){ state.cur=i; render(); imgs.push(await composite()); }
+  state.floors.forEach((f,i)=>f.liveOff=live0[i]);
+  state.cur=cur0; selLights=sel0; selSwitch=sw0; render();
+
+  let totUnits=0, totMeters=0, totW=0, totArea=0;
+  const usedLamps=new Map();
+
+  // ---- Mỗi TẦNG: bản vẽ + bảng thống kê (mỗi khu vực một cụm có hàng tiêu đề riêng) ----
+  const multi=state.floors.length>1;
+  const floorBlocks=state.floors.map((fl,fi)=>{
+  let rowsHtml="";
+  let flUnits=0, flMeters=0, flW=0;
+  fl.zones.forEach(z=>{
+    const A=areaM2(z, fl), lf=z.lossFactor||0.7;
+    const groups=zoneGroups(z, true);
+    const allLm=groups.reduce((s,g)=>s+g.lm,0);
+    const actual=A? allLm*lf/A : null;
+    const ok = actual!=null && z.lux && actual>=z.lux*0.9;
+    totArea+=(A||0);
+    const meta=[A? fmt(A,2)+" m²" : null,
+      z.lux? `chuẩn ${z.lux} lx` : null,
+      actual!=null? `<span class="${ok?"ok":"no"}">đạt ${Math.round(actual)} lx</span>` : null,
+      `trần ${fmt(z.ceilH,2)} m`].filter(Boolean).join("  ·  ");
+    rowsHtml+=`<tr class="zh"><td colspan="7">
+      <span class="zn">${escapeHtml(z.name)}</span> <span class="zm">${meta}</span></td></tr>`;
+    if(!groups.length){
+      rowsHtml+=`<tr><td colspan="7" style="color:#8A8175;font-style:italic">Chưa bố trí đèn</td></tr>`;
+    }
+    groups.forEach(g=>{
+      usedLamps.set(g.lid, g.lamp);
+      const isStrip=g.lamp.type==="strip";
+      if(isStrip){ totMeters+=g.count; flMeters+=g.count; } else { totUnits+=g.count; flUnits+=g.count; }
+      totW+=g.w; flW+=g.w;
+      const th=g.lamp.thumb? `<img src="${g.lamp.thumb}">` : "";
+      rowsHtml+=`<tr><td style="width:28px">${th}</td>
+        <td><span class="pr-code">${escapeHtml(g.lamp.code||"")}</span></td>
+        <td>${escapeHtml(g.lamp.name)}</td>
+        <td class="num">${fmt(g.count,1)}</td>
+        <td>${unitOf(g.lamp)}</td>
+        <td class="num">${g.lamp.watt}</td>
+        <td class="num">${fmt(g.w)}</td></tr>`;
+    });
+  });
+  const flArea=fl.zones.reduce((s,z)=>s+(areaM2(z,fl)||0),0);
+  const table=`<table class="pr"><thead><tr>
+      <th style="width:28px"></th><th style="width:44px">Mã</th><th>Loại đèn</th>
+      <th class="num" style="width:44px">SL</th><th style="width:34px">ĐVT</th>
+      <th class="num" style="width:52px">W/đèn</th><th class="num" style="width:56px">Tổng W</th>
+    </tr></thead><tbody>${rowsHtml||`<tr><td colspan="7" style="color:#8A8175;font-style:italic">Tầng chưa có khu vực</td></tr>`}
+    <tr class="tot"><td></td><td colspan="2">${multi? "CỘNG "+escapeHtml(fl.name).toUpperCase() : "TỔNG CỘNG"} — ${fmt(flArea,1)} m² sàn</td>
+      <td colspan="2">${qty(flUnits,flMeters)}</td><td></td><td class="num">${fmt(flW)} W</td></tr>
+    </tbody></table>`;
+  // Bảng công tắc + kịch bản của tầng
+  let ctlHtml="";
+  if((fl.switches||[]).length){
+    ctlHtml+=`<h2>Công tắc & cụm điều khiển${multi? " — "+escapeHtml(fl.name):""}</h2>
+      <table class="pr"><thead><tr><th style="width:44px">Công tắc</th><th style="width:40px">Số nút</th>
+      <th>Điều khiển cụm</th><th class="num" style="width:52px">Số đèn</th>
+      <th class="num" style="width:56px">Tổng W</th></tr></thead><tbody>`;
+    fl.switches.forEach(sw=>{
+      const ls=lightsOfSwitch(sw, fl);
+      const w=ls.reduce((s,{l})=>{ const lp=lightById(l.lightId);
+        return s+(lp.type==="strip"?(l.len||1):1)*lp.watt; },0);
+      const names=(sw.circuits||[]).map(c=>circuitById(c,fl)).filter(Boolean)
+        .map(c=>escapeHtml(c.name)).join(", ")||"—";
+      ctlHtml+=`<tr><td><span class="pr-code">${escapeHtml(sw.code||"CT")}</span></td>
+        <td class="num">${switchGang(sw)}</td><td>${names}</td>
+        <td class="num">${ls.length}</td><td class="num">${fmt(w)}</td></tr>`;
+    });
+    ctlHtml+=`</tbody></table>`;
+  }
+  if((fl.scenes||[]).length){
+    ctlHtml+=`<h2>Kịch bản chiếu sáng${multi? " — "+escapeHtml(fl.name):""}</h2>
+      <table class="pr"><thead><tr><th>Kịch bản</th><th>Cụm BẬT</th>
+      <th class="num" style="width:52px">Số đèn</th><th class="num" style="width:56px">Công suất</th>
+      </tr></thead><tbody>`;
+    fl.scenes.forEach(sc=>{
+      const offs=new Set(sc.off||[]);
+      const onC=(fl.circuits||[]).filter(c=>!offs.has(c.id));
+      let n=0, w=0;
+      fl.zones.forEach(z=>z.lights.forEach(l=>{
+        if(l.circuit && offs.has(l.circuit)) return;
+        const lp=lightById(l.lightId); n++; w+=(lp.type==="strip"?(l.len||1):1)*lp.watt;
+      }));
+      ctlHtml+=`<tr><td><b style="font-weight:600">${escapeHtml(sc.name)}</b></td>
+        <td>${onC.map(c=>escapeHtml(c.name)).join(", ")||"— tắt hết —"}</td>
+        <td class="num">${n}</td><td class="num">${fmt(w)} W</td></tr>`;
+    });
+    ctlHtml+=`</tbody></table>`;
+  }
+  return `<section class="pr-floor">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
+    <img class="plan" src="${imgs[fi]}">
+    <h2>Bảng thống kê đèn${multi? " — "+escapeHtml(fl.name):""}</h2>${table}${ctlHtml}</section>`;
+  }).join("");
+  const totQty=qty(totUnits,totMeters);
+  // bảng tổng toàn dự án khi có nhiều tầng
+  const grand=multi? `<h2>Tổng hợp toàn dự án</h2><table class="pr"><thead><tr>
+      <th>Tầng</th><th class="num" style="width:90px">Diện tích</th>
+      <th class="num" style="width:110px">Số lượng đèn</th><th class="num" style="width:80px">Tổng W</th>
+    </tr></thead><tbody>${state.floors.map(fl=>{
+      const gs=fl.zones.flatMap(z=>zoneGroups(z,true));
+      const u=gs.filter(g=>g.lamp.type!=="strip").reduce((s,g)=>s+g.count,0);
+      const m=gs.filter(g=>g.lamp.type==="strip").reduce((s,g)=>s+g.count,0);
+      const w=gs.reduce((s,g)=>s+g.w,0);
+      const a=fl.zones.reduce((s,z)=>s+(areaM2(z,fl)||0),0);
+      return `<tr><td>${escapeHtml(fl.name)}</td><td class="num">${fmt(a,1)} m²</td>
+        <td class="num">${qty(u,m)}</td><td class="num">${fmt(w)}</td></tr>`;
+    }).join("")}
+    <tr class="tot"><td>TOÀN DỰ ÁN — ${state.floors.length} tầng</td><td class="num">${fmt(totArea,1)} m²</td>
+      <td class="num">${totQty}</td><td class="num">${fmt(totW)} W</td></tr></tbody></table>` : "";
+
+  // ---- Bảng thông số kỹ thuật đèn + link xem chi tiết ----
+  let specHtml="";
+  usedLamps.forEach(l=>{
+    const th=l.thumb? `<img src="${l.thumb}">` : "";
+    // chuẩn hoá URL để chắc chắn thành hyperlink click được (tự thêm https:// nếu thiếu;
+    // bỏ scheme lạ như javascript: cho an toàn)
+    let u=(l.url||"").trim();
+    if(u && !/^https?:\/\//i.test(u)) u = /^[a-z][a-z0-9+.-]*:/i.test(u) ? "" : "https://"+u;
+    const link = u
+      ? `<a class="pr-link" href="${escapeHtml(u)}">${escapeHtml(u.replace(/^https?:\/\//,"").slice(0,42))}</a>`
+      : `<span style="color:#A9A093">—</span>`;
+    specHtml+=`<tr><td style="width:34px">${th}</td>
+      <td><span class="pr-code">${escapeHtml(l.code||"")}</span></td>
+      <td>${escapeHtml(l.name)}</td><td>${typeLabel(l.type)}</td>
+      <td class="num">${fmt(lampLumen(l))}</td><td class="num">${l.watt}</td>
+      <td class="num">${l.beam}°</td><td>${link}</td></tr>`;
+  });
+  const spec=usedLamps.size? `<h2>Thông số kỹ thuật đèn sử dụng</h2>
+    <table class="pr"><thead><tr><th style="width:34px"></th><th style="width:44px">Mã</th>
+      <th>Tên đèn</th><th style="width:64px">Kiểu</th>
+      <th class="num" style="width:56px">Quang thông</th><th class="num" style="width:40px">W</th>
+      <th class="num" style="width:44px">Góc chiếu</th><th style="width:150px">Xem chi tiết</th>
+    </tr></thead><tbody>${specHtml}</tbody></table>` : "";
+
+  // ---- Chú thích cho khách hàng ----
+  const note=`<h2>Chú thích</h2><div class="pr-note">
+    <div><dt>Mã đèn</dt><dd>— ký hiệu ghi cạnh mỗi đèn trên bản vẽ mặt bằng, dùng để tra sang bảng thông số kỹ thuật.</dd></div>
+    <div><dt>Độ rọi tiêu chuẩn (chuẩn … lx)</dt><dd>— mức sáng khuyến nghị cho từng loại phòng theo TCVN 7114-1 và EN 12464-1. Ví dụ: phòng khách 150–300 lx, bếp 500 lx, phòng ngủ 100–150 lx, bàn làm việc 300–500 lx.</dd></div>
+    <div><dt>Độ rọi đạt (đạt … lx)</dt><dd>— độ rọi trung bình ước tính trên mặt sàn khi bật đủ đèn của khu vực. <span style="color:#4B6B39;font-weight:600">Xanh</span> = đạt chuẩn, <span style="color:${"#B4553C"};font-weight:600">đỏ</span> = còn thiếu sáng.</dd></div>
+    <div><dt>Lux (lx)</dt><dd>— đơn vị đo độ rọi: lượng ánh sáng chiếu tới bề mặt. Quang thông (lumen) là tổng lượng sáng đèn phát ra.</dd></div>
+    <div><dt>ĐVT</dt><dd>— đơn vị tính: <b>bộ</b> = số bộ đèn rời; <b>m</b> = số mét dài đối với LED dây.</dd></div>
+    <div><dt>Vùng sáng trên bản vẽ</dt><dd>— quầng vàng minh hoạ phạm vi chiếu của mỗi đèn theo góc chiếu và chiều cao lắp đặt.</dd></div>
+    <div><dt>Cụm điều khiển (a, b, c…)</dt><dd>— nhóm đèn cùng bật/tắt bởi một nút công tắc, tương đương một mạch/đường dây (VD: đèn trần, đèn hắt, đèn rọi tranh). Chữ cụm ghi cạnh mỗi đèn trên bản vẽ.</dd></div>
+    <div><dt>Công tắc</dt><dd>— vị trí công tắc trên tường; chữ cạnh công tắc (VD “abc”) là các cụm nó điều khiển, “số nút” là số cụm. Nét đứt trên bản vẽ nối công tắc tới đúng những đèn nó bật/tắt.</dd></div>
+    <div><dt>Kịch bản chiếu sáng</dt><dd>— các cảnh sáng thường dùng, mỗi cảnh bật một số cụm (VD: “Sinh hoạt” bật đèn trần + hắt; “Xem phim” chỉ bật đèn hắt). Bản vẽ trong hồ sơ này thể hiện trạng thái <b>bật toàn bộ</b>.</dd></div>
+    <div><dt>Cách tính</dt><dd>— phương pháp quang thông: <b>Số đèn = (Độ rọi × Diện tích) ÷ (Quang thông mỗi đèn × Hệ số tổn hao)</b>. Hệ số tổn hao (mặc định 0,7) tính hao hụt do bụi bám, suy giảm quang thông và hấp thụ của tường/trần.</dd></div>
+  </div>`;
+
+  $("#printArea").innerHTML=`
+    <div class="pr-head">
+      <div><div class="wm">InEx <b>Lighting</b></div>
+        <div class="sub">Hồ sơ thiết kế chiếu sáng</div></div>
+      <div style="text-align:right"><div class="pj">${escapeHtml(state.projectName)}</div>
+        <div class="sub">${multi? state.floors.length+" tầng · ":""}Ngày ${dstr}</div></div>
+    </div>
+    ${floorBlocks}
+    ${grand}
+    ${spec}
+    ${note}
+    <div class="pr-foot">INEX DESIGN · inexdesign.vn — Số liệu tính theo phương pháp quang thông, mang tính tham khảo cho thiết kế sơ bộ.</div>`;
+}
+
+/* =========================== SEED =========================== */
+function rectPts(x,y,w,h){ return [{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}]; }
+function loadSeed(){
+  bgCache={}; state=newState();
+  state.projectName="Nhà mẫu — Chiếu sáng";
+  F().name="Tầng trệt"; F().pxPerMeter=100;
+  const mk=(name,pts,room,placeId)=>{
+    const i=F().zones.length;
+    F().zones.push({id:uid(),name,color:ZONE_COLORS[i%ZONE_COLORS.length],poly:pts,
+      roomIdx:room, lux:ROOM_LUX[room].lux, ceilH:2.8, workH:0.8, lossFactor:0.7,
+      placeLightId:placeId, lights:[]});
+    return F().zones[i];
+  };
+  const zk=mk("Phòng khách", rectPts(120,120,560,420), 1, "dl12");
+  const zb=mk("Bếp & Ăn", rectPts(720,120,420,420), 3, "dl18");
+  mk("Phòng ngủ", rectPts(120,580,560,320), 2, "dl9");
+  // spot rọi tranh dọc tường trên phòng khách (cách tường 0.4m, beam 36° → vệt cao ~1.57m)
+  [230,370,510].forEach(x=> zk.lights.push({x, y:160, lightId:"sp12"}));
+  // LED dây DƯỚI tủ bếp trên: lắp 1.45m (đáy tủ), tủ 1.45–2.25m sâu 0.35m, cách tường 0.3m
+  [800,900].forEach(x=> zb.lights.push({x, y:150, lightId:"st10",
+    mh:1.45, cab:{top:2.25, bot:1.45, dep:0.35}}));
+  hist=[]; future=[];
+  F().zones.forEach(z=>{ F().selectedZone=z.id;
+    // rải trực tiếp không qua mutate để không đầy history
+    const c=calc(z);
+    const othersLm=c.groups.filter(g=>g.lid!==z.placeLightId).reduce((s,g)=>s+g.lm,0);
+    const n=Math.max(0,Math.ceil((c.needLm-othersLm)/lampLumen(lightById(z.placeLightId))));
+    const others=z.lights.slice();
+    const pts=gridPts(z,n).filter(p=>!others.some(o=>Math.hypot(o.x-p.x,o.y-p.y)<0.25*ppm()));
+    z.lights=others.concat(pts.map(p=>({x:p.x,y:p.y,lightId:z.placeLightId})));
+  });
+  // ---- Mạch + công tắc + kịch bản (minh hoạ điều khiển chiếu sáng) ----
+  const fl0=F();
+  const cTran=addCircuit("Đèn trần chính", fl0);
+  const cPhu =addCircuit("Đèn trần phụ", fl0);
+  const cRoi =addCircuit("Đèn rọi tranh", fl0);
+  const cBep =addCircuit("Đèn trần bếp", fl0);
+  const cHat =addCircuit("LED hắt tủ bếp", fl0);
+  // cùng loại BG12 nhưng TÁCH 2 cụm điều khiển: dãy trong (chính) / dãy ngoài (phụ)
+  const dl=zk.lights.filter(l=>l.lightId==="dl12");
+  dl.forEach((l,i)=> l.circuit = i<dl.length-2? cTran.id : cPhu.id);
+  zk.lights.filter(l=>l.lightId==="sp12").forEach(l=> l.circuit=cRoi.id);
+  zb.lights.forEach(l=> l.circuit = l.lightId==="st10"? cHat.id : cBep.id);
+  fl0.switches=[
+    // công tắc 3 nút ở cửa phòng khách: trần chính / trần phụ / rọi tranh
+    {id:"s"+fl0.seq++, code:"CT1", x:700, y:520, circuits:[cTran.id, cPhu.id, cRoi.id]},
+    {id:"s"+fl0.seq++, code:"CT2", x:700, y:200, circuits:[cBep.id, cHat.id]},   // lối vào bếp
+  ];
+  fl0.scenes=[
+    {id:"sc"+fl0.seq++, name:"Sinh hoạt", off:[]},
+    {id:"sc"+fl0.seq++, name:"Tiếp khách", off:[cPhu.id]},
+    {id:"sc"+fl0.seq++, name:"Xem phim",  off:[cTran.id, cPhu.id, cBep.id]},
+    {id:"sc"+fl0.seq++, name:"Đêm",       off:[cTran.id, cPhu.id, cRoi.id, cBep.id]},
+  ];
+  fl0.liveOff=[]; fl0.scene=fl0.scenes[0].id;
+  F().selectedZone=F().zones[0].id;
+  // Tầng 2 — minh hoạ dự án nhiều mặt bằng
+  state.floors.push(newFloor("Tầng 2", 100));
+  state.cur=1;
+  mk("Phòng ngủ master", rectPts(120,120,620,460), 2, "dl12");
+  mk("Phòng tắm", rectPts(780,120,320,300), 5, "dl9");
+  F().zones.forEach(z=>{
+    const c=calc(z);
+    const n=Math.max(0,Math.ceil(c.needLm/lampLumen(lightById(z.placeLightId))));
+    z.lights=gridPts(z,n).map(p=>({x:p.x,y:p.y,lightId:z.placeLightId}));
+  });
+  F().selectedZone=F().zones[0].id;
+  state.cur=0;
+  selLights=[];
+  save(); fitView(); renderAll();
+  toast("Đã nạp dự án mẫu — thử click 1 đèn rọi gần tường để xem vệt sáng trên tường");
+}
+
+/* =========================== MISC =========================== */
+let toastTimer=null;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2800); }
+
+$("#projName").addEventListener("input", e=>{ state.projectName=e.target.value; save(); });
+$("#projName").addEventListener("change", ()=>{ if(focusSnap){ pushHist(focusSnap); focusSnap=null; } });
+$("#btnReset").onclick=()=>{ if(confirm("Nạp dự án mẫu? Dự án hiện tại sẽ bị thay thế — hãy “Lưu file” trước nếu cần giữ.")) loadSeed(); };
+$("#btnClear").onclick=()=>{ if(confirm("Bắt đầu dự án trống? Toàn bộ tầng, ảnh nền, khu vực và đèn hiện tại sẽ bị xoá — hãy “Lưu file” trước nếu cần giữ.")){
+  bgCache={}; state=newState(); hist=[]; future=[]; selLights=[];
+  $("#bgControls").classList.add("hidden"); $("#projName").value=state.projectName;
+  save(); fitView(); renderAll(); } };
+$("#btnLibrary").onclick=()=>openLibrary(false);
+$("#btnUndo").onclick=undo; $("#btnRedo").onclick=redo;
+$("#btnBgPop").onclick=()=>$("#bgPop").classList.toggle("hidden");
+document.addEventListener("pointerdown", e=>{ // click ngoài đóng popover nền
+  const p=$("#bgPop");
+  if(!p.classList.contains("hidden") && !e.target.closest("#bgPop,#btnBgPop")) p.classList.add("hidden");
+});
+$("#zonePick").addEventListener("change", e=>{
+  F().selectedZone=e.target.value||null; selLights=[]; renderAll();
+});
+$("#btnZoneDel").onclick=()=>{ const z=selZone(); if(z){ deleteZone(z.id); toast("Đã xoá khu vực — Ctrl+Z để hoàn tác"); } };
+$("#rightToggle").onclick=()=>{
+  const hid=$("#right").classList.toggle("hidden");
+  $("#rightToggle").textContent=hid?"⟨":"⟩";
+};
+$("#zoomIn").onclick=()=>zoomAt(1.2);
+$("#zoomOut").onclick=()=>zoomAt(1/1.2);
+$("#zoomFit").onclick=fitView;
+$("#chipDel").onclick=deleteSelected;
+$("#chipDup").onclick=duplicateSelected;
+$("#chipRotL").onclick=()=>rotateSelected(-15);
+$("#chipRotR").onclick=()=>rotateSelected(15);
+$("#chipPow").onclick=toggleSelected;
+$$("#toolbar .tool").forEach(b=> b.onclick=()=>setTool(b.dataset.tool));
+
+/* =========================== BOOT =========================== */
+async function boot(){
+  await load();
+  fillRoomSelect();
+  bindRight();
+  $("#projName").value=state.projectName;
+  $("#opacity").value=Math.round((F().bgOpacity||0.7)*100);
+  $("#opv").textContent=Math.round((F().bgOpacity||0.7)*100)+"%";
+  $("#chkGlow").checked=state.showGlow!==false;
+  $("#chkWiring").checked=!!state.showWiring;
+  $("#chkLegend").checked=state.showLegend!==false;
+  if(F().bg) $("#bgControls").classList.remove("hidden");
+  renderAll();
+  fitView();
+  updateUndoBtns();
+}
+boot();
+window.addEventListener("resize", ()=>{ render(); });
+</script>
+</body>
+</html>
