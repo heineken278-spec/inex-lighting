@@ -493,6 +493,8 @@
     .pr-code{font-family:var(--mono); font-size:9.5px; background:#fff;
       border:1px solid var(--line); border-radius:3px; padding:0 4px}
     .pr-link{color:var(--accent-dark); font-size:9.5px; word-break:break-all}
+    .pr-sym{width:20px; height:20px; color:var(--ink); display:block; margin:0 auto}
+    .pr-hint{font-size:9px; color:var(--ink-3); margin:3px 0 10px; line-height:1.5}
     /* Chú thích cho khách hàng */
     .pr-note{border:1px solid var(--line); border-radius:6px; padding:10px 12px;
       background:var(--cream); font-size:10px; line-height:1.65}
@@ -597,6 +599,12 @@
         <button data-lm="all" title="Ghi mã cạnh mọi đèn">Tất cả</button>
         <button data-lm="compact" title="Mỗi loại chỉ ghi 1 mã đại diện mỗi khu vực — bản vẽ thoáng">Gọn</button>
         <button data-lm="off" title="Ẩn hết mã (đèn đang chọn vẫn hiện trong bảng bên phải)">Ẩn</button>
+      </div>
+      <label>Cỡ chữ trên bản vẽ / bản in</label>
+      <div class="seg" id="txtSeg">
+        <button data-ts="nho" title="Mật độ như bản cũ">Nhỏ</button>
+        <button data-ts="vua" title="Cân bằng — mặc định">Vừa</button>
+        <button data-ts="lon" title="Đọc rõ khi in A4 nhỏ (~2,2 mm)">Lớn</button>
       </div>
       <p class="muted" style="font-size:10.5px; margin:12px 0 0; line-height:1.7">
         Pan: chuột phải / giữa / Space · Ctrl+lăn = zoom<br>
@@ -809,6 +817,11 @@ function syncLib(){
   dbPut(LIB_KEY, libCatalog).catch(()=>{});
 }
 const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C","#A98C6A","#7E8AA0"];
+/* Hệ số nhân CỠ CHỮ — RIÊNG cho chữ, không đụng mẫu số inv chung (nếu đổi inv thì cả bảng chú
+   giải, nét zone, marquee đều to lên). Chữ mã đèn ở bản in đang ~1,3 mm, dưới ngưỡng đọc 2,5 mm;
+   "Lớn" đưa lên ~2,2 mm. Mặc định "Vừa" — bản in hiện tại hơi nhỏ. Chọn "Nhỏ" để về mật độ cũ. */
+const TEXT_SCALES = {nho:1.0, vua:1.3, lon:1.7};
+function textScale(){ return TEXT_SCALES[state && state.textScale] || TEXT_SCALES.vua; }
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
 const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, spot:0.14, pendant:0.28,
                   chandelier:0.42, strip:1.0};
@@ -881,6 +894,22 @@ function emptyCircuits(fl){
   fl=fl||F();
   return (fl.circuits||[]).filter(c=>!fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
 }
+/* Cây khung nhỏ nhất (Prim) — trả DANH SÁCH CẠNH nối các điểm thành một chuỗi ngắn nhất.
+   Dùng để nối các đèn CÙNG CỤM với nhau bằng nét đứt (thay vì công tắc nối tới từng đèn).
+   n nhỏ (trung bình 2, tối đa ~6 đèn/cụm/phòng) nên O(n²) mỗi bước là đủ. */
+function mstEdges(pts){
+  if(pts.length<2) return [];
+  const inT=[pts[0]], rest=pts.slice(1), E=[];
+  while(rest.length){
+    let bi=0,bj=0,bd=Infinity;
+    for(let i=0;i<inT.length;i++) for(let j=0;j<rest.length;j++){
+      const v=Math.hypot(inT[i].x-rest[j].x, inT[i].y-rest[j].y);
+      if(v<bd){ bd=v; bi=i; bj=j; }
+    }
+    E.push([inT[bi], rest[bj]]); inT.push(rest[bj]); rest.splice(bj,1);
+  }
+  return E;
+}
 /* NGUYÊN LÝ: đèn chỉ tắt/bật qua CÔNG TẮC, mà công tắc điều khiển CỤM.
    → chỉ MỘT cơ chế: đèn tắt ⟺ cụm của nó đang tắt. Đèn chưa gán cụm = chưa qua
    công tắc nào = luôn sáng. Muốn 1 đèn bật riêng thì tách nó thành cụm riêng. */
@@ -899,7 +928,7 @@ function lightsOfSwitch(sw, fl){
 function newState(){
   return {
     version:6, projectName:"Dự án chưa đặt tên",
-    showGlow:true, labelMode:"all",
+    showGlow:true, labelMode:"all", textScale:"vua",
     lights: initialLights(),
     floors:[newFloor("Tầng 1")], cur:0,
   };
@@ -953,6 +982,7 @@ function migrate(s){
     f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.off; }));
   });
   if(s.showLegend===undefined) s.showLegend=true;
+  if(!TEXT_SCALES[s.textScale]) s.textScale="vua";
   // Nâng phiên bản CUỐI CÙNG, sau mọi khối sửa chữa ở trên. Dòng "if(s.version<5) s.version=5"
   // trước đây nằm SAU dòng nâng lên 6 nên không bao giờ chạy — đã bỏ.
   if(s.version<STATE_VERSION) s.version=STATE_VERSION;
@@ -1159,6 +1189,10 @@ function lightById(id){ return state.lights.find(l=>l.id===id) || state.lights[0
 function lampLumen(l){ return (l.lumen && l.lumen>0) ? l.lumen : (l.watt||0)*LM_PER_W; }
 function fmt(n,d=0){ if(n==null||isNaN(n)) return "–";
   return Number(n).toLocaleString("vi-VN",{maximumFractionDigits:d}); }
+/* Số vẽ TRÊN mặt bằng — dấu phẩy vi-VN để đồng bộ với panel/PDF/CSV (trước đây dùng .toFixed(2)
+   ra dấu chấm "2.78" trong khi bảng ghi "2,78" → hai quy ước lẫn lộn trong một tài liệu gửi khách) */
+function fmtPlan(n,d=2){ if(n==null||isNaN(n)) return "–";
+  return Number(n).toLocaleString("vi-VN",{minimumFractionDigits:0, maximumFractionDigits:d}); }
 function escapeHtml(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function shoelace(pts){
@@ -1451,12 +1485,12 @@ function elevationSVG(z, light){
   if(hits){
     const yT=Math.min(Y(hT)+4, Y(0)-8);
     if(hB>0.05 && (hT-hB)>=0.3){
-      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${hT.toFixed(2)} m</text>
-        <text x="${X(0)-7}" y="${Math.min(Y(hB)+11, Y(0)-8)}" text-anchor="end" ${F} font-size="10" fill="#B08040">+${hB.toFixed(2)} m</text>`;
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${fmtPlan(hT)} m</text>
+        <text x="${X(0)-7}" y="${Math.min(Y(hB)+11, Y(0)-8)}" text-anchor="end" ${F} font-size="10" fill="#B08040">+${fmtPlan(hB)} m</text>`;
     } else if(hB>0.05){
-      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${hB.toFixed(2)}→${hT.toFixed(2)} m</text>`;
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11" fill="#B08040">+${fmtPlan(hB)}→${fmtPlan(hT)} m</text>`;
     } else {
-      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11.5" fill="#B08040">+${hT.toFixed(2)} m</text>`;
+      hLabels=`<text x="${X(0)-7}" y="${yT}" text-anchor="end" ${F} font-size="11.5" fill="#B08040">+${fmtPlan(hT)} m</text>`;
     }
   }
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:8px auto 4px;max-width:100%">
@@ -1464,7 +1498,7 @@ function elevationSVG(z, light){
     ${axis}
     ${hits? `<line x1="${X(0)}" y1="${Y(hB>0.01?hB:0)}" x2="${X(0)}" y2="${Y(hT)}" stroke="#C78F57" stroke-width="4" stroke-linecap="round"/>`
       : (wm.blockedByCab? "" :
-        `<text x="${X(Math.max(0,d-Hl*tanN))}" y="${Y(0)-7}" text-anchor="middle" ${F2} font-size="10" fill="#8A8175">mép sáng cách tường ${Math.max(0,d-Hl*tanN).toFixed(2)} m</text>`)}
+        `<text x="${X(Math.max(0,d-Hl*tanN))}" y="${Y(0)-7}" text-anchor="middle" ${F2} font-size="10" fill="#8A8175">mép sáng cách tường ${fmtPlan(Math.max(0,d-Hl*tanN))} m</text>`)}
     ${hLabels}
     ${hatch}
     <line x1="${X(Wm)}" y1="${Y(0)}" x2="${X(0)}" y2="${Y(0)}" stroke="#3A362F" stroke-width="2"/>
@@ -1473,11 +1507,11 @@ function elevationSVG(z, light){
     ${cabRect}
     ${stem}
     <g transform="rotate(${tilt} ${X(d)} ${Y(Hl)})"><rect x="${X(d)-6}" y="${Y(Hl)-2}" width="12" height="5" rx="1.5" fill="#3A362F"/></g>
-    <text x="${X(d)-9}" y="${Y(Hl)+16}" text-anchor="end" ${F2} font-size="10" fill="#6E665A">${beam}°${tilt?` · nghiêng ${tilt}°`:""}${Hl<Hc-0.03?` · cao ${Hl.toFixed(2)}m`:""}</text>
+    <text x="${X(d)-9}" y="${Y(Hl)+16}" text-anchor="end" ${F2} font-size="10" fill="#6E665A">${beam}°${tilt?` · nghiêng ${tilt}°`:""}${Hl<Hc-0.03?` · cao ${fmtPlan(Hl)}m`:""}</text>
     <line x1="${X(d)}" y1="${Y(Hc)-8}" x2="${X(0)}" y2="${Y(Hc)-8}" stroke="#B08040" stroke-width="1"/>
     <line x1="${X(d)}" y1="${Y(Hc)-12}" x2="${X(d)}" y2="${Y(Hc)-4}" stroke="#B08040" stroke-width="1"/>
     <line x1="${X(0)}" y1="${Y(Hc)-12}" x2="${X(0)}" y2="${Y(Hc)-4}" stroke="#B08040" stroke-width="1"/>
-    <text x="${(X(d)+X(0))/2}" y="${Y(Hc)-13}" text-anchor="middle" ${F} font-size="10.5" fill="#B08040">${d.toFixed(2)} m</text>
+    <text x="${(X(d)+X(0))/2}" y="${Y(Hc)-13}" text-anchor="middle" ${F} font-size="10.5" fill="#B08040">${fmtPlan(d)} m</text>
     <text x="${X(Wm)+4}" y="${Y(Hc)-5}" ${F2} font-size="9.5" fill="#8A8175">trần ${Hc} m</text>
     <text x="${X(Wm)+4}" y="${Y(0)-5}" ${F2} font-size="9.5" fill="#8A8175">sàn</text>
     <text transform="rotate(90 ${W-6} ${Y(Hc/2)})" x="${W-6}" y="${Y(Hc/2)}" text-anchor="middle" ${F2} font-size="9.5" fill="#8A8175">tường</text>
@@ -1692,9 +1726,9 @@ function drawOverlay(){
         const ux=dx/len, uy=dy/len;
         const off=Math.max((SYM_SIZE[wm.lamp.type]||0.2)*P*0.9, 26*inv);
         const txt = wm.hits? (wm.hBottom>0.05
-              ? `${wm.dM.toFixed(2)}m · hắt tường +${wm.hBottom.toFixed(2)}→${wm.hTop.toFixed(2)}m`
-              : `${wm.dM.toFixed(2)}m · hắt tường +${wm.hTop.toFixed(2)}m`)
-            : `${wm.dM.toFixed(2)}m · chưa hắt tới tường`;
+              ? `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hBottom)}→${fmtPlan(wm.hTop)}m`
+              : `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hTop)}m`)
+            : `${fmtPlan(wm.dM)}m · chưa hắt tới tường`;
         // neo ĐẦU chuỗi theo hướng thoát — chữ mọc ra xa đèn, không tràn ngược lên ký hiệu
         const anchor = ux>0.35? "start" : ux<-0.35? "end" : "middle";
         addLabel(ov, l.x+ux*off, l.y+uy*off+4*inv, txt, 11*inv,
@@ -1772,26 +1806,53 @@ function drawOverlay(){
     });
   });
 
-  // ---- lớp 4b: CÔNG TẮC + đường điều khiển tới đèn (nét đứt kiểu bản vẽ ME) ----
+  // ---- lớp 4b: đường điều khiển theo CỤM (nét đứt kiểu bản vẽ ME) ----
+  // Nối đèn CÙNG CỤM với nhau bằng chuỗi ngắn nhất (MST), rồi mỗi CÔNG TẮC nối MỘT đường tới cụm.
+  // Trước đây vẽ 1 đường từ công tắc tới TỪNG đèn → rối (196,7 m nét đứt trên HB House). Cách này
+  // giảm ~44%. Lặp theo CỤM (không theo công tắc) để 2 công tắc cùng 1 cụm không vẽ chuỗi 2 lần,
+  // và cụm chưa có công tắc vẫn hiện chuỗi.
   const fl=F();
+  const wireCircuits=new Set();
+  if(state.showWiring){                        // "hiện tất cả" — mọi cụm
+    (fl.circuits||[]).forEach(c=>wireCircuits.add(c.id));
+  }else if(exportInv==null){                   // chỉ khi xem trên màn (export chỉ theo showWiring)
+    if(selSwitch){ const sw=(fl.switches||[]).find(s=>s.id===selSwitch);
+      if(sw)(sw.circuits||[]).forEach(cid=>wireCircuits.add(cid)); }
+    selLights.forEach(({zid,li})=>{            // luồng lấy ĐÈN làm trung tâm: chọn đèn → hiện cụm nó
+      const z=fl.zones.find(z=>z.id===zid); const l=z&&z.lights[li];
+      if(l&&l.circuit) wireCircuits.add(l.circuit);
+    });
+  }
+  wireCircuits.forEach(cid=>{
+    const c=circuitById(cid, fl); if(!c) return;
+    const col=c.color||C_ACCENT_D, dash=`${5*inv},${4*inv}`;
+    const drawBow=(a,b,op,wd)=>{                // cung cong: nét THẲNG đèn-đèn trông giống ống luồn dây
+      const mx=(a.x+b.x)/2,my=(a.y+b.y)/2, nx=-(b.y-a.y),ny=(b.x-a.x);
+      const len=Math.hypot(nx,ny)||1, bow=Math.min(len*0.12,40*inv);
+      ov.appendChild(svg("path",{ d:`M${a.x},${a.y} Q${(mx+nx/len*bow).toFixed(1)},${(my+ny/len*bow).toFixed(1)} ${b.x},${b.y}`,
+        fill:"none", stroke:col, "stroke-width":wd, "stroke-dasharray":dash, opacity:op})); };
+    // chuỗi đèn-với-đèn TRONG TỪNG khu vực: cụm trải nhiều phòng → mỗi phòng một chuỗi, không kéo
+    // cung chéo xuyên tường ngăn (đọc ra như lỗi trên tờ trình bày)
+    const allPts=[];
+    fl.zones.forEach(z=>{
+      const pts=z.lights.filter(l=>l.circuit===cid).map(l=>({x:l.x,y:l.y}));
+      allPts.push(...pts);
+      mstEdges(pts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
+    });
+    if(!allPts.length) return;
+    // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất + CHỮ CÁI CỤM ở điểm giữa
+    // (danh tính cụm chỉ có màu, mà công trường in đen trắng → chữ cái là thứ đọc được)
+    (fl.switches||[]).forEach(sw=>{
+      if(!(sw.circuits||[]).includes(cid)) return;
+      let best=allPts[0], bd=Infinity;
+      allPts.forEach(p=>{ const d=Math.hypot(p.x-sw.x,p.y-sw.y); if(d<bd){bd=d;best=p;} });
+      drawBow({x:sw.x,y:sw.y}, best, .65, 1.2*inv);
+      addLabel(ov, (sw.x+best.x)/2, (sw.y+best.y)/2-2*inv, c.key, 8*inv, col, inv, "middle");
+    });
+  });
   (fl.switches||[]).forEach((sw,si)=>{
-    const sel = selSwitch===sw.id;
+    const sel = exportInv==null && selSwitch===sw.id;   // export KHÔNG nướng highlight (sửa lỗi PNG cũ)
     const sz = Math.max(0.11*P, 15*inv);
-    // đường điều khiển: hiện khi chọn công tắc hoặc bật "hiện tất cả"
-    if(sel || state.showWiring){
-      lightsOfSwitch(sw, fl).forEach(({l})=>{
-        const mx=(sw.x+l.x)/2, my=(sw.y+l.y)/2;
-        const nx=-(l.y-sw.y), ny=(l.x-sw.x);
-        const len=Math.hypot(nx,ny)||1;
-        const bow=Math.min(len*0.12, 40*inv);
-        const c=circuitById(l.circuit, fl);
-        ov.appendChild(svg("path",{
-          d:`M${sw.x},${sw.y} Q${mx+nx/len*bow},${my+ny/len*bow} ${l.x},${l.y}`,
-          fill:"none", stroke:(c&&c.color)||C_ACCENT_D,
-          "stroke-width":(sel?1.4:1)*inv, "stroke-dasharray":`${5*inv},${4*inv}`,
-          opacity:sel?.9:.45}));
-      });
-    }
     const g=svg("g",{transform:`translate(${sw.x},${sw.y})`, "data-sw":sw.id,
       class:"switchm", style:"cursor:pointer"});
     if(sel) g.appendChild(svg("circle",{r:sz*0.95, fill:C_ACCENT, "fill-opacity":".16",
@@ -1882,7 +1943,7 @@ function drawOverlay(){
         "stroke-dasharray":`${5*inv},${4*inv}`}));
       if(F().pxPerMeter){
         addLabel(ov,(a.x+b.x)/2,(a.y+b.y)/2-11*inv,
-          (Math.hypot(b.x-a.x,b.y-a.y)/ppm()).toFixed(2)+" m", 10.5*inv, C_ACCENT_D, inv);
+          fmtPlan(Math.hypot(b.x-a.x,b.y-a.y)/ppm())+" m", 10.5*inv, C_ACCENT_D, inv);
       }
     }
   }
@@ -1892,9 +1953,54 @@ function drawOverlay(){
       fill:C_ACCENT,"fill-opacity":".07",stroke:C_ACCENT,
       "stroke-width":inv,"stroke-dasharray":`${4*inv},${3*inv}`}));
   }
+
+  // ---- lớp 8: khối tiêu đề + thước tỉ lệ — CHỈ khi xuất (PNG/PDF), để tờ giấy có khung chuyên nghiệp ----
+  if(exportInv!=null) drawTitleBlock(ov, inv, P);
+}
+/* Khối góc dưới-phải của bản xuất: thước tỉ lệ ĐỒ HOẠ (đúng ở mọi khổ in vì co theo bản vẽ) +
+   tên dự án/tầng/ngày + ghi chú không-đo-số-trực-tiếp. Vẽ trong world coords nên vào thẳng PNG/PDF. */
+function drawTitleBlock(ov, inv, P){
+  const pad=10*inv, g=svg("g",{});
+  const W=worldW(), H=worldH();
+  // ---- thước tỉ lệ đồ hoạ ----
+  let barW=0, segs=0, unit=1;
+  if(F().pxPerMeter){
+    // chọn số mét cho thước sao cho dài khoảng 12% bản vẽ, làm tròn đẹp
+    const target=W*0.12/F().pxPerMeter;
+    unit = target>=4? 2 : target>=1.5? 1 : 0.5;
+    segs = Math.max(2, Math.round(target/unit));
+    barW = segs*unit*F().pxPerMeter;
+  }
+  const th=6*inv;
+  // ước lượng bề rộng khối = max(thước, chữ dài nhất). Chữ dùng addText nên đã nhân textScale.
+  const line1=escapeHtml(state.projectName||"Dự án");
+  const line2=F().name+(F().pxPerMeter? "":" · CHƯA CÂN TỈ LỆ");
+  const boxW=Math.max(barW+2*pad, 150*inv);
+  const boxH=(F().pxPerMeter? th+30*inv : 8*inv) + 44*inv;
+  const x0=W-boxW-12*inv, y0=H-boxH-12*inv;
+  g.appendChild(svg("rect",{x:x0, y:y0, width:boxW, height:boxH, rx:4*inv,
+    fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
+  let cy=y0+pad+11*inv;
+  addText(g, x0+pad, cy, line1, 12*inv, C_INK, "start", 600); cy+=15*inv;
+  addText(g, x0+pad, cy, line2, 10*inv, "#8A8175", "start", 500); cy+=16*inv;
+  if(F().pxPerMeter){
+    const bx=x0+pad, by=cy;
+    for(let i=0;i<segs;i++){
+      g.appendChild(svg("rect",{x:bx+i*unit*F().pxPerMeter, y:by, width:unit*F().pxPerMeter, height:th,
+        fill:i%2? "#FFFFFF":C_INK, stroke:C_INK,"stroke-width":inv}));
+    }
+    for(let i=0;i<=segs;i++){
+      const lx=bx+i*unit*F().pxPerMeter;
+      addText(g, lx, by+th+11*inv, fmtPlan(i*unit,0)+(i===segs?" m":""), 8.5*inv, "#6E665A", "middle", 500);
+    }
+  }
+  // ghi chú không-đo-số — dán dưới cùng khối
+  addText(g, x0+pad, y0+boxH-6*inv, "Không đo số trực tiếp trên bản vẽ", 8*inv, "#A9A093", "start", 500);
+  ov.appendChild(g);
 }
 /* text trần (không viền) — dùng khi đã có nền thẻ phía dưới */
 function addText(parent, x, y, txt, size, color, anchor, weight){
+  size*=textScale();
   const t=svg("text",{x, y, "text-anchor":anchor||"start",
     "font-family":"'Inter',sans-serif", "font-weight":weight||500,
     "font-size":size, fill:color, style:"letter-spacing:.01em; pointer-events:none"});
@@ -1986,6 +2092,7 @@ function labelObj(kind, ref){
   return null;
 }
 function addDragLabel(ov, kind, ref, x, y, txt, size, color, inv, anchor){
+  size*=textScale();   // nhân TRƯỚC khi tính hộp bắt chuột để hitbox khớp cỡ chữ
   const g=svg("g",{class:"dlbl","data-k":kind,"data-r":ref, style:"cursor:move"});
   const w=txt.length*size*0.62, h=size*1.3;
   const rx = anchor==="end"? x-w : anchor==="middle"? x-w/2 : x;
@@ -2001,6 +2108,7 @@ function addDragLabel(ov, kind, ref, x, y, txt, size, color, inv, anchor){
 }
 /* text có viền trắng (paint-order) để đọc được trên nền ảnh */
 function addLabel(parent, x, y, txt, size, color, inv, anchor){
+  size*=textScale();
   // Inter cho nhãn (JetBrains Mono thiếu glyph dấu tiếng Việt phức như "ờ")
   const t=svg("text",{x,y,"text-anchor":anchor||"middle",
     "font-family":"'Inter',sans-serif","font-weight":"500","font-size":size, fill:color,
@@ -2090,10 +2198,13 @@ function renderFloorBar(){
 
 function renderSceneBar(){
   const fl=F(), bar=$("#sceneBar");
-  const hasCtl=(fl.circuits||[]).length>0;
-  bar.classList.toggle("hidden", !hasCtl);
-  if(!hasCtl){ bar.innerHTML=""; return; }
   const dirty=(fl.liveOff||[]).length>0 && !fl.scene;
+  // Kịch bản là tính năng ít dùng (anh Khoa: cụm đã làm hết việc). Ẩn dải khi CHƯA có kịch bản nào —
+  // trả lại chỗ ở đáy canvas (vốn chen với #selChip). Vẫn hiện khi có kịch bản, hoặc khi vừa tắt
+  // vài cụm (dirty) để còn nút "Lưu cảnh này" — giữ được đường tạo kịch bản đầu tiên.
+  const show=(fl.circuits||[]).length>0 && ((fl.scenes||[]).length>0 || dirty);
+  bar.classList.toggle("hidden", !show);
+  if(!show){ bar.innerHTML=""; return; }
   let h=`<span class="sclbl">Kịch bản</span>
     <button class="sc${!fl.scene&&!(fl.liveOff||[]).length?" on":""}" data-sc="">Tất cả bật</button>`;
   (fl.scenes||[]).forEach(s=>{
@@ -2117,7 +2228,7 @@ function renderAll(){
   $("#chkGlow").checked=state.showGlow!==false;
   $("#chkWiring").checked=!!state.showWiring;
   $("#chkLegend").checked=state.showLegend!==false;
-  syncLblSeg();
+  syncLblSeg(); syncTxtSeg();
   $("#bgControls").classList.toggle("hidden", !F().bg);
 }
 
@@ -2397,7 +2508,7 @@ function handlePointerUp(e){
         const rotD=Math.round((Math.atan2(b.y-a.y, b.x-a.x)*180/Math.PI+360)%360);
         mutate(()=>{ z.lights.push({x:(a.x+b.x)/2, y:(a.y+b.y)/2,
           lightId:z.placeLightId, len:+distM.toFixed(2), rot:rotD}); });
-        toast(`Đã đặt dây ${distM.toFixed(2)} m — sửa số trong ô "Dài dây" nếu cần`);
+        toast(`Đã đặt dây ${fmtPlan(distM)} m — sửa số trong ô "Dài dây" nếu cần`);
       }
     }
     render(); return;
@@ -3134,18 +3245,18 @@ function updateWallbox(){
     tx.innerHTML=`<span class="muted">Đèn đang ngoài khu vực — chỉnh X/Y hoặc kéo đèn vào trong.</span>`; return; }
   setV("wD", wm.dM.toFixed(2));
   eb.innerHTML=elevationSVG(c.z,c.l);
-  const pre = c.l.mh!=null? `Lắp cao <b>${wm.H.toFixed(2)} m</b> · cách tường <b>${wm.dM.toFixed(2)} m</b>`
-                          : `Đèn cách tường <b>${wm.dM.toFixed(2)} m</b>`;
+  const pre = c.l.mh!=null? `Lắp cao <b>${fmtPlan(wm.H)} m</b> · cách tường <b>${fmtPlan(wm.dM)} m</b>`
+                          : `Đèn cách tường <b>${fmtPlan(wm.dM)} m</b>`;
   const maxD = wm.H*Math.tan(Math.min(wm.tilt+wm.beam/2,86)*Math.PI/180);
   if(wm.blockedByCab){
     tx.innerHTML = `${pre} — <span class="muted">chùm sáng bị tủ (đỉnh ${wm.cab.top} m) che, không hắt tới tường. Hạ cao lắp, tăng nghiêng hoặc đưa đèn ra xa mặt tủ.</span>`;
   } else if(wm.hits){
     tx.innerHTML = (wm.hBottom>0.05
-        ? `${pre} — ánh sáng hắt lên tường từ cao độ <b>+${wm.hBottom.toFixed(2)} m</b> đến <b>+${wm.hTop.toFixed(2)} m</b>.`
-        : `${pre} — ánh sáng hắt lên tường tới cao độ <b>+${wm.hTop.toFixed(2)} m</b> tính từ sàn.`)
+        ? `${pre} — ánh sáng hắt lên tường từ cao độ <b>+${fmtPlan(wm.hBottom)} m</b> đến <b>+${fmtPlan(wm.hTop)} m</b>.`
+        : `${pre} — ánh sáng hắt lên tường tới cao độ <b>+${fmtPlan(wm.hTop)} m</b> tính từ sàn.`)
       + (wm.cappedByCab? ` <span class="muted">(phần dưới +${wm.cab.top} m bị tủ án ngữ)</span>`:"");
   } else {
-    tx.innerHTML = `${pre} — <span class="muted">chưa hắt tới tường. Đưa đèn lại gần dưới ${maxD.toFixed(2)} m hoặc tăng góc nghiêng.</span>`;
+    tx.innerHTML = `${pre} — <span class="muted">chưa hắt tới tường. Đưa đèn lại gần dưới ${fmtPlan(maxD)} m hoặc tăng góc nghiêng.</span>`;
   }
 }
 
@@ -3429,6 +3540,13 @@ function syncLblSeg(){
   $$("#lblSeg button").forEach(b=>
     b.classList.toggle("on", b.dataset.lm===(state.labelMode||"compact")));
 }
+$$("#txtSeg button").forEach(b=> b.onclick=()=>{
+  state.textScale=b.dataset.ts; save(); render(); syncTxtSeg();
+});
+function syncTxtSeg(){
+  $$("#txtSeg button").forEach(b=>
+    b.classList.toggle("on", b.dataset.ts===(state.textScale||"vua")));
+}
 
 /* =========================== EXPORT =========================== */
 function composite(){
@@ -3658,38 +3776,52 @@ async function buildPrintDoc(){
   // Bảng công tắc + kịch bản của tầng
   let ctlHtml="";
   if((fl.switches||[]).length){
+    // cụm do ≥2 công tắc điều khiển = đảo chiều (2 nơi bật/tắt cùng một đèn — cầu thang, hành lang dài)
+    const swByCir={}; fl.switches.forEach(sw=>(sw.circuits||[]).forEach(cid=>{ (swByCir[cid]=swByCir[cid]||[]).push(sw.code); }));
+    const twoWay=new Set(Object.keys(swByCir).filter(cid=>swByCir[cid].length>1));
+    // phòng của công tắc: theo vị trí đặt, không được thì theo phòng của đèn nó điều khiển
+    const roomOf=sw=>{ const z=zoneAtPoint({x:sw.x,y:sw.y});
+      if(z) return z.name;
+      const ls=lightsOfSwitch(sw,fl); return ls.length? ls[0].z.name : "—"; };
+    const rows=fl.switches.map(sw=>({sw, room:roomOf(sw)}))
+      .sort((a,b)=>a.room.localeCompare(b.room,"vi"));   // gom theo phòng
+    // BỎ cột "Tổng W" — tải theo mạch là số thợ dùng chọn tiết diện dây/aptomat, vượt phạm vi ME.
     ctlHtml+=`<h2>Công tắc & cụm điều khiển${multi? " — "+escapeHtml(fl.name):""}</h2>
       <table class="pr"><thead><tr><th style="width:44px">Công tắc</th><th style="width:40px">Số nút</th>
-      <th>Điều khiển cụm</th><th class="num" style="width:52px">Số đèn</th>
-      <th class="num" style="width:56px">Tổng W</th></tr></thead><tbody>`;
-    fl.switches.forEach(sw=>{
+      <th style="width:56px">Cao độ</th><th style="width:74px">Ở phòng</th>
+      <th>Điều khiển cụm</th><th class="num" style="width:52px">Số đèn</th></tr></thead><tbody>`;
+    rows.forEach(({sw,room})=>{
       const ls=lightsOfSwitch(sw, fl);
-      const w=ls.reduce((s,{l})=>{ const lp=lightById(l.lightId);
-        return s+(lp.type==="strip"?(l.len||1):1)*lp.watt; },0);
+      const twk=(sw.circuits||[]).some(cid=>twoWay.has(cid));
       const names=(sw.circuits||[]).map(c=>circuitById(c,fl)).filter(Boolean)
-        .map(c=>escapeHtml(c.name)).join(", ")||"—";
-      ctlHtml+=`<tr><td><span class="pr-code">${escapeHtml(sw.code||"CT")}</span></td>
-        <td class="num">${switchGang(sw)}</td><td>${names}</td>
-        <td class="num">${ls.length}</td><td class="num">${fmt(w)}</td></tr>`;
+        .map(c=>`${escapeHtml(c.name)} (${c.key})`).join(", ")||"—";
+      ctlHtml+=`<tr><td><span class="pr-code">${escapeHtml(sw.code||"CT")}</span>${twk?' <span style="color:#8A8175">↔</span>':''}</td>
+        <td class="num">${switchGang(sw)}</td>
+        <td class="num">+${fmtPlan(sw.mh!=null?sw.mh:1.25,2)} m</td>
+        <td>${escapeHtml(room)}</td><td>${names}</td>
+        <td class="num">${ls.length}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
+    if(twoWay.size) ctlHtml+=`<p class="pr-hint">↔ = công tắc đảo chiều (điều khiển cùng cụm từ hai vị trí).
+      Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
+    else ctlHtml+=`<p class="pr-hint">Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
   }
   if((fl.scenes||[]).length){
+    // BỎ cột "Công suất" — cùng lý do với Tổng W công tắc.
     ctlHtml+=`<h2>Kịch bản chiếu sáng${multi? " — "+escapeHtml(fl.name):""}</h2>
       <table class="pr"><thead><tr><th>Kịch bản</th><th>Cụm BẬT</th>
-      <th class="num" style="width:52px">Số đèn</th><th class="num" style="width:56px">Công suất</th>
-      </tr></thead><tbody>`;
+      <th class="num" style="width:52px">Số đèn</th></tr></thead><tbody>`;
     fl.scenes.forEach(sc=>{
       const offs=new Set(sc.off||[]);
       const onC=(fl.circuits||[]).filter(c=>!offs.has(c.id));
-      let n=0, w=0;
+      let n=0;
       fl.zones.forEach(z=>z.lights.forEach(l=>{
         if(l.circuit && offs.has(l.circuit)) return;
-        const lp=lightById(l.lightId); n++; w+=(lp.type==="strip"?(l.len||1):1)*lp.watt;
+        n++;
       }));
       ctlHtml+=`<tr><td><b style="font-weight:600">${escapeHtml(sc.name)}</b></td>
         <td>${onC.map(c=>escapeHtml(c.name)).join(", ")||"— tắt hết —"}</td>
-        <td class="num">${n}</td><td class="num">${fmt(w)} W</td></tr>`;
+        <td class="num">${n}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
   }
@@ -3725,14 +3857,17 @@ async function buildPrintDoc(){
     const link = u
       ? `<a class="pr-link" href="${escapeHtml(u)}">${escapeHtml(u.replace(/^https?:\/\//,"").slice(0,42))}</a>`
       : `<span style="color:#A9A093">—</span>`;
-    specHtml+=`<tr><td style="width:34px">${th}</td>
+    // Ký hiệu THẬT (cùng hàm vẽ trên mặt bằng) — cột này là bảng chú giải ký hiệu: thợ nhìn ký hiệu
+    // trên bản vẽ, tra sang đây ra tên + thông số. mnt để đèn tường hiện đúng ký hiệu lưng tường.
+    const sym=symbolIconSVG(l.type, "pr-sym").outerHTML;
+    specHtml+=`<tr><td style="width:26px">${sym}</td><td style="width:34px">${th}</td>
       <td><span class="pr-code">${escapeHtml(l.code||"")}</span></td>
       <td>${escapeHtml(l.name)}</td><td>${typeLabel(l.type)}</td>
       <td class="num">${fmt(lampLumen(l))}</td><td class="num">${l.watt}</td>
       <td class="num">${l.beam}°</td><td>${link}</td></tr>`;
   });
-  const spec=usedLamps.size? `<h2>Thông số kỹ thuật đèn sử dụng</h2>
-    <table class="pr"><thead><tr><th style="width:34px"></th><th style="width:44px">Mã</th>
+  const spec=usedLamps.size? `<h2>Ký hiệu &amp; thông số kỹ thuật đèn sử dụng</h2>
+    <table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th><th style="width:34px"></th><th style="width:44px">Mã</th>
       <th>Tên đèn</th><th style="width:64px">Kiểu</th>
       <th class="num" style="width:56px">Quang thông</th><th class="num" style="width:40px">W</th>
       <th class="num" style="width:44px">Góc chiếu</th><th style="width:150px">Xem chi tiết</th>
@@ -3747,9 +3882,10 @@ async function buildPrintDoc(){
     <div><dt>ĐVT</dt><dd>— đơn vị tính: <b>bộ</b> = số bộ đèn rời; <b>m</b> = số mét dài đối với LED dây.</dd></div>
     <div><dt>Vùng sáng trên bản vẽ</dt><dd>— quầng vàng minh hoạ phạm vi chiếu của mỗi đèn theo góc chiếu và chiều cao lắp đặt.</dd></div>
     <div><dt>Cụm điều khiển (a, b, c…)</dt><dd>— nhóm đèn cùng bật/tắt bởi một nút công tắc, tương đương một mạch/đường dây (VD: đèn trần, đèn hắt, đèn rọi tranh). Chữ cụm ghi cạnh mỗi đèn trên bản vẽ.</dd></div>
-    <div><dt>Công tắc</dt><dd>— vị trí công tắc trên tường; chữ cạnh công tắc (VD “abc”) là các cụm nó điều khiển, “số nút” là số cụm. Nét đứt trên bản vẽ nối công tắc tới đúng những đèn nó bật/tắt.</dd></div>
+    <div><dt>Công tắc</dt><dd>— vị trí công tắc trên tường; chữ cạnh công tắc (VD “abc”) là các cụm nó điều khiển, “số nút” là số cụm. <b>Nét đứt trên bản vẽ nối các đèn CÙNG MỘT CỤM với nhau và với công tắc — đó là quan hệ ĐIỀU KHIỂN, KHÔNG phải tuyến đi dây.</b></dd></div>
     <div><dt>Kịch bản chiếu sáng</dt><dd>— các cảnh sáng thường dùng, mỗi cảnh bật một số cụm (VD: “Sinh hoạt” bật đèn trần + hắt; “Xem phim” chỉ bật đèn hắt). Bản vẽ trong hồ sơ này thể hiện trạng thái <b>bật toàn bộ</b>.</dd></div>
     <div><dt>Cách tính</dt><dd>— phương pháp quang thông: <b>Số đèn = (Độ rọi × Diện tích) ÷ (Quang thông mỗi đèn × Hệ số tổn hao)</b>. Hệ số tổn hao (mặc định 0,7) tính hao hụt do bụi bám, suy giảm quang thông và hấp thụ của tường/trần.</dd></div>
+    <div><dt>Phạm vi hồ sơ</dt><dd>— đây là bản vẽ <b>bố trí chiếu sáng</b> phục vụ thiết kế nội thất: vị trí đèn, cụm điều khiển và công tắc. Hồ sơ <b>không bao gồm</b> tính toán điện: tiết diện dây, aptomat, tủ điện, sơ đồ nguyên lý — các nội dung này do kỹ sư M&E triển khai.</dd></div>
   </div>`;
 
   $("#printArea").innerHTML=`
