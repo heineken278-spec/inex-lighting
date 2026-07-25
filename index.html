@@ -145,8 +145,11 @@
   details.sec:not([open])>summary .n{background:var(--bg)}
   .secbody{padding:2px 14px 14px}
   /* khối ngữ cảnh (đèn/công tắc đang chọn) — nổi bật trên cùng */
+  /* GHIM khối ngữ cảnh (đèn/công tắc/thiết bị đang chọn) ở đầu bảng — cuộn xuống vẫn thấy
+     thông số thứ đang chọn, không bị các mục khác đẩy khuất */
   .ctxsec{background:#FBF7F0; border-bottom:1px solid var(--line);
-    box-shadow:inset 3px 0 0 var(--accent)}
+    position:sticky; top:0; z-index:6;
+    box-shadow:inset 3px 0 0 var(--accent), 0 10px 14px -12px rgba(39,39,39,.35)}
   .panel-sec:last-child{border-bottom:none}
   /* Phân cấp chữ: tiêu đề mục (eyebrow) đậm rõ > nhãn field nhỏ nhạt > giá trị nổi bật */
   .eyebrow{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
@@ -766,7 +769,7 @@
         <p class="empty">Chọn hoặc vẽ một khu vực để cấu hình chiếu sáng và xem số lượng đèn.</p>
       </div>
       <div id="zoneProps" class="hidden">
-        <details class="sec" open>
+        <details class="sec" id="secZone">
           <summary>Thông số khu vực</summary>
           <div class="secbody">
           <label style="margin-top:2px">Tên khu vực</label>
@@ -784,7 +787,7 @@
           </div>
         </details>
 
-        <details class="sec" open>
+        <details class="sec" id="secLights" open>
           <summary>Đèn trong khu vực</summary>
           <div class="secbody">
           <!-- CÂY BÚT: loại đèn sẽ được đặt khi click lên bản vẽ. Tách hẳn khỏi danh sách bên dưới
@@ -803,7 +806,7 @@
           </div>
         </details>
 
-        <details class="sec" open>
+        <details class="sec" id="secCir">
           <summary>Cụm điều khiển <span class="n" id="cirCount">0</span></summary>
           <div class="secbody"><div id="cirList"></div></div>
         </details>
@@ -826,7 +829,7 @@
         <div class="secbody"><div id="devList"></div></div>
       </details>
 
-      <details class="sec">
+      <details class="sec" id="secSum">
         <summary>Tổng hợp dự án</summary>
         <div class="secbody"><div id="summary"></div></div>
       </details>
@@ -3550,6 +3553,7 @@ function refreshRight(){
   refreshSwitchPanel();
   refreshDevicePanel();
   refreshSelPanel();
+  syncRightScroll();
   const z=selZone();
   $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || selLights.length>0);
   $("#zoneProps").classList.toggle("hidden", !z);
@@ -3926,6 +3930,36 @@ function bindRight(){
   // "Đổi…" mẫu đèn sắp đặt = chuyển sang công cụ Đèn và mở bảng chọn mẫu (một đường duy nhất)
   $("#btnPickLight").addEventListener("click", ()=>{ setTool("light"); });
   bindRightGrip();
+  bindAccordion();
+}
+/* ĐÀN XẾP: mở một mục thì tự đóng các mục kia — bảng luôn chỉ cao bằng MỘT mục, hết cuộn dài.
+   Nhớ mục đang mở bằng localStorage (thói quen dùng máy, không phải dữ liệu dự án). */
+const SEC_KEY="inex_open_sec";
+const SEC_IDS=["secZone","secLights","secCir","devSec","secSum"];
+function bindAccordion(){
+  let saved=null; try{ saved=localStorage.getItem(SEC_KEY); }catch(e){}
+  if(saved && SEC_IDS.includes(saved))
+    SEC_IDS.forEach(id=>{ const d=$("#"+id); if(d) d.open = (id===saved); });
+  SEC_IDS.forEach(id=>{
+    const d=$("#"+id); if(!d) return;
+    d.addEventListener("toggle", ()=>{
+      if(!d.open) return;
+      SEC_IDS.forEach(o=>{ if(o!==id){ const e=$("#"+o); if(e) e.open=false; } });
+      try{ localStorage.setItem(SEC_KEY, id); }catch(e){}
+    });
+  });
+}
+/* Đổi thứ đang chọn → đưa bảng về đầu để thấy ngay khối ngữ cảnh (không phải tự cuộn tìm) */
+let lastSelSig="";
+function syncRightScroll(){
+  const sig = selSwitch? "w:"+selSwitch
+    : selDevice? "d:"+selDevice
+    : selLights.length? "l:"+selLights.map(s=>s.zid+":"+s.li).join(",")
+    : "";
+  if(sig!==lastSelSig){
+    lastSelSig=sig;
+    if(sig) { const r=$("#right"); if(r && r.scrollTop>0) r.scrollTop=0; }
+  }
 }
 /* Kéo mép trái để đổi bề rộng bảng phải. Nhớ bằng localStorage (đây là thói quen dùng máy,
    KHÔNG phải dữ liệu dự án → không đưa vào state/undo). Double-click trả về mặc định. */
