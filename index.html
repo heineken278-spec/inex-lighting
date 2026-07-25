@@ -101,20 +101,29 @@
      không che bản vẽ). Mặc định ẩn nên panel vẫn gọn. */
   /* hàng thu/mở — DÙNG LẠI đúng quy cách details.sec>summary của app (chữ nhãn hoa, mũi tên › xoay),
      thay cho nút viền lạc lõng */
-  .disclose{width:100%; margin-top:8px; border:none; background:transparent; cursor:pointer;
-    display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px;
-    font-family:var(--label); text-transform:uppercase; letter-spacing:.08em;
-    font-size:10.5px; font-weight:700; color:var(--ink-2); text-align:left}
-  .disclose:hover{background:var(--cream); color:var(--ink)}
+  /* Hàng thu/mở: giữ ngữ pháp details>summary (chữ nhãn hoa + mũi tên › xoay) NHƯNG có viền + nền
+     để nhìn ra ngay là nút bấm được — bản không viền trước đó anh Khoa phản ánh khó nhận ra. */
+  .disclose{width:100%; margin-top:9px; cursor:pointer; text-align:left;
+    display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--cream);
+    font-family:var(--label); text-transform:uppercase; letter-spacing:.06em;
+    font-size:10.5px; font-weight:700; color:var(--ink-2); transition:all .15s}
+  .disclose svg{width:15px; height:15px; flex:none; color:var(--accent-dark)}
+  .disclose:hover{border-color:var(--accent); color:var(--accent-dark); background:#FBF3E8}
   .disclose::after{content:"›"; margin-left:auto; color:var(--ink-3); font-size:15px;
     transform:rotate(0deg); transition:transform .15s}
-  .disclose.on{color:var(--accent-dark)}
+  .disclose.on{border-color:var(--accent); background:#FBF3E8; color:var(--accent-dark)}
   .disclose.on::after{transform:rotate(90deg); color:var(--accent-dark)}
   #visBox{ margin-top:2px }
   #visBox svg{ display:block; margin:2px auto; max-width:100% }
   .visempty{ font-size:11.5px; color:var(--ink-3); text-align:center; padding:12px 4px; margin:0;
     border:1px dashed var(--line); border-radius:8px; margin-top:6px }
   #devKinds, #lightKinds{ display:flex; flex-direction:column; gap:3px; max-height:300px; overflow-y:auto }
+  .pophd{display:flex; align-items:center; gap:6px; margin-bottom:2px}
+  .pophd .eyebrow{flex:1; margin:0}
+  .popx{border:none; background:none; cursor:pointer; color:var(--ink-3); font-size:13px;
+    line-height:1; padding:4px 6px; border-radius:6px; flex:none}
+  .popx:hover{background:var(--cream); color:var(--ink)}
   .devk{ display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--line);
     border-radius:8px; cursor:pointer; background:var(--bg); text-align:left; width:100% }
   .devk.on{ border-color:var(--accent); background:#FBF7F0 }
@@ -145,11 +154,12 @@
   details.sec:not([open])>summary .n{background:var(--bg)}
   .secbody{padding:2px 14px 14px}
   /* khối ngữ cảnh (đèn/công tắc đang chọn) — nổi bật trên cùng */
-  /* GHIM khối ngữ cảnh (đèn/công tắc/thiết bị đang chọn) ở đầu bảng — cuộn xuống vẫn thấy
-     thông số thứ đang chọn, không bị các mục khác đẩy khuất */
   .ctxsec{background:#FBF7F0; border-bottom:1px solid var(--line);
-    position:sticky; top:0; z-index:6;
-    box-shadow:inset 3px 0 0 var(--accent), 0 10px 14px -12px rgba(39,39,39,.35)}
+    box-shadow:inset 3px 0 0 var(--accent)}
+  /* GHIM riêng DÒNG TIÊU ĐỀ, không ghim cả khối: khối này cao 600–830px, ghim cả khối thì khi cuộn
+     nó ĐÈ LÊN các mục bên dưới (đo được: che 267px, bấm không tới) — đúng lỗi "panel không thu về được". */
+  .ctxsec>.eyebrow{position:sticky; top:0; z-index:3; background:#FBF7F0;
+    padding:9px 0 7px; margin:-9px 0 8px}
   .panel-sec:last-child{border-bottom:none}
   /* Phân cấp chữ: tiêu đề mục (eyebrow) đậm rõ > nhãn field nhỏ nhạt > giá trị nổi bật */
   .eyebrow{text-transform:uppercase; letter-spacing:.08em; font-size:11px; font-weight:700;
@@ -694,17 +704,19 @@
     </div>
 
     <div id="devPop" class="uifloat hidden">
-      <p class="eyebrow">Loại thiết bị đang đặt</p>
+      <div class="pophd"><p class="eyebrow">Loại thiết bị đang đặt</p>
+        <button class="popx" data-closepop title="Ẩn bảng này (vẫn đặt tiếp được)">✕</button></div>
       <div id="devKinds"></div>
       <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
-        Click lên bản vẽ để đặt · phím 1–9 đổi loại · Esc để xong
+        Click lên bản vẽ để đặt · phím 1–9 đổi loại<br>Esc: ẩn bảng · Esc lần nữa: thoát công cụ
       </p>
     </div>
     <div id="lightPop" class="uifloat hidden">
-      <p class="eyebrow">Chọn mẫu đèn để đặt</p>
+      <div class="pophd"><p class="eyebrow">Chọn mẫu đèn để đặt</p>
+        <button class="popx" data-closepop title="Ẩn bảng này (vẫn đặt tiếp được)">✕</button></div>
       <div id="lightKinds"></div>
       <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
-        Chọn 1 mẫu ở đây rồi click lên khu vực để đặt · Esc để xong
+        Chọn 1 mẫu rồi click lên khu vực để đặt<br>Esc: ẩn bảng · Esc lần nữa: thoát công cụ
       </p>
     </div>
 
@@ -947,6 +959,8 @@ let visTab = "side";        // "side" = mặt bên (dùng thường xuyên) · "
 let hoverLight = null;      // {zid, li}
 let deviceKind = "socket";  // loại thiết bị đang đặt (dính giữa các lần đặt)
 let pickLightId = null;     // mẫu đèn vừa chọn ở bảng đặt đèn — dùng khi chưa chọn khu vực nào
+let popOpen = true;         // bảng chọn mẫu (đèn/thiết bị) đang mở? — TÁCH khỏi việc đang ở công cụ nào,
+                            // để tắt bảng mà VẪN đặt tiếp được (Esc lần 1 tắt bảng, lần 2 mới thoát công cụ)
 let spaceHeld = false;
 let hist = [], future = [];
 let focusSnap = null;
@@ -2650,10 +2664,8 @@ function fitView(){
 function setTool(t){
   tool=t; draft=null;
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
-  $("#devPop").classList.toggle("hidden", t!=="device");   // flyout loại thiết bị chỉ hiện khi đặt thiết bị
-  if(t==="device") renderDevPop();
-  $("#lightPop").classList.toggle("hidden", t!=="light");  // flyout chọn đèn để đặt (tách khỏi list đã đặt)
-  if(t==="light") renderLightPop();
+  popOpen=true;            // đổi công cụ thì mở lại bảng chọn mẫu
+  syncPops();
   updateCursor();
   const z=selZone();
   const hints={
@@ -2710,7 +2722,8 @@ function renderVisPop(){
   const btn=document.querySelector("#btnVis");
   if(!wrap||!box) return;
   wrap.classList.toggle("hidden", !visOpen);
-  if(btn){ const sp=btn.querySelector("span"); if(sp) sp.textContent="Xem mặt cắt";
+  if(btn){ const sp=btn.querySelector("span");
+    if(sp) sp.textContent = visOpen? "Ẩn mặt cắt vệt chiếu" : "Xem mặt cắt vệt chiếu";
     btn.classList.toggle("on", visOpen); }
   if(!visOpen){ box.innerHTML=""; return; }
   wrap.querySelectorAll("#visTabs button").forEach(b=> b.classList.toggle("on", b.dataset.vt===visTab));
@@ -2724,6 +2737,22 @@ function renderVisPop(){
   }else{
     box.innerHTML = elevationSVG(c.z, c.l) || '<p class="visempty">Không dựng được mặt cắt.</p>';
   }
+}
+/* Ẩn/hiện bảng chọn mẫu theo công cụ HIỆN TẠI và popOpen */
+function syncPops(){
+  const showL = tool==="light"  && popOpen;
+  const showD = tool==="device" && popOpen;
+  $("#lightPop").classList.toggle("hidden", !showL);
+  $("#devPop").classList.toggle("hidden", !showD);
+  if(showL) renderLightPop();
+  if(showD) renderDevPop();
+}
+function closePop(){
+  popOpen=false; syncPops();
+  const what = tool==="device"? DEVICE_SPEC[deviceKind]&&DEVICE_SPEC[deviceKind].label : null;
+  showHint(tool==="device"
+    ? `Đang đặt ${what||"thiết bị"} · click lên bản vẽ · Esc để xong`
+    : `Đang đặt đèn · click vào khu vực · Esc để xong`);
 }
 function renderDevPop(){
   const box=$("#devKinds"); box.innerHTML="";
@@ -3105,12 +3134,16 @@ window.addEventListener("keydown", e=>{
     case "e": rotateSelected(15); break;
     case "t": if(selSwitch) pressSwitch(selSwitch); else toggleSelected(); break;
     case "1": case "2": case "3": case "4": case "5": case "6": case "7": case "8": case "9":
-      if(tool==="device"){ const idx=+k-1; if(idx<DEVICE_KINDS.length){ deviceKind=DEVICE_KINDS[idx]; renderDevPop();
+      if(tool==="device"){ const idx=+k-1; if(idx<DEVICE_KINDS.length){ deviceKind=DEVICE_KINDS[idx];
+        popOpen=true; syncPops();
         showHint(`Click để đặt ${DEVICE_SPEC[deviceKind].label} · phím 1–9 đổi loại, Esc để xong`); } }
       break;
     case "escape":
       if(!$("#bgPop").classList.contains("hidden")){ $("#bgPop").classList.add("hidden"); }
       else if(draft){ draft=null; setTool("select"); }
+      // Esc lần 1 khi đang mở bảng chọn mẫu: chỉ ẨN BẢNG, VẪN ở công cụ để đặt tiếp.
+      // Esc lần 2 mới thoát về công cụ chọn (trước đây Esc là nhảy thẳng sang select).
+      else if(popOpen && (tool==="light"||tool==="device")){ closePop(); }
       else if(tool!=="select"){ setTool("select"); }
       else if(selSwitch){ selSwitch=null; renderAll(); }
       else if(selDevice){ selDevice=null; renderAll(); }
@@ -3733,7 +3766,9 @@ function buildWallbox(wi){
     <div class="grpbox">
       <p class="gt">Vệt chiếu lên tường</p>
       <div id="wallTxt"></div>
-      <button type="button" class="disclose" id="btnVis"><span>Xem mặt cắt</span></button>
+      <button type="button" class="disclose" id="btnVis" title="Xem mặt cắt vệt chiếu lên tường (mặt bên / mặt đứng)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 3v18"/><path d="M12 5l7 7-7 7"  stroke-dasharray="2.5 2"/><circle cx="11" cy="5" r="1.6" fill="currentColor" stroke="none"/></svg>
+        <span>Xem mặt cắt vệt chiếu</span></button>
       <div id="visWrap" class="hidden">
         <div class="seg" id="visTabs" style="margin-top:8px">
           <button type="button" data-vt="side" title="Nhìn ngang: đèn cách tường bao nhiêu, hắt lên tới cao độ nào">Mặt bên</button>
@@ -3931,6 +3966,7 @@ function bindRight(){
   $("#btnPickLight").addEventListener("click", ()=>{ setTool("light"); });
   bindRightGrip();
   bindAccordion();
+  $$("[data-closepop]").forEach(b=> b.addEventListener("click", closePop));
 }
 /* ĐÀN XẾP: mở một mục thì tự đóng các mục kia — bảng luôn chỉ cao bằng MỘT mục, hết cuộn dài.
    Nhớ mục đang mở bằng localStorage (thói quen dùng máy, không phải dữ liệu dự án). */
