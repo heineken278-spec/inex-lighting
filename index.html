@@ -713,7 +713,7 @@
           <p class="eyebrow">Kết quả chiếu sáng</p>
           <div class="kpis">
             <div class="kpi hero"><div class="v" id="rNeed">–</div><div class="k" id="rNeedK">Cần thêm (loại đang chọn)</div></div>
-            <div class="kpi"><div class="v" id="rActual">–</div><div class="k">Lux đạt / mục tiêu</div></div>
+            <div class="kpi"><div class="v" id="rActual">–</div><div class="k">Lux ước tính / mục tiêu</div></div>
             <div class="kpi"><div class="v" id="rCount">0</div><div class="k">Đèn đang bật (kịch bản)</div></div>
             <div class="kpi"><div class="v" id="rWatt">–</div><div class="k">Tổng công suất</div></div>
             <div class="kpi"><div class="v" id="rDensity">–</div><div class="k">Mật độ W/m²</div></div>
@@ -1187,6 +1187,10 @@ function getZone(id){ return F().zones.find(z=>z.id===id); }
 function selZone(){ return getZone(F().selectedZone); }
 function lightById(id){ return state.lights.find(l=>l.id===id) || state.lights[0]; }
 function lampLumen(l){ return (l.lumen && l.lumen>0) ? l.lumen : (l.watt||0)*LM_PER_W; }
+/* Cách gắn của đèn ĐÃ ĐẶT: l.mnt (chép từ mẫu lúc đặt, sửa được từng cái) ưu tiên hơn mẫu thư viện.
+   KHÔNG đọc sống từ thư viện lúc vẽ vì thư viện dùng chung mọi dự án. Vắng = 'ceiling'. */
+function mountOf(l, lamp){ return l.mnt || (lamp||lightById(l.lightId)).mount || "ceiling"; }
+function isWall(l, lamp){ return mountOf(l, lamp)==="wall"; }
 function fmt(n,d=0){ if(n==null||isNaN(n)) return "–";
   return Number(n).toLocaleString("vi-VN",{maximumFractionDigits:d}); }
 /* Số vẽ TRÊN mặt bằng — dấu phẩy vi-VN để đồng bộ với panel/PDF/CSV (trước đây dùng .toFixed(2)
@@ -1471,10 +1475,15 @@ function elevationSVG(z, light){
       <line x1="${X(wm.cab.dep)}" y1="${Y(wm.cab.top)}" x2="${X(0)}" y2="${Y(cb)}" stroke="#CFC6B8" stroke-width="1"/>
       <text x="${(X(wm.cab.dep)+X(0))/2}" y="${(Y(wm.cab.top)+Y(cb))/2+3}" text-anchor="middle" ${F2} font-size="9" fill="#6E665A">tủ</text>`;
   }
-  // thân treo/gắn khi đèn không nằm sát trần
-  const stem = (Hl < Hc-0.03)
-    ? `<line x1="${X(d)}" y1="${Y(Hc)}" x2="${X(d)}" y2="${Y(Hl)}" stroke="#8A8175" stroke-width="1" stroke-dasharray="2,3"/>`
-    : "";
+  // thân treo (cần treo nét đứt từ trần) — nhưng đèn TƯỜNG thì gắn vào mặt tường, KHÔNG treo trần:
+  // vẽ GIÁ ĐỠ áp tường tại cao độ lắp, nếu không đèn tường hiện ra như đèn thả lơ lửng.
+  const wallMount = isWall(light);
+  const stem = wallMount
+    ? `<line x1="${X(0)}" y1="${Y(Hl)}" x2="${X(Math.min(d,0.12))}" y2="${Y(Hl)}" stroke="#3A362F" stroke-width="2.5"/>
+       <line x1="${X(0)}" y1="${Y(Hl)-4}" x2="${X(0)}" y2="${Y(Hl)+4}" stroke="#3A362F" stroke-width="2.5"/>`
+    : ((Hl < Hc-0.03)
+      ? `<line x1="${X(d)}" y1="${Y(Hc)}" x2="${X(d)}" y2="${Y(Hl)}" stroke="#8A8175" stroke-width="1" stroke-dasharray="2,3"/>`
+      : "");
   let hatch="";
   for(let i=0;i<6;i++){ const y0=Hc*(i+0.5)/6;
     hatch+=`<line x1="${X(0)}" y1="${Y(y0)}" x2="${X(0)+7}" y2="${Y(y0)+7}" stroke="#CFC6B8" stroke-width="1"/>`; }
@@ -1519,8 +1528,10 @@ function elevationSVG(z, light){
 }
 
 /* =========================== SYMBOLS (chuẩn ME, kích thước thật) =========================== */
-/* Trả về mảng shapes [{tag, attrs, fill?}] toạ độ quanh (0,0), đơn vị world px */
-function symbolShapes(type, P, len){
+/* Trả về mảng shapes [{tag, attrs, fill?}] toạ độ quanh (0,0), đơn vị world px.
+   mnt="wall" → bọc thêm LƯNG TƯỜNG phía sau đèn: thanh + gạch hatch hướng +Y (hướng tường,
+   ngược hướng chiếu (0,-1) tại rot 0). Nhóm đã rotate(l.rot) nên lưng tự xoay theo đèn. */
+function symbolShapes(type, P, len, mnt){
   const s=[];
   if(type==="panel"){
     const h=0.3*P;
@@ -1562,13 +1573,19 @@ function symbolShapes(type, P, len){
     s.push({tag:"line", attrs:{x1:-e,y1:0,x2:e,y2:0}});
     s.push({tag:"line", attrs:{x1:0,y1:-e,x2:0,y2:e}});
   }
+  if(mnt==="wall"){ // đèn GẮN TƯỜNG: thanh lưng + 3 gạch hatch (mặt tường) phía sau đèn
+    const bx=0.13*P, by=0.055*P, t=0.05*P;
+    s.push({tag:"line", attrs:{x1:(-bx).toFixed(1), y1:by.toFixed(1), x2:bx.toFixed(1), y2:by.toFixed(1)}});
+    for(let i=-1;i<=1;i++){ const cx=i*bx*0.6;
+      s.push({tag:"line", attrs:{x1:cx.toFixed(1), y1:by.toFixed(1), x2:(cx-t).toFixed(1), y2:(by+t).toFixed(1)}}); }
+  }
   return s;
 }
 function svg(tag,attrs){ const e=document.createElementNS(SVGNS,tag);
   for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
 /* Vẽ symbol 2 lớp: halo trắng phía dưới + nét mực phía trên (đọc được trên ảnh nền) */
-function appendSymbol(parent, type, P, strokeW, color, len){
-  const shapes=symbolShapes(type,P,len);
+function appendSymbol(parent, type, P, strokeW, color, len, mnt){
+  const shapes=symbolShapes(type,P,len,mnt);
   [[C_WHITE, strokeW*3],[color, strokeW]].forEach(([col,w],pass)=>{
     shapes.forEach(sh=>{
       const a={...sh.attrs, stroke:col, "stroke-width":w, fill:"none",
@@ -1605,13 +1622,13 @@ function appendSwitch(parent, sz, gang, strokeW, color){
 const ICON_SPEC={downlight:{s:0.28,cy:0}, panel:{s:0.64,cy:0}, tube:{s:1.28,cy:0},
                  spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
                  chandelier:{s:0.48,cy:0}, strip:{s:1.06,cy:0}};
-function symbolIconSVG(type, cls){
+function symbolIconSVG(type, cls, mnt){
   const spec=ICON_SPEC[type]||{s:0.3,cy:0};
   const P=24/spec.s;
   const el=document.createElementNS(SVGNS,"svg");
   el.setAttribute("viewBox","-14 -14 28 28"); el.setAttribute("class",cls||"sym");
   const g=svg("g",{transform:`translate(0,${(-spec.cy*P).toFixed(1)})`});
-  symbolShapes(type,P).forEach(sh=>{
+  symbolShapes(type,P,undefined,mnt).forEach(sh=>{
     const a={...sh.attrs, stroke:"currentColor","stroke-width":1.4,fill:sh.fill?"currentColor":"none",
       "stroke-linecap":"round","stroke-linejoin":"round"};
     g.appendChild(svg(sh.tag,a));
@@ -1692,7 +1709,10 @@ function drawOverlay(){
         gx+=dir.x*offG; gy+=dir.y*offG;
       }
       const g=svg("g",{transform:`translate(${gx},${gy}) rotate(${l.rot||0})`});
-      if(lamp.type==="panel"){
+      if(isWall(l,lamp)){
+        // đèn TƯỜNG hắt lên mặt tường, không tạo vũng sáng tròn dưới sàn → vệt dẹt ôm tường
+        g.appendChild(svg("ellipse",{cx:0,cy:-r*0.15,rx:r*0.9,ry:r*0.4,fill:"url(#glowGrad)"}));
+      } else if(lamp.type==="panel"){
         g.appendChild(svg("rect",{x:-r*0.8,y:-r*0.8,width:r*1.6,height:r*1.6,rx:r*0.15,fill:"url(#glowGrad)"}));
       } else if(lamp.type==="tube"){
         g.appendChild(svg("ellipse",{cx:0,cy:0,rx:r*1.3,ry:r*0.6,fill:"url(#glowGrad)"}));
@@ -1707,33 +1727,38 @@ function drawOverlay(){
     ov.appendChild(gz);
   });
 
-  // ---- lớp 3: vệt tường cho đèn được chọn (1 đèn) ----
-  if(exportInv==null && selLights.length===1 && F().pxPerMeter){
-    const {zid,li}=selLights[0]; const z=getZone(zid);
-    if(z && z.lights[li]){
-      const wm=wallMetrics(z, z.lights[li]);
-      if(wm){
-        const l=z.lights[li];
-        ov.appendChild(svg("line",{x1:l.x,y1:l.y,x2:wm.foot.x,y2:wm.foot.y,
-          stroke:C_ACCENT_D,"stroke-width":1.2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
-        if(wm.chord){
-          ov.appendChild(svg("line",{x1:wm.chord.x1,y1:wm.chord.y1,x2:wm.chord.x2,y2:wm.chord.y2,
-            stroke:C_GLOW,"stroke-width":Math.max(0.06*P,3*inv),"stroke-linecap":"round",opacity:".85"}));
-        }
-        // MỘT label duy nhất, đặt SAU LƯNG đèn (phía ngược tường) — vùng luôn trống,
-        // không đè ký hiệu/vòng chọn kể cả khi đèn sát tường
-        const dx=l.x-wm.foot.x, dy=l.y-wm.foot.y, len=Math.hypot(dx,dy)||1;
-        const ux=dx/len, uy=dy/len;
-        const off=Math.max((SYM_SIZE[wm.lamp.type]||0.2)*P*0.9, 26*inv);
-        const txt = wm.hits? (wm.hBottom>0.05
-              ? `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hBottom)}→${fmtPlan(wm.hTop)}m`
-              : `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hTop)}m`)
-            : `${fmtPlan(wm.dM)}m · chưa hắt tới tường`;
-        // neo ĐẦU chuỗi theo hướng thoát — chữ mọc ra xa đèn, không tràn ngược lên ký hiệu
-        const anchor = ux>0.35? "start" : ux<-0.35? "end" : "middle";
-        addLabel(ov, l.x+ux*off, l.y+uy*off+4*inv, txt, 11*inv,
-          wm.hits?C_ACCENT_D:"#8A8175", inv, anchor);
+  // ---- lớp 3: đường đo tới tường ----
+  // Vẽ cho: (a) đèn đang chọn (chỉ trên màn, xem nhanh); (b) đèn có l.dim=true — GHIM lại để
+  // SỐNG SÓT khi xuất PNG/PDF (app vốn đã vẽ đường này rồi vứt đi lúc xuất vì guard exportInv==null).
+  if(F().pxPerMeter){
+    const drawn=new Set();
+    const doDim=(z,l,li)=>{
+      const key=z.id+":"+li; if(drawn.has(key)) return; drawn.add(key);
+      const wm=wallMetrics(z, l); if(!wm) return;
+      ov.appendChild(svg("line",{x1:l.x,y1:l.y,x2:wm.foot.x,y2:wm.foot.y,
+        stroke:C_ACCENT_D,"stroke-width":1.2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
+      if(wm.chord){
+        ov.appendChild(svg("line",{x1:wm.chord.x1,y1:wm.chord.y1,x2:wm.chord.x2,y2:wm.chord.y2,
+          stroke:C_GLOW,"stroke-width":Math.max(0.06*P,3*inv),"stroke-linecap":"round",opacity:".85"}));
       }
+      const dx=l.x-wm.foot.x, dy=l.y-wm.foot.y, len=Math.hypot(dx,dy)||1;
+      const ux=dx/len, uy=dy/len;
+      const off=Math.max((SYM_SIZE[wm.lamp.type]||0.2)*P*0.9, 26*inv);
+      let txt = wm.hits? (wm.hBottom>0.05
+            ? `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hBottom)}→${fmtPlan(wm.hTop)}m`
+            : `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hTop)}m`)
+          : `${fmtPlan(wm.dM)}m · chưa hắt tới tường`;
+      if(l.dim) txt+=" · kiểm tra tại công trường";   // ghi chú: dim suy ra từ polygon vẽ tay
+      const anchor = ux>0.35? "start" : ux<-0.35? "end" : "middle";
+      addLabel(ov, l.x+ux*off, l.y+uy*off+4*inv, txt, 11*inv,
+        wm.hits?C_ACCENT_D:"#8A8175", inv, anchor);
+    };
+    // đèn GHIM (mọi tình huống, cả export)
+    F().zones.forEach(z=>z.lights.forEach((l,li)=>{ if(l.dim) doDim(z,l,li); }));
+    // đèn đang chọn (chỉ trên màn hình)
+    if(exportInv==null && selLights.length===1){
+      const {zid,li}=selLights[0]; const z=getZone(zid);
+      if(z && z.lights[li]) doDim(z, z.lights[li], li);
     }
   }
 
@@ -1769,7 +1794,8 @@ function drawOverlay(){
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
       const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : (cir? cir.color : C_INK);
-      appendSymbol(g, lamp.type, P, symW, symColor, l.len);
+      const mnt = mountOf(l, lamp);
+      appendSymbol(g, lamp.type, P, symW, symColor, l.len, mnt);
       // vùng bắt chuột (ẩn) — LED dây thêm dải hit dọc theo chiều dài
       const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
       g.appendChild(svg("circle",{r:hitR, fill:"transparent", class:"hit"}));
@@ -1798,9 +1824,12 @@ function drawOverlay(){
           const so=(SYM_SIZE[lamp.type]||0.2)*P*0.55;
           lx=l.x+so+3*inv; ly=l.y+so+8*inv;
         }
-        // mã loại + CHỮ CỤM (chuẩn ME: "D2a") — kéo được để né chỗ đè
+        // mã loại + CHỮ CỤM (chuẩn ME: "D2a") + CAO ĐỘ nếu khác cao trần (đèn tường / thả / hắt).
+        // Cao độ chỉ hiện khi khác trần để không rối bản vẽ toàn downlight âm trần.
+        const ceilH=z.ceilH||2.8;
+        const hSuffix = (l.mh!=null && Math.abs(l.mh-ceilH)>0.03) ? ` +${fmtPlan(l.mh)}` : "";
         addDragLabel(ov, "L", z.id+":"+li, lx+(l.lx||0), ly+(l.ly||0),
-          lamp.code+(cir&&cir.key? cir.key:""), 8.5*inv,
+          lamp.code+(cir&&cir.key? cir.key:"")+hSuffix, 8.5*inv,
           off? "#BDB4A6" : (sel? C_ACCENT_D : (cir? cir.color : "#6E665A")), inv, anch);
       }
     });
@@ -1880,9 +1909,11 @@ function drawOverlay(){
     if(wpx<70 && !active) return;                 // zone quá nhỏ: ẩn nhãn (chọn zone sẽ hiện)
     const c=calc(z);
     const ok = c.actual!=null && c.actual>=c.E*0.9;
+    // chiều cao trần in MỘT LẦN ở chip khu vực (thay vì lặp cao độ ở từng downlight âm trần)
+    const cH=`trần ${fmtPlan(z.ceilH||2.8,1)}m`;
     let line2 = (c.E && (wpx>=150 || active))? (c.actual!=null
-      ? `${Math.round(c.actual)}/${c.E} lx · ${c.count} đèn · ${fmt(c.totW)}W`
-      : `chuẩn ${c.E} lx`) : null;
+      ? `${Math.round(c.actual)}/${c.E} lx · ${c.count} đèn · ${cH}`
+      : `chuẩn ${c.E} lx · ${cH}`) : null;
     const sizeOf=l2=>({
       lw: Math.max(z.name.length*6.4, (l2||"").length*5.0)*inv + 16*inv,
       lh: (l2? 31 : 19)*inv,
@@ -2767,12 +2798,36 @@ function zoneAtPoint(w){
   }
   return z||null;
 }
+/* Tạo đèn đã đặt: chép cách gắn từ mẫu. Đèn TƯỜNG thì SNAP lên cạnh gần nhất, tự xoay hướng chiếu
+   vào phòng, và inset 0,02 m vào trong polygon (để wallMetrics/elevationSVG không trả rỗng vì đèn
+   nằm đúng trên cạnh). Đây là thứ khiến đặt đèn tường thành 1 click, thay vì bấm Q/E xoay tay. */
+function newPlacedLight(z, w){
+  const lamp=lightById(z.placeLightId);
+  const o={x:w.x, y:w.y, lightId:z.placeLightId};
+  if(lamp.mount==="wall"){
+    o.mnt="wall";
+    if(lamp.defMh!=null) o.mh=lamp.defMh;
+    const nw=nearestWall(w, z.poly);
+    if(nw){
+      // pháp tuyến cạnh, lật cho hướng VÀO phòng
+      const ex=nw.b.x-nw.a.x, ey=nw.b.y-nw.a.y, el=Math.hypot(ex,ey)||1;
+      let nx=-ey/el, ny=ex/el;
+      if(!pointInPoly(nw.fx+nx*5, nw.fy+ny*5, z.poly)){ nx=-nx; ny=-ny; }
+      const inset=0.02*ppm();
+      o.x=nw.fx+nx*inset; o.y=nw.fy+ny*inset;
+      // hướng chiếu (sin r, -cos r) ≈ pháp tuyến (nx,ny) → r=atan2(nx,-ny)
+      o.rot=Math.round((Math.atan2(nx,-ny)*180/Math.PI+360)%360);
+      o.aim=true;   // ghim tường đang đo để kéo đèn không nhảy sang vách đối diện
+    }
+  }
+  return o;
+}
 function addLightAt(w){
   // đặt vào zone chứa điểm click (ưu tiên zone đang chọn)
   const z=zoneAtPoint(w);
   if(!z){ toast("Hãy click bên trong một khu vực"); return; }
   F().selectedZone=z.id;
-  mutate(()=>{ z.lights.push({x:w.x,y:w.y,lightId:z.placeLightId}); });
+  mutate(()=>{ z.lights.push(newPlacedLight(z, w)); });
   showHint(`Đã đặt ${z.lights.length} đèn · click tiếp để thêm, Esc để xong`);
 }
 function gridPts(z, n){
@@ -2977,7 +3032,7 @@ function refreshRight(){
     const el=document.createElement("div");
     el.className="grp"+(g.lid===z.placeLightId?" on":"");
     el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ";
-    el.appendChild(symbolIconSVG(g.lamp.type));
+    el.appendChild(symbolIconSVG(g.lamp.type, null, g.lamp.mount));
     const gth=thumbEl(g.lamp); if(gth) el.appendChild(gth);
     const d=document.createElement("div"); d.className="d";
     d.innerHTML=`<b><span class="code">${escapeHtml(g.lamp.code||"")}</span>${escapeHtml(g.lamp.name)}</b><small>${fmt(lampLumen(g.lamp))} lm · ${g.lamp.watt}W · ${g.lamp.beam}°${g.lamp.type==="strip"?" · 1 điểm = 1 m":""}</small>`;
@@ -3012,7 +3067,7 @@ function refreshRight(){
   if(!allGroups.some(g=>g.lid===z.placeLightId)){
     const lamp=c.active;
     const el=document.createElement("div"); el.className="grp on";
-    el.appendChild(symbolIconSVG(lamp.type));
+    el.appendChild(symbolIconSVG(lamp.type, null, lamp.mount));
     const fth=thumbEl(lamp); if(fth) el.appendChild(fth);
     const d=document.createElement("div"); d.className="d";
     d.innerHTML=`<b><span class="code">${escapeHtml(lamp.code||"")}</span>${escapeHtml(lamp.name)}</b><small>loại đang đặt · chưa có trên bản vẽ</small>`;
@@ -3043,7 +3098,7 @@ function refreshRight(){
     const ratio=c.actual/c.E;
     if(ratio<0.9) flag.innerHTML+=`<div class="miniflag warn">⚠ Thiếu sáng: đạt ${fmt(c.actual)}/${c.E} lux — cần thêm ~${fmt(c.remainLm)} lm.</div>`;
     else if(ratio>1.5) flag.innerHTML+=`<div class="miniflag warn">⚠ Dư sáng nhiều (${fmt(c.actual)} lux) — cân nhắc giảm đèn hoặc dimmer.</div>`;
-    else flag.innerHTML+=`<div class="miniflag ok">✓ Đạt ${fmt(c.actual)} lux (mục tiêu ${c.E}).</div>`;
+    else flag.innerHTML+=`<div class="miniflag ok">✓ Ước tính ${fmt(c.actual)} lux (mục tiêu ${c.E}).</div>`;
   }
 
 }
@@ -3106,9 +3161,14 @@ function buildWallbox(wi){
       <div><label>Đáy (m)</label><input type="number" id="wCabB" step="0.05"></div>
       <div><label>Sâu (m)</label><input type="number" id="wCabD" step="0.05"></div>
     </div>
+    <label class="check" style="margin-top:8px"><input type="checkbox" id="wDim"> Ghim kích thước tới tường lên bản vẽ (hiện khi xuất)</label>
     <div id="elevBox"></div>
     <div id="wallTxt" style="margin-top:2px"></div>
     </div>`;
+  wi.querySelector("#wDim").addEventListener("change", e=>{
+    const items=selItems(); if(!items.length) return;
+    mutate(()=>items.forEach(({l})=>{ if(e.target.checked) l.dim=true; else delete l.dim; }));
+  });
   // gán cụm cho ĐÚNG các đèn đang chọn — click chip a/b/c (tách 6 đèn thành cụm 4 + 2)
   wi.querySelector("#selCir").addEventListener("click", e=>{
     const b=e.target.closest("[data-cir]"); if(!b) return;
@@ -3229,6 +3289,7 @@ function updateWallbox(){
   const isStrip = lightById(c.l.lightId).type==="strip";
   wi.querySelector("#wLenRow").classList.toggle("hidden", !isStrip);
   if(isStrip) setV("wLen", +(c.l.len||1).toFixed(2));
+  const dimChk=wi.querySelector("#wDim"); if(dimChk && document.activeElement!==dimChk) dimChk.checked=!!c.l.dim;
   const lockBtn=wi.querySelector("#wLock");
   lockBtn.classList.toggle("on", !!c.l.aim);
   lockBtn.title = c.l.aim? "Đang ghim tường này — bấm để bỏ ghim (đo tường gần nhất)"
@@ -3387,10 +3448,10 @@ function openLibrary(pickMode){
     const b=m.querySelector("#libBody"); b.innerHTML="";
     state.lights.forEach(l=>{
       const el=document.createElement("div"); el.className="lp-item"+(l.id===libSel?" sel":"");
-      el.appendChild(symbolIconSVG(l.type));
+      el.appendChild(symbolIconSVG(l.type, null, l.mount));
       const lth=thumbEl(l); if(lth) el.appendChild(lth);
       const d=document.createElement("div"); d.className="d";
-      d.innerHTML=`<b><span class="code">${escapeHtml(l.code||"")}</span>${escapeHtml(l.name)}</b><small>${fmt(lampLumen(l))} lm · ${l.watt}W · ${l.beam}° · ${typeLabel(l.type)}</small>`;
+      d.innerHTML=`<b><span class="code">${escapeHtml(l.code||"")}</span>${escapeHtml(l.name)}</b><small>${fmt(lampLumen(l))} lm · ${l.watt}W · ${l.beam}° · ${typeLabel(l.type)}${l.mount==="wall"?" · gắn tường":""}</small>`;
       el.appendChild(d);
       if(/^https?:\/\//i.test(l.url||"")){ const a=document.createElement("a"); a.className="lk"; a.href=l.url;
         a.target="_blank"; a.rel="noopener"; a.title=l.url; a.textContent="↗";
@@ -3433,8 +3494,15 @@ function openLibrary(pickMode){
       <label>Tên đèn</label><input id="nfName" type="text" value="${escapeHtml(l.name)}" placeholder="VD: Downlight COB 15W">
       <div class="row"><div><label>Mã ký hiệu</label><input id="nfCode" type="text" maxlength="5" value="${escapeHtml(l.code||autoCode(l.type||"downlight"))}" style="font-family:var(--mono)"></div>
       <div><label>Loại</label><select id="nfType">
-        ${["downlight","panel","tube","spot","pendant","chandelier","strip"].map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${typeLabel(t)}</option>`).join("")}
+        ${Object.keys(CODE_PREFIX).map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${typeLabel(t)}</option>`).join("")}
       </select></div><div><label>Góc chiếu (°)</label><input id="nfBeam" type="number" value="${l.beam}"></div></div>
+      <label>Cách lắp</label>
+      <div class="seg" id="nfMount">
+        <button type="button" data-mt="ceiling" title="Âm trần / ốp trần / thả trần">Trần</button>
+        <button type="button" data-mt="wall" title="Gắn trên mặt tường (đèn hắt, đèn rọi tranh gắn tường…)">Tường</button>
+      </div>
+      <div id="nfMhRow" class="${(l.mount==="wall")?"":"hidden"}"><label>Cao lắp mặc định (m, tính từ sàn)</label>
+        <input id="nfMh" type="number" step="0.05" value="${l.defMh??""}" placeholder="VD: 2,0"></div>
       <div class="row"><div><label>Quang thông (lm)</label><input id="nfLm" type="number" value="${l.lumen||""}" placeholder="trống = quy đổi từ W"></div>
       <div><label>Công suất (W)</label><input id="nfW" type="number" value="${l.watt}"></div></div>
       <label>Link sản phẩm</label><input id="nfUrl" type="url" value="${escapeHtml(l.url||"")}" placeholder="https://…">
@@ -3443,11 +3511,15 @@ function openLibrary(pickMode){
         <button class="btn ghost" id="nfBack">Quay lại</button>
       </div>`;
     let thumb=l.thumb;
+    let mount = l.mount==="wall"? "wall":"ceiling";
     const icon=b.querySelector("#nfThumbIcon");
     const refreshIcon=()=>{ icon.innerHTML="";
-      const tmp=symbolIconSVG(b.querySelector("#nfType").value);
+      const tmp=symbolIconSVG(b.querySelector("#nfType").value, null, mount);
       icon.innerHTML=tmp.innerHTML; };
-    refreshIcon();
+    const syncMount=()=>{ b.querySelectorAll("#nfMount button").forEach(x=>x.classList.toggle("on", x.dataset.mt===mount));
+      b.querySelector("#nfMhRow").classList.toggle("hidden", mount!=="wall"); refreshIcon(); };
+    b.querySelectorAll("#nfMount button").forEach(x=> x.onclick=()=>{ mount=x.dataset.mt; syncMount(); });
+    syncMount();
     b.querySelector("#nfType").addEventListener("change",refreshIcon);
     b.querySelector("#nfThumbBtn").onclick=()=>b.querySelector("#nfThumbFile").click();
     b.querySelector("#nfThumbFile").addEventListener("change",e=>{
@@ -3485,11 +3557,25 @@ function openLibrary(pickMode){
         watt: Math.max(0, parseNum(b.querySelector("#nfW").value)),
         url: u,
         thumb,
+        mount,
+        defMh: mount==="wall" ? (parseNum(b.querySelector("#nfMh").value)||null) : null,
       };
       if(!(data.lumen>0) && !(data.watt>0)){ toast("Cần khai quang thông hoặc công suất"); return; }
+      const modelId = existing? existing.id : "c"+Date.now();
+      // Đèn đã ĐẶT loại này mà CHƯA đánh dấu cách gắn — hỏi áp một lần (chuyển 6 đèn tường cũ
+      // vốn khai là spot). KHÔNG bao giờ tự đoán trong migrate(): khối migrate chạy mỗi lần mở file,
+      // anh bỏ đánh dấu một cái thì lần sau nó tự đánh lại.
+      let placed=[];
+      if(data.mount==="wall"){
+        state.floors.forEach(f=>f.zones.forEach(z=>z.lights.forEach(l=>{
+          if(l.lightId===modelId && l.mnt!=="wall") placed.push(l); })));
+      }
       mutate(()=>{
         if(existing){ Object.assign(existing,data); }
-        else { const nl={id:"c"+Date.now(), ...data}; state.lights.push(nl); libSel=nl.id; }
+        else { const nl={id:modelId, ...data}; state.lights.push(nl); libSel=nl.id; }
+        if(placed.length && confirm(`Áp cách gắn “tường” cho ${placed.length} đèn “${data.name}” đã đặt trên bản vẽ?`)){
+          placed.forEach(l=>{ l.mnt="wall"; if(data.defMh!=null && l.mh==null) l.mh=data.defMh; });
+        }
       });
       syncLib();   // lưu mẫu đèn vừa thêm/sửa vào thư viện chung — không mất khi tạo dự án mới
       renderLib();
@@ -3687,7 +3773,7 @@ $("#projFile").addEventListener("change", e=>{
 
 $("#btnCsv").onclick=()=>{
   const {rows,tot}=projectRows();
-  const head=["Tầng","Khu vực","Mã","Loại đèn","Số lượng","ĐVT","W/đèn","Tổng W","Lumen/đèn","Diện tích (m²)","Lux tiêu chuẩn","Lux đạt","Link sản phẩm"];
+  const head=["Tầng","Khu vực","Mã","Loại đèn","Số lượng","ĐVT","W/đèn","Tổng W","Lumen/đèn","Diện tích (m²)","Lux tiêu chuẩn","Lux ước tính","Link sản phẩm"];
   const lines=[head.join(",")];
   let units=0, meters=0;
   rows.forEach(r=>{
@@ -3742,12 +3828,12 @@ async function buildPrintDoc(){
     totArea+=(A||0);
     const meta=[A? fmt(A,2)+" m²" : null,
       z.lux? `chuẩn ${z.lux} lx` : null,
-      actual!=null? `<span class="${ok?"ok":"no"}">đạt ${Math.round(actual)} lx</span>` : null,
+      actual!=null? `<span class="${ok?"ok":"no"}">ước tính ${Math.round(actual)} lx</span>` : null,
       `trần ${fmt(z.ceilH,2)} m`].filter(Boolean).join("  ·  ");
-    rowsHtml+=`<tr class="zh"><td colspan="7">
+    rowsHtml+=`<tr class="zh"><td colspan="8">
       <span class="zn">${escapeHtml(z.name)}</span> <span class="zm">${meta}</span></td></tr>`;
     if(!groups.length){
-      rowsHtml+=`<tr><td colspan="7" style="color:#8A8175;font-style:italic">Chưa bố trí đèn</td></tr>`;
+      rowsHtml+=`<tr><td colspan="8" style="color:#8A8175;font-style:italic">Chưa bố trí đèn</td></tr>`;
     }
     groups.forEach(g=>{
       usedLamps.set(g.lid, g.lamp);
@@ -3755,13 +3841,18 @@ async function buildPrintDoc(){
       if(isStrip){ totMeters+=g.count; flMeters+=g.count; } else { totUnits+=g.count; flUnits+=g.count; }
       totW+=g.w; flW+=g.w;
       const th=g.lamp.thumb? `<img src="${g.lamp.thumb}">` : "";
+      // Cao độ lắp: gom các mh khác nhau của đèn cùng loại trong khu vực. Trần = âm/ốp trần.
+      const inst=z.lights.filter(l=>l.lightId===g.lid);
+      const hs=[...new Set(inst.map(l=> l.mh!=null? "+"+fmtPlan(l.mh,2)+"m" : "trần"))];
+      const caoDo = hs.length<=2? hs.join(" / ") : "hỗn hợp";
       rowsHtml+=`<tr><td style="width:28px">${th}</td>
         <td><span class="pr-code">${escapeHtml(g.lamp.code||"")}</span></td>
         <td>${escapeHtml(g.lamp.name)}</td>
         <td class="num">${fmt(g.count,1)}</td>
         <td>${unitOf(g.lamp)}</td>
         <td class="num">${g.lamp.watt}</td>
-        <td class="num">${fmt(g.w)}</td></tr>`;
+        <td class="num">${fmt(g.w)}</td>
+        <td class="num" style="font-family:var(--mono);font-size:9.5px">${caoDo}</td></tr>`;
     });
   });
   const flArea=fl.zones.reduce((s,z)=>s+(areaM2(z,fl)||0),0);
@@ -3769,9 +3860,10 @@ async function buildPrintDoc(){
       <th style="width:28px"></th><th style="width:44px">Mã</th><th>Loại đèn</th>
       <th class="num" style="width:44px">SL</th><th style="width:34px">ĐVT</th>
       <th class="num" style="width:52px">W/đèn</th><th class="num" style="width:56px">Tổng W</th>
-    </tr></thead><tbody>${rowsHtml||`<tr><td colspan="7" style="color:#8A8175;font-style:italic">Tầng chưa có khu vực</td></tr>`}
+      <th class="num" style="width:56px">Cao độ</th>
+    </tr></thead><tbody>${rowsHtml||`<tr><td colspan="8" style="color:#8A8175;font-style:italic">Tầng chưa có khu vực</td></tr>`}
     <tr class="tot"><td></td><td colspan="2">${multi? "CỘNG "+escapeHtml(fl.name).toUpperCase() : "TỔNG CỘNG"} — ${fmt(flArea,1)} m² sàn</td>
-      <td colspan="2">${qty(flUnits,flMeters)}</td><td></td><td class="num">${fmt(flW)} W</td></tr>
+      <td colspan="2">${qty(flUnits,flMeters)}</td><td></td><td class="num">${fmt(flW)} W</td><td></td></tr>
     </tbody></table>`;
   // Bảng công tắc + kịch bản của tầng
   let ctlHtml="";
@@ -3859,7 +3951,7 @@ async function buildPrintDoc(){
       : `<span style="color:#A9A093">—</span>`;
     // Ký hiệu THẬT (cùng hàm vẽ trên mặt bằng) — cột này là bảng chú giải ký hiệu: thợ nhìn ký hiệu
     // trên bản vẽ, tra sang đây ra tên + thông số. mnt để đèn tường hiện đúng ký hiệu lưng tường.
-    const sym=symbolIconSVG(l.type, "pr-sym").outerHTML;
+    const sym=symbolIconSVG(l.type, "pr-sym", l.mount).outerHTML;
     specHtml+=`<tr><td style="width:26px">${sym}</td><td style="width:34px">${th}</td>
       <td><span class="pr-code">${escapeHtml(l.code||"")}</span></td>
       <td>${escapeHtml(l.name)}</td><td>${typeLabel(l.type)}</td>
@@ -3877,7 +3969,7 @@ async function buildPrintDoc(){
   const note=`<h2>Chú thích</h2><div class="pr-note">
     <div><dt>Mã đèn</dt><dd>— ký hiệu ghi cạnh mỗi đèn trên bản vẽ mặt bằng, dùng để tra sang bảng thông số kỹ thuật.</dd></div>
     <div><dt>Độ rọi tiêu chuẩn (chuẩn … lx)</dt><dd>— mức sáng khuyến nghị cho từng loại phòng theo TCVN 7114-1 và EN 12464-1. Ví dụ: phòng khách 150–300 lx, bếp 500 lx, phòng ngủ 100–150 lx, bàn làm việc 300–500 lx.</dd></div>
-    <div><dt>Độ rọi đạt (đạt … lx)</dt><dd>— độ rọi trung bình ước tính trên mặt sàn khi bật đủ đèn của khu vực. <span style="color:#4B6B39;font-weight:600">Xanh</span> = đạt chuẩn, <span style="color:${"#B4553C"};font-weight:600">đỏ</span> = còn thiếu sáng.</dd></div>
+    <div><dt>Độ rọi ước tính (ước tính … lx)</dt><dd>— độ rọi trung bình <b>ước tính</b> trên mặt sàn khi bật đủ đèn của khu vực, theo phương pháp quang thông với hệ số suy giảm 0,7 (chưa xét chỉ số phòng và phản xạ bề mặt cụ thể). <span style="color:#4B6B39;font-weight:600">Xanh</span> = đạt chuẩn, <span style="color:${"#B4553C"};font-weight:600">đỏ</span> = còn thiếu sáng. Số mang tính tham khảo cho thiết kế sơ bộ.</dd></div>
     <div><dt>Lux (lx)</dt><dd>— đơn vị đo độ rọi: lượng ánh sáng chiếu tới bề mặt. Quang thông (lumen) là tổng lượng sáng đèn phát ra.</dd></div>
     <div><dt>ĐVT</dt><dd>— đơn vị tính: <b>bộ</b> = số bộ đèn rời; <b>m</b> = số mét dài đối với LED dây.</dd></div>
     <div><dt>Vùng sáng trên bản vẽ</dt><dd>— quầng vàng minh hoạ phạm vi chiếu của mỗi đèn theo góc chiếu và chiều cao lắp đặt.</dd></div>
