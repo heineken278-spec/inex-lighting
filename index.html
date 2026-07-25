@@ -84,13 +84,14 @@
   .railbtn .ico{width:20px; height:20px}
   .railsep{width:24px; height:1px; background:var(--line); margin:2px 0}
   .railtools{display:flex; flex-direction:column; gap:6px}
-  #bgPop, #devPop{
+  #bgPop, #devPop, #lightPop{
     position:absolute; left:66px; top:12px; width:242px; z-index:30;
     background:var(--bg); border:1px solid var(--line); border-radius:12px;
     box-shadow:0 4px 20px rgba(39,39,39,.16); padding:14px;
   }
-  #devPop{ top:auto; bottom:60px; }
-  #devKinds{ display:flex; flex-direction:column; gap:3px }
+  #devPop, #lightPop{ top:auto; bottom:60px; }
+  #lightPop{ width:236px }
+  #devKinds, #lightKinds{ display:flex; flex-direction:column; gap:3px; max-height:300px; overflow-y:auto }
   .devk{ display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--line);
     border-radius:8px; cursor:pointer; background:var(--bg); text-align:left; width:100% }
   .devk.on{ border-color:var(--accent); background:#FBF7F0 }
@@ -306,6 +307,8 @@
   .empty{color:var(--ink-3); font-size:12.5px; font-style:italic; text-align:center; padding:14px 6px}
 
   /* light groups in zone */
+  /* danh sách dài không đẩy các nút bên dưới ra khỏi màn — cuộn trong khung, nút luôn thấy */
+  #grpList, #devList{max-height:230px; overflow-y:auto; margin:-2px -2px 2px; padding:2px}
   .grp{display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px;
     border:1px solid var(--line); margin-bottom:6px; cursor:pointer; transition:all .12s}
   .grp:hover{border-color:var(--accent-soft)}
@@ -634,6 +637,13 @@
       <div id="devKinds"></div>
       <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
         Click lên bản vẽ để đặt · phím 1–9 đổi loại · Esc để xong
+      </p>
+    </div>
+    <div id="lightPop" class="uifloat hidden">
+      <p class="eyebrow">Đèn đang đặt — click để chọn</p>
+      <div id="lightKinds"></div>
+      <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
+        Chọn 1 mẫu ở đây rồi click lên khu vực để đặt · Esc để xong
       </p>
     </div>
 
@@ -1471,7 +1481,64 @@ function wallMetrics(z, light){
     chord={x1:seg.a.x+(seg.b.x-seg.a.x)*t1, y1:seg.a.y+(seg.b.y-seg.a.y)*t1,
            x2:seg.a.x+(seg.b.x-seg.a.x)*t2, y2:seg.a.y+(seg.b.y-seg.a.y)*t2};
   }
-  return {dM, hTop, hBottom, hits, foot, chord, lamp, beam, tilt, H, cab, blockedByCab, cappedByCab};
+  return {dM, hTop, hBottom, hits, foot, chord, lamp, beam, tilt, H, cab, blockedByCab, cappedByCab,
+    seg:{a:seg.a, b:seg.b, len:seg.len}, tFoot};
+}
+/* Mặt đứng CHÍNH DIỆN một diện tường: nhìn thẳng vào tường, hiện MỌI đèn đang rọi vào diện đó +
+   vệt sáng chồng nhau + khoảng cách giữa các vệt → canh 3 đèn cách nhau bao nhiêu cho đều/đẹp.
+   Gom đèn theo CẠNH tường (so trùng 2 đầu mút cạnh). */
+function wallFaceSVG(z, light){
+  const wm=wallMetrics(z, light);
+  if(!wm || !wm.hits) return "";
+  const Hc=z.ceilH||2.8, ppm=F().pxPerMeter;
+  const eq=(p,q)=>Math.hypot(p.x-q.x,p.y-q.y)<1;
+  const sameEdge=(s)=> s && ((eq(s.a,wm.seg.a)&&eq(s.b,wm.seg.b))||(eq(s.a,wm.seg.b)&&eq(s.b,wm.seg.a)));
+  const L = wm.seg.len/ppm;                       // chiều dài diện tường (m)
+  // các đèn CÙNG rọi vào cạnh này
+  const items=[];
+  z.lights.forEach(l2=>{
+    const m=wallMetrics(z, l2);
+    if(!m || !m.hits || !sameEdge(m.seg)) return;
+    // vị trí ngang theo cạnh: chiếu foot lên cạnh gốc wm.seg (t theo hướng seg.a→seg.b)
+    const ax=wm.seg.a, bx=wm.seg.b;
+    const ex=bx.x-ax.x, ey=bx.y-ax.y, el2=(ex*ex+ey*ey)||1;
+    const tt=((m.foot.x-ax.x)*ex+(m.foot.y-ax.y)*ey)/el2;   // vị trí ngang trên cạnh (0..1)
+    const midH=(m.hTop+(m.hBottom||0))/2, slant=Math.hypot(m.dM, m.H-midH);
+    const half=Math.tan(m.beam/2*Math.PI/180)*slant;  // nửa bề rộng vệt trên tường (m)
+    items.push({ x: clamp(tt,0,1)*L, hT:m.hTop, hB:m.hBottom||0, half, mh:m.H,
+      sel: l2===light, code:(m.lamp.code||"") });
+  });
+  if(!items.length) return "";
+  items.sort((a,b)=>a.x-b.x);
+  // khung SVG
+  const Wm=Math.max(L, 1.2), Hm=Hc+0.3;
+  const k=Math.min(300/Wm, 150/Hm), PAD=22, TOP=22;   // TOP: chừa chỗ cho đường ghi khoảng cách phía trên tường
+  const W=Math.round(Wm*k)+PAD*2, H=Math.round(Hc*k)+TOP+22;
+  const X=m=> +(PAD+m*k).toFixed(1), Y=m=> +(Hc*k - m*k + TOP).toFixed(1);  // y=0 ở sàn
+  const FM=`font-family="JetBrains Mono,monospace"`, FI=`font-family="Inter,sans-serif" font-weight="500"`;
+  let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:8px auto 4px;max-width:100%">
+    <rect x="${X(0)}" y="${Y(Hc)}" width="${(L*k).toFixed(1)}" height="${(Hc*k).toFixed(1)}" fill="#FBFAF7" stroke="#8A8175" stroke-width="1.3"/>`;
+  // vệt sáng từng đèn (ellipse mờ) + tâm
+  items.forEach(it=>{
+    const cy=Y((it.hT+it.hB)/2), ry=Math.max(3,(it.hT-it.hB)/2*k), rx=Math.max(4,it.half*k);
+    s+=`<ellipse cx="${X(it.x)}" cy="${cy}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}"
+        fill="#F2C879" fill-opacity="${it.sel?.5:.32}" stroke="#E0B375" stroke-width="1"/>`;
+    // dấu đèn trên đỉnh (tại cao độ lắp)
+    s+=`<circle cx="${X(it.x)}" cy="${Y(it.mh)}" r="${it.sel?3.5:2.5}" fill="${it.sel?"#B08040":"#6E665A"}"/>`;
+  });
+  // khoảng cách GIỮA các đèn kề nhau
+  for(let i=1;i<items.length;i++){
+    const x1=items[i-1].x, x2=items[i].x, xm=(x1+x2)/2, gap=x2-x1;
+    const yy=Y(Hc)-9;
+    s+=`<line x1="${X(x1)}" y1="${yy}" x2="${X(x2)}" y2="${yy}" stroke="#B08040" stroke-width="1"/>
+      <line x1="${X(x1)}" y1="${yy-3}" x2="${X(x1)}" y2="${yy+3}" stroke="#B08040" stroke-width="1"/>
+      <line x1="${X(x2)}" y1="${yy-3}" x2="${X(x2)}" y2="${yy+3}" stroke="#B08040" stroke-width="1"/>
+      <text x="${X(xm)}" y="${yy-3}" text-anchor="middle" ${FM} font-size="9.5" fill="#B08040">${fmtPlan(gap)} m</text>`;
+  }
+  s+=`<line x1="${X(0)}" y1="${Y(0)}" x2="${X(L)}" y2="${Y(0)}" stroke="#3A362F" stroke-width="2"/>
+    <text x="${X(L/2)}" y="${Y(0)+16}" text-anchor="middle" ${FI} font-size="9.5" fill="#8A8175">diện tường ${fmtPlan(L,2)} m · ${items.length} đèn</text>
+  </svg>`;
+  return s;
 }
 
 /* Mặt đứng diện tường: trần/sàn/tường + nón sáng từ CAO ĐỘ LẮP đèn + khối tủ (nếu khai) */
@@ -2429,11 +2496,13 @@ function renderSceneBar(){
 function deviceZone(d, fl){
   fl=fl||F();
   for(const z of fl.zones){ if(pointInPoly(d.x,d.y,z.poly)) return z; }
-  // không nằm trong polygon nào (ổ cắm áp tường ngoài) → lấy zone có cạnh gần nhất trong ngưỡng 0.5m
+  // Không nằm trong polygon nào (ổ cắm áp tường, đặt hơi lệch mép) → lấy zone có cạnh GẦN NHẤT.
+  // Ngưỡng nới rộng 1,5 m: ổ cắm ngoài tường vẫn thuộc phòng liền kề; 0,5m cũ quá chặt nên báo
+  // "ngoài khu vực" oan. Không có pxPerMeter thì so bằng px (fallback ~1,5m*50).
   let best=null,bd=Infinity;
   fl.zones.forEach(z=>{ const nw=nearestWall({x:d.x,y:d.y}, z.poly); if(nw&&nw.d<bd){bd=nw.d;best=z;} });
-  if(best && fl.pxPerMeter && bd < 0.5*fl.pxPerMeter) return best;
-  return null;   // caller hiểu null = "Ngoài khu vực"
+  const lim=1.5*(fl.pxPerMeter||50);
+  return (best && bd<lim)? best : null;   // caller hiểu null = "Ngoài khu vực"
 }
 function renderDeviceList(){
   const fl=F(), box=$("#devList"), sec=$("#devSec");
@@ -2445,15 +2514,20 @@ function renderDeviceList(){
   devs.forEach(d=>{
     const spec=DEVICE_SPEC[d.kind]||{};
     const z=deviceZone(d, fl);
-    const el=document.createElement("div"); el.className="cir"+(d.id===selDevice?" sel":"");
+    // KHUÔN như danh sách đèn: KÝ HIỆU thiết bị bên trái (thay ô mã 19px làm tràn chữ "LAN1"),
+    // mã đưa xuống dòng nhỏ. Đây là "thumbnail như đèn" anh yêu cầu.
+    const el=document.createElement("div"); el.className="grp"+(d.id===selDevice?" on":"");
     el.style.cursor="pointer"; el.title="Click: chọn thiết bị trên bản vẽ";
+    const ic=deviceIconSVG(d.kind); ic.style.color=spec.prov?"#8A6D3B":"var(--ink-2)";
+    el.appendChild(ic);
     const nm = d.kind==="prov" ? (d.note? "Chờ: "+escapeHtml(d.note):'<i>chờ: chưa đặt tên</i>')
       : escapeHtml(spec.label)+(d.qty>1? " ×"+d.qty:"");
-    el.innerHTML=`<b class="ckey" style="color:${spec.prov?"#8A6D3B":"#6E665A"};border-color:currentColor">${escapeHtml(d.code||"?")}</b>
-      <div class="d"><b>${nm}</b>
-        <small>${z?escapeHtml(z.name):'<i>ngoài khu vực</i>'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small></div>`;
+    const dd=document.createElement("div"); dd.className="d"; dd.style.minWidth="0";
+    dd.innerHTML=`<b style="font-weight:normal;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</b>
+      <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
+        <span style="font-family:var(--mono)">${escapeHtml(d.code||"?")}</span> · ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
+    el.appendChild(dd);
     el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null;
-      // đưa thiết bị vào giữa khung nhìn
       const vp=$("#viewport").getBoundingClientRect();
       view.tx=vp.width/2 - d.x*view.scale; view.ty=vp.height/2 - d.y*view.scale;
       renderAll(); };
@@ -2462,6 +2536,7 @@ function renderDeviceList(){
 }
 function renderAll(){
   render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); refreshRight(); renderSummary(); updateUndoBtns();
+  if(tool==="light" && !$("#lightPop").classList.contains("hidden")) renderLightPop();
   // đồng bộ các control ngoài right-panel sau undo/redo/nạp dữ liệu
   const pn=$("#projName"); if(document.activeElement!==pn) pn.value=state.projectName;
   $("#opacity").value=Math.round((F().bgOpacity||0.7)*100);
@@ -2497,6 +2572,8 @@ function setTool(t){
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
   $("#devPop").classList.toggle("hidden", t!=="device");   // flyout loại thiết bị chỉ hiện khi đặt thiết bị
   if(t==="device") renderDevPop();
+  $("#lightPop").classList.toggle("hidden", t!=="light");  // flyout chọn đèn để đặt (tách khỏi list đã đặt)
+  if(t==="light") renderLightPop();
   updateCursor();
   const z=selZone();
   const hints={
@@ -2504,7 +2581,7 @@ function setTool(t){
     rect:"Kéo chuột để tạo khu vực · Esc để huỷ",
     poly:"Click từng đỉnh · double-click hoặc Enter để đóng · Esc để huỷ",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
-    device:`Click để đặt ${DEVICE_SPEC[deviceKind].label} · phím 1–9 đổi loại · Esc để xong`,
+    device:`Click để đặt ${(DEVICE_SPEC[deviceKind]||DEVICE_SPEC.socket).label} · phím 1–9 đổi loại · Esc để xong`,
     light: z? (lightById(z.placeLightId).type==="strip"
               ? "Kéo để vẽ dây theo chiều dài thật · click 1 lần = 1 m · Esc để xong"
               : `Click trong khu vực để đặt “${lightById(z.placeLightId).name}” · Esc để xong`)
@@ -2512,6 +2589,28 @@ function setTool(t){
   };
   if(hints[t]) showHint(hints[t]); else hideHint();
   render();
+}
+/* Flyout chọn ĐÈN để đặt — tách bạch với danh sách "Đèn trong khu vực" (trước đây click 1 dòng vừa
+   chọn đèn vừa đổi loại-sắp-đặt, gây lẫn). Đặt loại vào z.placeLightId của khu vực đang chọn. */
+function renderLightPop(){
+  const box=$("#lightKinds"); box.innerHTML="";
+  const z=selZone();
+  if(!z){ box.innerHTML='<p class="muted" style="font-size:11px;padding:4px">Chọn một khu vực trước (bên phải) rồi chọn mẫu đèn.</p>'; return; }
+  state.lights.forEach(l=>{
+    const b=document.createElement("button");
+    b.className="devk"+(l.id===z.placeLightId?" on":""); b.type="button";
+    b.appendChild(symbolIconSVG(l.type, null, l.mount));
+    const nm=document.createElement("span"); nm.className="kn";
+    nm.innerHTML=`<span style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">${escapeHtml(l.code||"")}</span> ${escapeHtml(l.name)}`;
+    b.appendChild(nm);
+    b.onclick=()=>{ const zz=selZone(); if(!zz) return; zz.placeLightId=l.id; save(); renderAll(); renderLightPop();
+      showHint(`Đèn đang đặt: “${l.name}” · click lên khu vực để đặt · Esc để xong`); };
+    box.appendChild(b);
+  });
+  const add=document.createElement("button");
+  add.className="btn ghost sm"; add.style.cssText="width:100%;margin-top:6px"; add.textContent="+ Thêm / sửa mẫu đèn…";
+  add.onclick=()=>openLibrary(true);
+  box.appendChild(add);
 }
 function renderDevPop(){
   const box=$("#devKinds"); box.innerHTML="";
@@ -2664,7 +2763,7 @@ vp.addEventListener("pointerdown", e=>{
   }
   const hit=hitLight(e.target);
   if(hit){
-    selSwitch=null;
+    selSwitch=null; selDevice=null;   // chọn đèn → bỏ chọn công tắc/thiết bị (1 loại tại 1 thời điểm)
     const already=selLights.some(s=>s.zid===hit.zid&&s.li===hit.li);
     if(e.shiftKey){
       if(already){ drag={mode:"shift-toggle-off", hit, start:w}; return; }
@@ -2809,7 +2908,7 @@ function handlePointerUp(e){
   if(d.mode==="maybe-marquee"){
     // click đơn: chọn zone hoặc bỏ chọn; shift+click chỗ trống giữ nguyên selection
     if(!d.shift){
-      selLights=[]; selSwitch=null;
+      selLights=[]; selSwitch=null; selDevice=null;
       F().selectedZone = d.zidHit || null;
       renderAll();
     }
@@ -2821,6 +2920,7 @@ function handlePointerUp(e){
     F().zones.forEach(z=>z.lights.forEach((l,li)=>{
       if(l.x>=r.x0&&l.x<=r.x1&&l.y>=r.y0&&l.y<=r.y1) found.push({zid:z.id,li});
     }));
+    if(!d.shift){ selSwitch=null; selDevice=null; }   // quét chọn đèn → bỏ công tắc/thiết bị đang chọn
     selLights = d.shift? selLights.concat(found.filter(f=>!selLights.some(s=>s.zid===f.zid&&s.li===f.li))) : found;
     if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
     renderAll(); return;
@@ -3088,9 +3188,12 @@ function addDeviceAt(w){
   const dev={ id:"d"+(fl.seq++), kind, code:nextDeviceCode(kind), x:w.x, y:w.y, rot:0,
     mh: spec.mh, qty:1, note:"" };
   // ổ cắm/mạng/TV/chờ gắn TƯỜNG → snap + xoay vào phòng. Ổ sàn / wifi thì không.
+  // Snap theo cạnh GẦN NHẤT của MỌI zone (không chỉ zone chứa điểm) — click hơi ra ngoài mép tường
+  // vẫn dính đúng tường, khỏi báo "ngoài khu vực".
   if(kind!=="socket_floor" && kind!=="wifi"){
-    const z=zoneAtPoint(w);
-    if(z){ const sn=wallSnap(w, z.poly); if(sn){ dev.x=sn.x; dev.y=sn.y; dev.rot=sn.rot; } }
+    let bz=null,bd=Infinity;
+    fl.zones.forEach(z=>{ const nw=nearestWall(w, z.poly); if(nw&&nw.d<bd){bd=nw.d;bz=z;} });
+    if(bz && bd < 1.5*(fl.pxPerMeter||50)){ const sn=wallSnap(w, bz.poly); if(sn){ dev.x=sn.x; dev.y=sn.y; dev.rot=sn.rot; } }
   }
   mutate(()=>{ fl.devices.push(dev); });
   selDevice=dev.id; selLights=[]; selSwitch=null;
@@ -3383,10 +3486,11 @@ function refreshRight(){
     gx.onclick=(ev)=>{ ev.stopPropagation();
       mutate(()=>{ z.lights=z.lights.filter(l=>l.lightId!==g.lid); selLights=[]; }); };
     el.appendChild(gx);
-    el.onclick=()=>{ // chọn nhóm trên canvas + đặt làm loại đang dùng
-      z.placeLightId=g.lid;
+    el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ (đổi loại-sắp-đặt ở bảng “Đèn đang đặt” khi bấm L)";
+    el.onclick=()=>{ // CHỈ chọn nhóm để xem/sửa — KHÔNG đổi loại-sắp-đặt (việc đó ở flyout khi bấm L)
       selLights=z.lights.map((l,li)=> l.lightId===g.lid? {zid:z.id,li} : null).filter(Boolean);
-      save(); renderAll();
+      selSwitch=null; selDevice=null;
+      renderAll();
     };
     gl.appendChild(el);
   });
@@ -3477,6 +3581,7 @@ function buildWallbox(wi){
       <div><label>Dài dây (m)</label><input type="number" id="wLen" step="0.1" min="0.3"></div>
       <div style="flex:2.2"></div>
     </div>
+    <div id="cabWrap">
     <label>Tủ sát tường</label>
     <div class="seg" id="cabSeg">
       <button data-cab="none">Không</button>
@@ -3488,8 +3593,11 @@ function buildWallbox(wi){
       <div><label>Đáy (m)</label><input type="number" id="wCabB" step="0.05"></div>
       <div><label>Sâu (m)</label><input type="number" id="wCabD" step="0.05"></div>
     </div>
+    </div>
     <label class="check" style="margin-top:8px"><input type="checkbox" id="wDim"> Ghim kích thước tới tường lên bản vẽ (hiện khi xuất)</label>
     <div id="elevBox"></div>
+    <div id="faceWrap" class="hidden"><label style="margin-top:8px">Mặt đứng chính diện (canh khoảng cách vệt)</label>
+      <div id="faceBox"></div></div>
     <div id="wallTxt" style="margin-top:2px"></div>
     </div>`;
   wi.querySelector("#wDim").addEventListener("change", e=>{
@@ -3621,18 +3729,26 @@ function updateWallbox(){
   lockBtn.classList.toggle("on", !!c.l.aim);
   lockBtn.title = c.l.aim? "Đang ghim tường này — bấm để bỏ ghim (đo tường gần nhất)"
     : "Ghim bức tường đang đo — kéo đèn ra xa vẫn đo đúng tường này";
+  // Đèn TƯỜNG không cần "tủ sát tường" (nó gắn trên tường, không phải rọi từ trần bị tủ che)
+  const wallMounted = isWall(c.l, lightById(c.l.lightId));
+  wi.querySelector("#cabWrap").classList.toggle("hidden", wallMounted);
   const cabMode = !c.l.cab? "none" : (c.l.cab.bot>0.2? "kitchen" : "wardrobe");
   wi.querySelectorAll("#cabSeg button").forEach(b=> b.classList.toggle("on", b.dataset.cab===cabMode));
-  wi.querySelector("#cabFine").classList.toggle("hidden", cabMode==="none");
+  wi.querySelector("#cabFine").classList.toggle("hidden", cabMode==="none" || wallMounted);
   setV("wCabT", c.l.cab? c.l.cab.top : "");
   setV("wCabB", c.l.cab? c.l.cab.bot : "");
   setV("wCabD", c.l.cab? c.l.cab.dep : "");
   const eb=wi.querySelector("#elevBox"), tx=wi.querySelector("#wallTxt");
+  const faceWrap=wi.querySelector("#faceWrap"), faceBox=wi.querySelector("#faceBox");
   const wm=wallMetrics(c.z,c.l);
-  if(!wm){ setV("wD",""); eb.innerHTML="";
+  if(!wm){ setV("wD",""); eb.innerHTML=""; faceWrap.classList.add("hidden");
     tx.innerHTML=`<span class="muted">Đèn đang ngoài khu vực — chỉnh X/Y hoặc kéo đèn vào trong.</span>`; return; }
   setV("wD", wm.dM.toFixed(2));
   eb.innerHTML=elevationSVG(c.z,c.l);
+  // Mặt đứng chính diện: chỉ hiện khi đèn RỌI TỚI tường (có vệt) — gom mọi đèn cùng diện
+  const face = wm.hits? wallFaceSVG(c.z, c.l) : "";
+  faceWrap.classList.toggle("hidden", !face);
+  faceBox.innerHTML=face;
   const pre = c.l.mh!=null? `Lắp cao <b>${fmtPlan(wm.H)} m</b> · cách tường <b>${fmtPlan(wm.dM)} m</b>`
                           : `Đèn cách tường <b>${fmtPlan(wm.dM)} m</b>`;
   const maxD = wm.H*Math.tan(Math.min(wm.tilt+wm.beam/2,86)*Math.PI/180);
@@ -3823,11 +3939,12 @@ function openLibrary(pickMode){
       <div><label>Loại</label><select id="nfType">
         ${Object.keys(CODE_PREFIX).map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${typeLabel(t)}</option>`).join("")}
       </select></div><div><label>Góc chiếu (°)</label><input id="nfBeam" type="number" value="${l.beam}"></div></div>
+      <div id="nfMountRow">
       <label>Cách lắp</label>
       <div class="seg" id="nfMount">
         <button type="button" data-mt="ceiling" title="Âm trần / ốp trần / thả trần">Trần</button>
-        <button type="button" data-mt="wall" title="Gắn trên mặt tường (đèn hắt, đèn rọi tranh gắn tường…)">Tường</button>
-      </div>
+        <button type="button" data-mt="wall" title="Gắn trên mặt tường (đèn hắt tường, tuýp gắn tường…)">Tường</button>
+      </div></div>
       <div id="nfMhRow" class="${(l.mount==="wall")?"":"hidden"}"><label>Cao lắp mặc định (m, tính từ sàn)</label>
         <input id="nfMh" type="number" step="0.05" value="${l.defMh??""}" placeholder="VD: 2,0"></div>
       <div class="row"><div><label>Quang thông (lm)</label><input id="nfLm" type="number" value="${l.lumen||""}" placeholder="trống = quy đổi từ W"></div>
@@ -3843,11 +3960,17 @@ function openLibrary(pickMode){
     const refreshIcon=()=>{ icon.innerHTML="";
       const tmp=symbolIconSVG(b.querySelector("#nfType").value, null, mount);
       icon.innerHTML=tmp.innerHTML; };
-    const syncMount=()=>{ b.querySelectorAll("#nfMount button").forEach(x=>x.classList.toggle("on", x.dataset.mt===mount));
+    // Chỉ TUÝP + LED DÂY được gắn tường (anh Khoa chốt). Loại khác: ẩn nút, ép về trần.
+    const wallOK=t=> t==="tube" || t==="strip";
+    const syncMount=()=>{
+      const t=b.querySelector("#nfType").value;
+      if(!wallOK(t)) mount="ceiling";
+      b.querySelector("#nfMountRow").classList.toggle("hidden", !wallOK(t));
+      b.querySelectorAll("#nfMount button").forEach(x=>x.classList.toggle("on", x.dataset.mt===mount));
       b.querySelector("#nfMhRow").classList.toggle("hidden", mount!=="wall"); refreshIcon(); };
     b.querySelectorAll("#nfMount button").forEach(x=> x.onclick=()=>{ mount=x.dataset.mt; syncMount(); });
     syncMount();
-    b.querySelector("#nfType").addEventListener("change",refreshIcon);
+    b.querySelector("#nfType").addEventListener("change",syncMount);
     b.querySelector("#nfThumbBtn").onclick=()=>b.querySelector("#nfThumbFile").click();
     b.querySelector("#nfThumbFile").addEventListener("change",e=>{
       const f=e.target.files[0]; if(!f) return;
