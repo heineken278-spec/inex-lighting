@@ -91,16 +91,12 @@
   }
   #devPop, #lightPop{ top:auto; bottom:60px; }
   #lightPop{ width:236px }
-  /* Bảng kiểm tra vệt chiếu — nổi góc TRÊN-PHẢI canvas, bật/tắt khi cần (không chiếm chỗ panel phải) */
-  #visPop{ left:auto; right:14px; top:14px; width:322px; padding:11px 12px 12px }
-  #visPop .vh{ display:flex; align-items:center; gap:6px; margin-bottom:9px }
-  #visPop .vh b{ font-family:var(--label); font-size:10.5px; letter-spacing:.08em;
-    text-transform:uppercase; color:var(--ink-2); font-weight:700 }
-  #visPop .vx{ border:none; background:none; cursor:pointer; color:var(--ink-3);
-    font-size:14px; line-height:1; padding:3px 5px; border-radius:6px }
-  #visPop .vx:hover{ background:var(--cream); color:var(--ink) }
-  #visPop #visBody{ min-height:60px }
-  #visPop .empty{ font-size:11.5px; color:var(--ink-3); text-align:center; padding:14px 4px; margin:0 }
+  /* Mặt cắt vệt chiếu — vẽ NGAY trong panel phải, dưới các ô chỉnh (mắt không phải lia sang canvas,
+     không che bản vẽ). Mặc định ẩn nên panel vẫn gọn. */
+  #visBox{ margin-top:6px }
+  #visBox svg{ display:block; margin:2px auto; max-width:100% }
+  .visempty{ font-size:11.5px; color:var(--ink-3); text-align:center; padding:12px 4px; margin:0;
+    border:1px dashed var(--line); border-radius:8px; margin-top:6px }
   #devKinds, #lightKinds{ display:flex; flex-direction:column; gap:3px; max-height:300px; overflow-y:auto }
   .devk{ display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--line);
     border-radius:8px; cursor:pointer; background:var(--bg); text-align:left; width:100% }
@@ -331,8 +327,8 @@
   .brush .d{flex:1; min-width:0}
   .brush .d small{display:block; font-family:var(--label); font-size:9px; letter-spacing:.08em;
     text-transform:uppercase; color:var(--ink-3)}
-  .brush .d b{display:block; font-size:12.5px; font-weight:500; color:var(--ink);
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .brush .d b{font-size:12.5px; font-weight:500; color:var(--ink); line-height:1.3;
+    white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
   .grp{display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px;
     border:1px solid var(--line); margin-bottom:6px; cursor:pointer; transition:all .12s}
   .grp:hover{border-color:var(--accent-soft)}
@@ -345,9 +341,11 @@
   .grp .th{width:26px; height:26px}
   .lp-item .th{width:34px; height:34px}
   .grp .d{flex:1; min-width:0}
-  .grp .d b{font-weight:normal; font-size:12.5px; display:block; overflow:hidden;
-    text-overflow:ellipsis; white-space:nowrap}
-  .grp .d small{font-family:var(--label); font-size:10px; font-weight:400; color:var(--ink-3); letter-spacing:.01em}
+  /* tên đèn dài ("LED dây hắt khe 10W/m") xuống tối đa 2 dòng thay vì bị CẮT MẤT CHỮ */
+  .grp .d b{font-weight:normal; font-size:12.5px; line-height:1.3; white-space:normal;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .grp .d small{font-family:var(--label); font-size:10px; font-weight:400; color:var(--ink-3);
+    letter-spacing:.01em; display:flex; align-items:center; gap:5px; flex-wrap:wrap}
   .code{font-family:var(--mono); font-size:9.5px; background:var(--cream);
     border:1px solid var(--line); border-radius:4px; padding:0 4px; margin-right:5px;
     color:var(--ink-2); display:inline-block; line-height:1.5; vertical-align:1px}
@@ -385,7 +383,7 @@
   .sumz-r{display:flex; align-items:center; gap:6px; padding:5px 10px;
     border-top:1px solid #F0EAE0; font-size:12px}
   .sumz-r .th{width:18px; height:18px; border-radius:4px; object-fit:cover; flex-shrink:0}
-  .sumz-r .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .sumz-r .nm{flex:1; min-width:0; white-space:normal; line-height:1.35}   /* xuống dòng, không cắt tên đèn */
   .sumz-r .n{font-family:var(--mono); font-size:11px; color:var(--accent-dark)}
   .sumz-r .wv{font-family:var(--mono); font-size:11px; color:var(--ink-2);
     min-width:44px; text-align:right}
@@ -413,6 +411,12 @@
   .cir:hover .ciredit{opacity:1}
   .cir .ciredit:hover{background:var(--cream);color:var(--accent-dark)}
   /* chip gán cụm nhanh trong "đèn đang chọn" */
+  /* nhóm trong panel "Đèn đang chọn": mỗi nhóm một việc, có tiêu đề nhỏ + vạch ngăn */
+  .grpbox{border-top:1px solid var(--line); padding-top:9px; margin-top:11px}
+  .grpbox:first-of-type{border-top:none; padding-top:0; margin-top:0}
+  .grpbox .gt{font-family:var(--label); font-size:9px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:700; margin:0 0 7px}
+  .cdot{width:12px; height:12px; border-radius:3px; flex:none; border:1px solid rgba(0,0,0,.08)}
   .chipwrap{display:flex; flex-wrap:wrap; gap:5px; align-items:center}
   .cchip{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line);
     background:var(--bg); border-radius:7px; padding:4px 9px; cursor:pointer;
@@ -468,7 +472,11 @@
   .modal .body{padding:18px 20px; overflow-y:auto; flex:1 1 auto; min-height:0}
   .libnote{margin:0; padding:10px 20px; background:var(--cream); border-bottom:1px solid var(--line);
     font-size:11.5px; line-height:1.45; color:var(--ink-3)}
-  .modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px; flex:none}
+  /* flex-wrap + flex:none trên nút: nút GIỮ nguyên bề rộng và xuống dòng khi chật, thay vì bị
+     bóp lại làm CẮT MẤT CHỮ (nút "Dùng cho khu vực" từng mất chữ ở modal thư viện) */
+  .modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; align-items:center;
+    gap:8px; flex:none; flex-wrap:wrap; row-gap:8px}
+  .modal .foot .btn{flex:none}
   .libnote{flex:none}
   .lp-item{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--line);
     border-radius:9px; margin-bottom:7px; cursor:pointer}
@@ -672,18 +680,6 @@
       <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
         Chọn 1 mẫu ở đây rồi click lên khu vực để đặt · Esc để xong
       </p>
-    </div>
-    <div id="visPop" class="uifloat hidden">
-      <div class="vh">
-        <b id="visTitle">Vệt chiếu</b>
-        <span style="flex:1"></span>
-        <button class="vx" id="visClose" title="Đóng (V)">✕</button>
-      </div>
-      <div class="seg" id="visTabs" style="margin:0 0 8px">
-        <button type="button" data-vt="side" title="Nhìn ngang: đèn cách tường bao nhiêu, hắt lên tới cao độ nào">Mặt bên</button>
-        <button type="button" data-vt="face" title="Nhìn thẳng vào tường: các đèn cùng rọi, khoảng cách giữa vệt">Mặt đứng</button>
-      </div>
-      <div id="visBody"></div>
     </div>
 
     <!-- CENTER -->
@@ -923,6 +919,7 @@ let visOpen = false;        // bảng kiểm tra vệt chiếu (nổi trên canv
 let visTab = "side";        // "side" = mặt bên (dùng thường xuyên) · "face" = mặt đứng chính diện
 let hoverLight = null;      // {zid, li}
 let deviceKind = "socket";  // loại thiết bị đang đặt (dính giữa các lần đặt)
+let pickLightId = null;     // mẫu đèn vừa chọn ở bảng đặt đèn — dùng khi chưa chọn khu vực nào
 let spaceHeld = false;
 let hist = [], future = [];
 let focusSnap = null;
@@ -1559,7 +1556,7 @@ function wallFaceSVG(z, light){
   items.sort((a,b)=>a.x-b.x);
   // khung SVG
   const Wm=Math.max(L, 1.2), Hm=Hc+0.3;
-  const k=Math.min(300/Wm, 150/Hm), PAD=22, TOP=22;   // TOP: chừa chỗ cho đường ghi khoảng cách phía trên tường
+  const k=Math.min(214/Wm, 132/Hm), PAD=22, TOP=22;   // TOP: chừa chỗ cho đường ghi khoảng cách phía trên tường
   const W=Math.round(Wm*k)+PAD*2, H=Math.round(Hc*k)+TOP+22;
   const X=m=> +(PAD+m*k).toFixed(1), Y=m=> +(Hc*k - m*k + TOP).toFixed(1);  // y=0 ở sàn
   const FM=`font-family="JetBrains Mono,monospace"`, FI=`font-family="Inter,sans-serif" font-weight="500"`;
@@ -1597,7 +1594,7 @@ function elevationSVG(z, light){
   const tanN=Math.tan(Math.min(phiN,1.53)), tanF=Math.tan(phiF);
   const xF=Math.max(0, d-Hl*tanF);           // chân tia xa trên sàn (0 = tia xa cũng đập tường)
   const Wm=Math.max(2.6, xF+0.5, d+0.8, wm.cab? wm.cab.dep+0.6:0), Hm=Hc+0.6;
-  const k=Math.min(270/Wm, 185/Hm), PAD=18, CAP=18;   // CAP: dải chú thích DƯỚI sàn
+  const k=Math.min(240/Wm, 165/Hm), PAD=18, CAP=18;   // CAP: dải chú thích DƯỚI sàn (vừa panel 294px)
   const W=Math.round(Wm*k)+PAD, H=Math.round(Hm*k)+CAP;
   const X=m=> +((Wm-m)*k).toFixed(1), Y=m=> +((Hm-m)*k).toFixed(1);
   const hits=wm.hits, hT=wm.hTop||0, hB=wm.hBottom||0;
@@ -2650,17 +2647,24 @@ function setTool(t){
    chọn đèn vừa đổi loại-sắp-đặt, gây lẫn). Đặt loại vào z.placeLightId của khu vực đang chọn. */
 function renderLightPop(){
   const box=$("#lightKinds"); box.innerHTML="";
+  // Danh sách mẫu LUÔN hiện ngay khi bấm công cụ đặt đèn — chưa chọn khu vực cũng chọn được mẫu
+  // trước (nhớ vào pickLightId), khu vực nào được chọn sau sẽ dùng mẫu đó.
   const z=selZone();
-  if(!z){ box.innerHTML='<p class="muted" style="font-size:11px;padding:4px">Chọn một khu vực trước (bên phải) rồi chọn mẫu đèn.</p>'; return; }
+  const cur = z? z.placeLightId : pickLightId;
   state.lights.forEach(l=>{
     const b=document.createElement("button");
-    b.className="devk"+(l.id===z.placeLightId?" on":""); b.type="button";
+    b.className="devk"+(l.id===cur?" on":""); b.type="button";
     b.appendChild(symbolIconSVG(l.type, null, l.mount));
     const nm=document.createElement("span"); nm.className="kn";
     nm.innerHTML=`<span style="font-family:var(--mono);font-size:10px;color:var(--ink-3)">${escapeHtml(l.code||"")}</span> ${escapeHtml(l.name)}`;
     b.appendChild(nm);
-    b.onclick=()=>{ const zz=selZone(); if(!zz) return; zz.placeLightId=l.id; save(); renderAll(); renderLightPop();
-      showHint(`Đèn đang đặt: “${l.name}” · click lên khu vực để đặt · Esc để xong`); };
+    b.onclick=()=>{
+      const zz=selZone();
+      if(zz){ zz.placeLightId=l.id; pickLightId=null; }   // có khu vực → gán thẳng cho khu vực đó
+      else pickLightId=l.id;                              // chưa có → nhớ tạm, dùng cho lần đặt tới
+      save(); renderAll(); renderLightPop();
+      showHint(zz? `Đèn đang đặt: “${l.name}” · click lên khu vực để đặt · Esc để xong`
+                 : `Đã chọn “${l.name}” · click vào một khu vực để đặt · Esc để xong`); };
     box.appendChild(b);
   });
   const add=document.createElement("button");
@@ -2673,23 +2677,25 @@ function renderLightPop(){
    - Mặt đứng  : nhìn thẳng vào tường — nhiều đèn cùng rọi, khoảng cách giữa các vệt (ít dùng)
    Cập nhật LIVE cả khi đang kéo đèn, nên canh được ngay. */
 function renderVisPop(){
-  const p=$("#visPop");
-  p.classList.toggle("hidden", !visOpen);
-  if(!visOpen) return;
-  $$("#visTabs button").forEach(b=> b.classList.toggle("on", b.dataset.vt===visTab));
-  const body=$("#visBody"), title=$("#visTitle");
-  const c=(typeof selOne==="function")? selOne() : null;
-  if(!c){ title.textContent="Vệt chiếu";
-    body.innerHTML='<p class="empty">Chọn <b>một</b> đèn trên bản vẽ để xem vệt chiếu.</p>'; return; }
-  const lamp=lightById(c.l.lightId);
-  title.textContent="Vệt chiếu · "+(lamp.code||lamp.name);
+  // Vẽ NGAY TRONG panel phải, ngay dưới các ô cao lắp/nghiêng/tới tường — mắt không phải lia sang
+  // canvas, và không che mất bản vẽ. Mặc định ẩn nên panel vẫn gọn khi không cần xem.
+  const wrap=document.querySelector("#visWrap"), box=document.querySelector("#visBox");
+  const btn=document.querySelector("#btnVis");
+  if(!wrap||!box) return;
+  wrap.classList.toggle("hidden", !visOpen);
+  if(btn){ btn.textContent = visOpen? "▴ Ẩn mặt cắt" : "◱ Xem mặt cắt";
+    btn.classList.toggle("primary", visOpen); }
+  if(!visOpen){ box.innerHTML=""; return; }
+  wrap.querySelectorAll("#visTabs button").forEach(b=> b.classList.toggle("on", b.dataset.vt===visTab));
+  const c=selOne();
+  if(!c){ box.innerHTML='<p class="visempty">Chọn <b>một</b> đèn để xem mặt cắt.</p>'; return; }
   const wm=wallMetrics(c.z, c.l);
-  if(!wm){ body.innerHTML='<p class="empty">Đèn đang ngoài khu vực.</p>'; return; }
+  if(!wm){ box.innerHTML='<p class="visempty">Đèn đang ngoài khu vực.</p>'; return; }
   if(visTab==="face"){
     const face=wm.hits? wallFaceSVG(c.z, c.l) : "";
-    body.innerHTML = face || '<p class="empty">Đèn chưa hắt tới tường nên chưa có vệt để so khoảng cách.</p>';
+    box.innerHTML = face || '<p class="visempty">Đèn chưa hắt tới tường nên chưa có vệt để so khoảng cách.</p>';
   }else{
-    body.innerHTML = elevationSVG(c.z, c.l) || '<p class="empty">Không dựng được mặt cắt.</p>';
+    box.innerHTML = elevationSVG(c.z, c.l) || '<p class="visempty">Không dựng được mặt cắt.</p>';
   }
 }
 function renderDevPop(){
@@ -3284,6 +3290,8 @@ function addLightAt(w){
   const z=zoneAtPoint(w);
   if(!z){ toast("Hãy click bên trong một khu vực"); return; }
   F().selectedZone=z.id;
+  // mẫu đã chọn lúc chưa có khu vực nào → áp cho khu vực vừa click, rồi thôi
+  if(pickLightId){ z.placeLightId=pickLightId; pickLightId=null; }
   mutate(()=>{ z.lights.push(newPlacedLight(z, w)); });
   showHint(`Đã đặt ${z.lights.length} đèn · click tiếp để thêm, Esc để xong`);
 }
@@ -3552,7 +3560,8 @@ function refreshRight(){
     el.appendChild(symbolIconSVG(g.lamp.type, null, g.lamp.mount));
     const gth=thumbEl(g.lamp); if(gth) el.appendChild(gth);
     const d=document.createElement("div"); d.className="d";
-    d.innerHTML=`<b><span class="code">${escapeHtml(g.lamp.code||"")}</span>${escapeHtml(g.lamp.name)}</b><small>${fmt(lampLumen(g.lamp))} lm · ${g.lamp.watt}W · ${g.lamp.beam}°${g.lamp.type==="strip"?" · 1 điểm = 1 m":""}</small>`;
+    // MÃ xuống dòng phụ để TÊN đèn có đủ bề ngang (panel 278px, "LED dây hắt khe 10W/m" từng bị cắt)
+    d.innerHTML=`<b>${escapeHtml(g.lamp.name)}</b><small><span class="code">${escapeHtml(g.lamp.code||"")}</span>${fmt(lampLumen(g.lamp))} lm · ${g.lamp.watt}W · ${g.lamp.beam}°${g.lamp.type==="strip"?" · 1 điểm = 1 m":""}</small>`;
     el.appendChild(d);
     // chỉ báo loại này nằm ở CỤM nào (CHỈ ĐỌC: a, b… — gán cụm làm ở "Đèn đang chọn")
     const keys=[...new Set(z.lights.filter(l=>l.lightId===g.lid)
@@ -3566,7 +3575,9 @@ function refreshRight(){
       cb.title="Loại này thuộc cụm: "+ks.join(", ")
         +(keys.includes(null)? " · còn đèn chưa gán cụm":"");
     } else { cb.className+=" none"; cb.textContent="—"; cb.title="Chưa gán cụm"; }
-    el.appendChild(cb);
+    // badge cụm nằm ở DÒNG PHỤ (cùng mã/thông số) — hàng chỉ còn icon + tên + số lượng + xoá,
+    // nên tên đèn dài không bị bóp mất chữ
+    d.querySelector("small").appendChild(cb);
     const cnt=document.createElement("span"); cnt.className="cnt"; cnt.textContent=qtyLabel(g);
     el.appendChild(cnt);
     const gx=document.createElement("button"); gx.className="gx"; gx.textContent="✕"; gx.title="Xoá hết đèn loại này";
@@ -3634,63 +3645,93 @@ function selItems(){
 }
 function buildWallbox(wi){
   wi.dataset.built="1";
+  // Sắp theo 3 NHÓM có tiêu đề, mỗi nhóm 1 việc — trước đây 17 chip cụm + 6 hàng số dồn một mạch,
+  // nhìn rất rối. Cụm điều khiển đổi từ dải chip sang Ô CHỌN gọn (tầng thật có tới 16 cụm).
   wi.innerHTML=`
-    <p class="eyebrow" id="selHdr" style="margin-bottom:6px">Đèn đang chọn</p>
-    <label style="margin-top:0">Gán vào cụm</label>
-    <div id="selCir" class="chipwrap"></div>
+    <p class="eyebrow" id="selHdr" style="margin-bottom:8px">Đèn đang chọn</p>
+
+    <div class="grpbox">
+      <p class="gt">Điều khiển</p>
+      <div class="inline" style="gap:6px">
+        <i id="cirDot" class="cdot"></i>
+        <select id="selCirSel" style="flex:1"></select>
+        <button class="btn sm" id="selCirNew" title="Tách các đèn đang chọn thành cụm mới">+ cụm</button>
+      </div>
+    </div>
+
     <div id="oneOnly">
-    <div class="row" style="margin-top:8px">
-      <div><label style="margin-top:0">X (m)</label><input type="number" id="wX" step="0.05"></div>
-      <div><label style="margin-top:0">Y (m)</label><input type="number" id="wY" step="0.05"></div>
-      <div><label style="margin-top:0">Tới tường</label>
-        <div class="inline" style="gap:4px">
-          <input type="number" id="wD" step="0.05" min="0.05" style="flex:1">
-          <button id="wLock" class="wlock" title="Ghim bức tường đang đo — kéo đèn ra xa vẫn đo đúng tường này, không nhảy sang vách đối diện">📌</button>
+    <div class="grpbox">
+      <p class="gt">Vị trí</p>
+      <div class="row">
+        <div><label style="margin-top:0">X (m)</label><input type="number" id="wX" step="0.05"></div>
+        <div><label style="margin-top:0">Y (m)</label><input type="number" id="wY" step="0.05"></div>
+        <div><label style="margin-top:0">Tới tường</label>
+          <div class="inline" style="gap:4px">
+            <input type="number" id="wD" step="0.05" min="0.05" style="flex:1;min-width:0">
+            <button id="wLock" class="wlock" title="Ghim bức tường đang đo — kéo đèn ra xa vẫn đo đúng tường này">📌</button>
+          </div>
+        </div>
+      </div>
+      <div class="row hidden" id="wLenRow" style="margin-top:8px">
+        <div><label style="margin-top:0">Dài dây (m)</label><input type="number" id="wLen" step="0.1" min="0.3"></div>
+        <div style="flex:2.2"></div>
+      </div>
+    </div>
+
+    <div class="grpbox">
+      <p class="gt">Lắp đặt</p>
+      <div class="row">
+        <div style="flex:.85"><label style="margin-top:0">Cao lắp (m)</label><input type="number" id="wMh" step="0.05" placeholder="trần"></div>
+        <div style="flex:1.6"><label style="margin-top:0">Nghiêng <span id="wTiltV" class="muted"></span></label>
+          <input type="range" id="wTilt" min="0" max="60" step="5" style="margin-top:10px"></div>
+      </div>
+      <div id="cabWrap">
+        <label>Tủ sát tường</label>
+        <div class="seg" id="cabSeg">
+          <button data-cab="none">Không</button>
+          <button data-cab="kitchen">Bếp trên</button>
+          <button data-cab="wardrobe">Tủ áo</button>
+        </div>
+        <div class="row hidden" id="cabFine">
+          <div><label>Đỉnh (m)</label><input type="number" id="wCabT" step="0.05"></div>
+          <div><label>Đáy (m)</label><input type="number" id="wCabB" step="0.05"></div>
+          <div><label>Sâu (m)</label><input type="number" id="wCabD" step="0.05"></div>
         </div>
       </div>
     </div>
-    <div class="row">
-      <div style="flex:.8"><label>Cao lắp (m)</label><input type="number" id="wMh" step="0.05" placeholder="trần"></div>
-      <div style="flex:1.7"><label>Nghiêng đèn <span id="wTiltV" class="muted"></span></label>
-        <input type="range" id="wTilt" min="0" max="60" step="5" style="margin-top:10px"></div>
+
+    <div class="grpbox">
+      <p class="gt">Vệt chiếu lên tường</p>
+      <div id="wallTxt"></div>
+      <button class="btn sm" id="btnVis" style="width:100%; margin-top:9px">◱ Xem mặt cắt</button>
+      <div id="visWrap" class="hidden">
+        <div class="seg" id="visTabs" style="margin-top:8px">
+          <button type="button" data-vt="side" title="Nhìn ngang: đèn cách tường bao nhiêu, hắt lên tới cao độ nào">Mặt bên</button>
+          <button type="button" data-vt="face" title="Nhìn thẳng vào tường: các đèn cùng rọi, khoảng cách giữa vệt">Mặt đứng</button>
+        </div>
+        <div id="visBox"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="wDim"> Ghim kích thước lên bản vẽ</label>
     </div>
-    <div class="row hidden" id="wLenRow">
-      <div><label>Dài dây (m)</label><input type="number" id="wLen" step="0.1" min="0.3"></div>
-      <div style="flex:2.2"></div>
-    </div>
-    <div id="cabWrap">
-    <label>Tủ sát tường</label>
-    <div class="seg" id="cabSeg">
-      <button data-cab="none">Không</button>
-      <button data-cab="kitchen">Bếp trên</button>
-      <button data-cab="wardrobe">Tủ áo</button>
-    </div>
-    <div class="row hidden" id="cabFine">
-      <div><label>Đỉnh (m)</label><input type="number" id="wCabT" step="0.05"></div>
-      <div><label>Đáy (m)</label><input type="number" id="wCabB" step="0.05"></div>
-      <div><label>Sâu (m)</label><input type="number" id="wCabD" step="0.05"></div>
-    </div>
-    </div>
-    <label class="check" style="margin-top:8px"><input type="checkbox" id="wDim"> Ghim kích thước tới tường lên bản vẽ</label>
-    <button class="btn sm" id="btnVis" style="width:100%; margin-top:10px">◱ Xem vệt chiếu</button>
-    <div id="wallTxt" style="margin-top:8px"></div>
     </div>`;
   wi.querySelector("#btnVis").addEventListener("click", ()=>{ visOpen=!visOpen; renderVisPop(); });
+  wi.querySelectorAll("#visTabs button").forEach(b=>
+    b.addEventListener("click", ()=>{ visTab=b.dataset.vt; renderVisPop(); }));
   wi.querySelector("#wDim").addEventListener("change", e=>{
     const items=selItems(); if(!items.length) return;
     mutate(()=>items.forEach(({l})=>{ if(e.target.checked) l.dim=true; else delete l.dim; }));
   });
-  // gán cụm cho ĐÚNG các đèn đang chọn — click chip a/b/c (tách 6 đèn thành cụm 4 + 2)
-  wi.querySelector("#selCir").addEventListener("click", e=>{
-    const b=e.target.closest("[data-cir]"); if(!b) return;
+  // gán cụm cho ĐÚNG các đèn đang chọn (tách 6 đèn thành cụm 4 + 2 vẫn làm được như trước)
+  wi.querySelector("#selCirSel").addEventListener("change", e=>{
     const items=selItems(); if(!items.length) return;
-    const v=b.dataset.cir;
-    if(v==="__new"){
-      let key=""; mutate(()=>{ const c=addCircuit(); if(!c) return; key=c.key; items.forEach(({l})=>l.circuit=c.id); });
-      if(key) toast(`Đã tách ${items.length} đèn thành cụm ${key} — đổi tên ở mục “Cụm điều khiển” nếu cần`);
-      return;
-    }
+    const v=e.target.value;
+    if(v==="__mix") return;                     // dòng thông báo, không phải lựa chọn
     mutate(()=>{ items.forEach(({l})=>{ if(v) l.circuit=v; else delete l.circuit; }); });
+  });
+  wi.querySelector("#selCirNew").addEventListener("click", ()=>{
+    const items=selItems(); if(!items.length) return;
+    let key=""; mutate(()=>{ const c=addCircuit(); if(!c) return; key=c.key; items.forEach(({l})=>l.circuit=c.id); });
+    if(key) toast(`Đã tách ${items.length} đèn thành cụm ${key} — đổi tên ở mục “Cụm điều khiển” nếu cần`);
   });
   const upd=fn=>{ const c=selOne(); if(!c) return; fn(c);
     save(); render(); renderZoneList(); renderSummary(); updateWallbox(); };
@@ -3777,16 +3818,18 @@ function updateWallbox(){
   wi.querySelector("#selHdr").textContent = items.length===1
     ? `Đèn đang chọn · ${lightById(items[0].l.lightId).code||""}`
     : `${items.length} đèn đang chọn`;
-  // chip a/b/c: chip đang chọn = cụm chung của mọi đèn được chọn (mix = không chip nào sáng)
-  const sc=wi.querySelector("#selCir");
+  // Ô CHỌN cụm (gọn hơn 17 chip): giá trị = cụm chung của mọi đèn đang chọn; khác nhau thì "— nhiều cụm —"
+  const sc=wi.querySelector("#selCirSel");
   const cur = cids.length===1? cids[0] : null;
-  sc.innerHTML=
-    `<button class="cchip${!cur&&cids.length<=1?" on":""}" data-cir="" title="Bỏ khỏi mọi cụm">○ chưa gán</button>`
+  const mix = cids.length>1;
+  sc.innerHTML = (mix? `<option value="__mix" selected>— nhiều cụm — chọn để gộp</option>`:"")
+    + `<option value="">○ Chưa gán cụm</option>`
     + (fl.circuits||[]).map(c2=>
-        `<button class="cchip${cur===c2.id?" on":""}" data-cir="${c2.id}"
-          style="--cc:${c2.color}" title="${escapeHtml(c2.name)}"><i></i>${c2.key}</button>`).join("")
-    + `<button class="cchip new" data-cir="__new" title="Tạo cụm mới cho các đèn này">+ cụm</button>`
-    + (cids.length>1? `<span class="chipnote">nhiều cụm — chọn để gộp</span>`:"");
+        `<option value="${c2.id}">${escapeHtml(c2.key+" · "+c2.name)}</option>`).join("");
+  if(document.activeElement!==sc) sc.value = mix? "__mix" : (cur||"");
+  const dot=wi.querySelector("#cirDot");
+  const cc = cur? (circuitById(cur, fl)||{}).color : null;
+  dot.style.background = mix? "linear-gradient(135deg,#C78F57,#7C9A8E)" : (cc||"#D8D0C2");
   const c=selOne();
   wi.querySelector("#oneOnly").classList.toggle("hidden", !c);
   if(!c) return;
@@ -3815,7 +3858,6 @@ function updateWallbox(){
   setV("wCabB", c.l.cab? c.l.cab.bot : "");
   setV("wCabD", c.l.cab? c.l.cab.dep : "");
   const tx=wi.querySelector("#wallTxt");
-  const vb=wi.querySelector("#btnVis"); if(vb) vb.classList.toggle("primary", visOpen);
   const wm=wallMetrics(c.z,c.l);
   renderVisPop();
   if(!wm){ setV("wD","");
@@ -3857,8 +3899,6 @@ function bindRight(){
     mutate(()=>{ z.lights=[]; selLights=[]; }); toast("Đã xoá đèn — Ctrl+Z để hoàn tác"); });
   // "Đổi…" mẫu đèn sắp đặt = chuyển sang công cụ Đèn và mở bảng chọn mẫu (một đường duy nhất)
   $("#btnPickLight").addEventListener("click", ()=>{ setTool("light"); });
-  $("#visClose").addEventListener("click", ()=>{ visOpen=false; renderVisPop(); refreshRight(); });
-  $$("#visTabs button").forEach(b=> b.addEventListener("click", ()=>{ visTab=b.dataset.vt; renderVisPop(); }));
 }
 
 /* =========================== SUMMARY =========================== */
