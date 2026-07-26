@@ -222,6 +222,18 @@
   #floorBar .fladd{border:1px dashed var(--line); background:transparent; cursor:pointer;
     border-radius:7px; width:28px; height:26px; color:var(--ink-3); font-size:14px; flex-shrink:0}
   #floorBar .fladd:hover{border-color:var(--accent); color:var(--accent-dark)}
+  /* chọn TỜ đang xem — tách bản vẽ chiếu sáng và bản vẽ ổ cắm thành 2 tờ riêng.
+     Nằm ngay dưới thanh tầng: cùng là "đang xem cái gì", đọc một mạch từ trên xuống. */
+  #sheetBar{position:absolute; left:14px; top:56px; z-index:15; display:flex; gap:3px;
+    align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:4px; box-shadow:var(--shadow); max-width:calc(100% - 28px)}
+  #sheetBar .sblbl{font-family:var(--label); font-size:9px; font-weight:700; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3); padding:0 5px 0 4px; white-space:nowrap}
+  #sheetBar .sh{border:none; background:transparent; cursor:pointer; border-radius:7px;
+    padding:4px 9px; font-family:var(--label); font-size:11px; font-weight:600;
+    color:var(--ink-2); white-space:nowrap}
+  #sheetBar .sh:hover{background:var(--cream); color:var(--ink)}
+  #sheetBar .sh.on{background:var(--ink); color:#fff}
   /* dải kịch bản — khách bấm xem từng cảnh sáng */
   #sceneBar{position:absolute; left:14px; bottom:52px; z-index:15; display:flex; gap:5px;
     align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
@@ -728,6 +740,12 @@
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
       <div id="floorBar" class="uifloat"></div>
+      <div id="sheetBar" class="uifloat">
+        <span class="sblbl">Tờ</span>
+        <button class="sh" data-sheet="all" title="Làm việc — thấy hết mọi lớp">Tất cả</button>
+        <button class="sh" data-sheet="light" title="Tờ chiếu sáng: đèn + công tắc + kích thước định vị. Không có ổ cắm.">Chiếu sáng</button>
+        <button class="sh" data-sheet="device" title="Tờ ổ cắm & thiết bị: ổ cắm / mạng / wifi / nguồn chờ. Đèn chỉ hiện mờ để tham chiếu.">Ổ cắm</button>
+      </div>
       <div id="sceneBar" class="uifloat"></div>
       <div id="scaleTag" class="uifloat">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
       <div id="zoombar" class="uifloat">
@@ -1942,14 +1960,15 @@ function dimSegments(stations, ppm){
 /* Vẽ một chuỗi kích thước. isH=true: chuỗi NGANG đặt ở tung độ `line`; ngược lại chuỗi DỌC ở hoành độ `line` */
 function drawDimChain(ov, inv, segs, line, isH, ppm, froms){
   if(!segs.length) return;
-  const col="#6E665A", tick=4.5*inv, ext=3*inv;
+  const col="#6E665A", tick=4.5*inv, ext=3*inv, stub=7*inv;
   const P=(v,cross)=> isH? {x:v, y:cross} : {x:cross, y:v};
-  // đường gióng: từ vị trí đèn (hoặc mép tường) tới đường ghi
+  // ĐƯỜNG GIÓNG NGẮN: chỉ một đoạn cụt bắc qua đường ghi, KHÔNG kéo tới tận đèn.
+  // Kéo tới đèn thì mỗi khu vực thêm cả chục nét cắt ngang mặt bằng → rối mắt, mà cũng
+  // không thêm thông tin gì: vạch xiên trên đường ghi đã chỉ đúng trạm rồi.
   froms.forEach(f=>{
-    const p1=P(f.v, f.from), p2=P(f.v, line);
-    const dir=Math.sign(line-f.from)||1;
-    ov.appendChild(svg("line",{x1:p1.x, y1:p1.y,
-      x2:(isH? p2.x : p2.x+ext*dir), y2:(isH? p2.y+ext*dir : p2.y),
+    const dir=Math.sign(line-f.from)||1;      // hướng từ đèn về đường ghi
+    const p1=P(f.v, line-stub*dir), p2=P(f.v, line+ext*dir);
+    ov.appendChild(svg("line",{x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
       stroke:col, "stroke-width":0.7*inv, opacity:".6"}));
   });
   segs.forEach(sg=>{
@@ -2053,13 +2072,16 @@ function render(){
 
 let exportInv=null; // khi xuất PNG/PDF: cỡ nhãn/nét cố định theo ảnh, bỏ selection/guides
 let exportOpts=null; // preset tờ xuất: {layers:Set, bg?}. null = xem màn hình / xuất đầy đủ
-/* Tờ xuất có lớp này không? Trên màn hình LUÔN có (đang chỉnh). Khi xuất theo preset thì theo preset. */
-function sheetHas(layer){ if(exportInv==null || !exportOpts) return true; return exportOpts.layers.has(layer); }
 /* Hai preset tờ (anh Khoa chốt: khách xem màn hình, thợ in giấy):
-   - TRÌNH BÀY: như hiện nay — đèn + điều khiển + quầng sáng + huy hiệu lux, KHÔNG ổ cắm.
-   - THI CÔNG : ổ cắm + kích thước, TẮT quầng sáng + TẮT huy hiệu lux, nền đậm hơn cho thợ đọc tường. */
+   - CHIẾU SÁNG: đèn + công tắc + đường điều khiển + quầng sáng + lux + kích thước, KHÔNG ổ cắm.
+   - Ổ CẮM    : ổ cắm/mạng/wifi/nguồn chờ; TẮT quầng sáng, lux, đường công tắc và dim đèn;
+                nền đậm hơn cho thợ đọc tường; ĐÈN chỉ còn bóng mờ tham chiếu (ghostLights). */
 const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims"]) };   // không có "devices"
-const SHEET_DEVICE = { layers:new Set(["devices"]), bg:0.9 };   // không glow/lux/wiring, và không dim đèn
+const SHEET_DEVICE = { layers:new Set(["devices"]), bg:0.9, ghostLights:true };
+/* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
+const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE };
+function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
+function sheetHas(layer){ const s=curSheet(); return !s || s.layers.has(layer); }
 function drawOverlay(){
   const ov=$("#overlay"); ov.innerHTML="";
   const inv = exportInv!=null? exportInv : 1/view.scale;
@@ -2158,7 +2180,10 @@ function drawOverlay(){
   if(state.showDims!==false && sheetHas("dims")) drawDims(ov, inv, P);
 
   // ---- lớp 4: ký hiệu đèn (kích thước thật) ----
-  const lblMode=state.labelMode||"compact";
+  // Trên TỜ Ổ CẮM đèn chỉ còn bóng mờ tham chiếu: không mã, không bắt chuột (click xuyên qua để
+  // đặt ổ cắm), để tờ này đọc ra đúng một thứ là hệ ổ cắm — nhưng vẫn thấy đèn mà né.
+  const ghostL = !!(curSheet()||{}).ghostLights;
+  const lblMode=state.labelMode||"compact";   // KHÔNG tắt theo ghostL — nhãn ổ cắm dùng chung biến này
   F().zones.forEach(z=>{
     const seenCode=new Set(); // chế độ "Gọn": mỗi loại chỉ ghi mã 1 lần / khu vực
     // nếu ≥2 model CÙNG loại (cùng ký hiệu) trong khu vực → mã là thứ duy nhất
@@ -2173,8 +2198,9 @@ function drawOverlay(){
       const off=isOff(l);
       const rot=l.rot||0;
       const g=svg("g",{transform:`translate(${l.x},${l.y}) rotate(${rot})`,
-        "data-zid":z.id,"data-li":li, class:"lightm"+(hov&&!sel?" hov":""), style:"cursor:pointer",
-        opacity: off? .35 : 1});
+        "data-zid":z.id,"data-li":li, class:"lightm"+(hov&&!sel?" hov":""),
+        style:ghostL? "pointer-events:none" : "cursor:pointer",
+        opacity: ghostL? .2 : (off? .35 : 1)});
       const hr=Math.max((SYM_SIZE[lamp.type]||0.2)*0.75*P, 12*inv);
       if(sel){
         g.appendChild(svg("circle",{r:hr, fill:C_ACCENT, "fill-opacity":".16",
@@ -2201,7 +2227,7 @@ function drawOverlay(){
       }
       ov.appendChild(g);
       // mã ký hiệu cạnh đèn (D1, S2…) — theo chế độ nhãn: Tất cả / Gọn (1 mã mỗi loại) / Ẩn
-      let showCode = !!lamp.code && lblMode!=="off";
+      let showCode = !ghostL && !!lamp.code && lblMode!=="off";
       if(showCode && lblMode==="compact" && !sel){
         const shared = typeModels[lamp.type] && typeModels[lamp.type].size>1;
         if(!shared){ // loại chỉ có 1 model: 1 mã đại diện là đủ
@@ -2515,6 +2541,7 @@ function drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv){
 function drawLegend(ov, inv, P){
   const fl=F();
   if(state.showLegend===false) return;
+  if(!sheetHas("wiring")) return;   // tờ ổ cắm không vẽ cụm → chú giải cụm ở đó là chữ thừa
   const rows=(fl.circuits||[]).filter(c=> fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
   if(!rows.length) return;
   const rh=15*inv, pad=8*inv, hh=15*inv;
@@ -2734,9 +2761,22 @@ function renderAll(){
   $("#chkWiring").checked=!!state.showWiring;
   $("#chkLegend").checked=state.showLegend!==false;
   $("#chkDims").checked=state.showDims!==false;
-  syncLblSeg(); syncTxtSeg();
+  syncLblSeg(); syncTxtSeg(); syncSheetBar();
   $("#bgControls").classList.toggle("hidden", !F().bg);
 }
+/* ---- chọn tờ đang xem ---- */
+function syncSheetBar(){
+  const s=state.sheet||"all";
+  $$("#sheetBar .sh").forEach(b=>b.classList.toggle("on", b.dataset.sheet===s));
+}
+function setSheet(s, quiet){
+  if((state.sheet||"all")===s) return;
+  state.sheet=s; save(); renderAll();
+  if(!quiet) toast(s==="light"? "Tờ CHIẾU SÁNG — ổ cắm đang ẩn"
+    : s==="device"? "Tờ Ổ CẮM — đèn chỉ hiện mờ tham chiếu"
+    : "Xem tất cả các lớp");
+}
+$$("#sheetBar .sh").forEach(b=> b.onclick=()=>setSheet(b.dataset.sheet));
 
 /* =========================== VIEW =========================== */
 function zoomAt(factor, px, py){
@@ -2758,6 +2798,10 @@ function fitView(){
 
 /* =========================== TOOLS =========================== */
 function setTool(t){
+  // đang xem một tờ mà lớp của công cụ bị ẩn thì thoát về "Tất cả" — nếu không, anh đặt ổ cắm
+  // trên tờ Chiếu sáng sẽ không thấy gì hiện ra và tưởng app hỏng
+  if(t==="device" && !sheetHas("devices")) setSheet("all", true);
+  else if((t==="light"||t==="switch") && (curSheet()||{}).ghostLights) setSheet("all", true);
   tool=t; draft=null;
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
   popOpen=true;            // đổi công cụ thì mở lại bảng chọn mẫu
@@ -2770,7 +2814,6 @@ function setTool(t){
     poly:"Click từng đỉnh · double-click hoặc Enter để đóng · Esc để huỷ",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
     device:`Click để đặt ${(DEVICE_SPEC[deviceKind]||DEVICE_SPEC.socket).label} · phím 1–9 đổi loại · Esc để xong`,
-    dim:"Click 2 điểm để ghi kích thước · tự bắt tim đèn/công tắc/góc phòng · Esc để xong",
     light: z? (lightById(z.placeLightId).type==="strip"
               ? "Kéo để vẽ dây theo chiều dài thật · click 1 lần = 1 m · Esc để xong"
               : `Click trong khu vực để đặt “${lightById(z.placeLightId).name}” · Esc để xong`)
@@ -4412,8 +4455,15 @@ function csvCell(s){ s=String(s??"");
   if(/^[=+\-@]/.test(s)) s="'"+s; // chặn formula injection khi mở bằng Excel
   return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; }
 
-$("#btnPng").onclick=async()=>{ const url=await composite();
-  downloadURL(url, safeName()+"-"+F().name.replace(/\s+/g,"-")+".png"); toast("Đã xuất ảnh PNG"); };
+/* PNG ra ĐÚNG tờ đang xem — chọn "Chiếu sáng" xuất một file, chọn "Ổ cắm" xuất file thứ hai */
+$("#btnPng").onclick=async()=>{
+  const sh=state.sheet||"all";
+  exportOpts=SHEETS[sh];
+  let url; try{ url=await composite(); } finally { exportOpts=null; }
+  const suf={light:"-chieu-sang", device:"-o-cam"}[sh]||"";
+  downloadURL(url, safeName()+"-"+F().name.replace(/\s+/g,"-")+suf+".png");
+  toast("Đã xuất PNG"+(sh==="light"? " — tờ chiếu sáng" : sh==="device"? " — tờ ổ cắm" : ""));
+};
 
 /* ---- Lưu / mở dự án dạng FILE: mang đi máy khác, gửi đồng nghiệp, backup ---- */
 $("#btnSaveFile").onclick=()=>{
