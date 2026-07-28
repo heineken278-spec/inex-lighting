@@ -541,6 +541,15 @@
   .lp-item .ib:hover{color:var(--ink)}
   .lp-item .ib.dgr:hover{color:var(--danger)}
   .thumbprev{width:56px; height:56px; border-radius:8px; object-fit:cover; border:1px solid var(--line); background:var(--cream)}
+  /* form sửa đèn: KÝ HIỆU (in ra bản vẽ) và ẢNH (nhận mặt sản phẩm) đứng cạnh nhau, có nhãn */
+  .pvcell{display:flex; flex-direction:column; align-items:center; gap:4px; flex:none}
+  .pvcell>svg, .pvcell>img, .pvcell>.ph{width:56px; height:56px; border-radius:8px;
+    border:1px solid var(--line); background:var(--cream); object-fit:cover}
+  .pvcell>svg{color:var(--ink-2); padding:10px; box-sizing:border-box}
+  .pvcell>.ph{display:flex; align-items:center; justify-content:center; border-style:dashed;
+    font-size:9.5px; color:var(--ink-3)}
+  .pvcell>span{font-family:var(--label); font-size:9px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--ink-3)}
 
   /* toast */
   #toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
@@ -729,7 +738,7 @@
         <button class="popx" data-closepop title="Ẩn bảng này (vẫn đặt tiếp được)">✕</button></div>
       <div id="lightKinds"></div>
       <p class="muted" style="font-size:10.5px; margin:10px 0 0; line-height:1.6">
-        Chọn 1 mẫu rồi click lên khu vực để đặt<br>Esc: ẩn bảng · Esc lần nữa: thoát công cụ
+        Chọn 1 mẫu → bảng tự thu, click lên khu vực để đặt<br>Phím L mở lại bảng để đổi mẫu · Esc thoát
       </p>
     </div>
 
@@ -929,11 +938,15 @@ const DEFAULT_LIGHTS = [
   {id:"sp12", code:"SO22", type:"spot", name:"SO22", lumen:1000, watt:10, beam:24, url:"", thumb:"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCABgAGADASIAAhEBAxEB/8QAHAAAAQUBAQEAAAAAAAAAAAAAAgEDBAYHAAUI/8QAMRAAAQMDAgQDBwQDAAAAAAAAAQACAwQFEQYSITFBUQcTYRQiI1JxgZEyQnLBobHR/8QAFwEBAQEBAAAAAAAAAAAAAAAAAAECA//EABcRAQEBAQAAAAAAAAAAAAAAAAABEQL/2gAMAwEAAhEDEQA/ANFCIIAUoKoMLkOV2UC5XZQkooWOkkaxnNxwiYUFcs/8RdaXfQ2oWtrrKypsc+BBUwyEOz1Dicjd6cF7+ltX2nUtMx9BPtncMmnl92Rv26/UZRcWFckyhLkBEoS5JuQkoEDkoKQRu7IhGeyDsrspfLd2S+UeyAc5XqWeEAumd091qgMhc9wa0cScL2iBDA2NvJowpasiHe6SkudFLR3CCKoppBh8cjcgrFNV+GNwt7ZZtE1W3cdwhleRJEBxDY5Oo/lx4cytoqJOPNRCclYjVjL/AA61nd5K8af1hQ1NNc2+7DUSR7RP6HpnsRwP+9KJwnzHuYMtBIORkcj3TZid2XSMGiUJcnDE7smzE7sgsgpYuyIUsXZGAiAUAeyw9kbKSJx4NyiATNmdVS2h5nBZV75W+8McnuDftjapbiyHHwxRO+GQXN546FQqh6zKk1mzRU1PR6qdOx9yqHkueM+S4Yy5x544tz+Ve/b6eqhZPTzMlhkG5r2OBDgeoKy1CynJSQs3yNaCBuOOKhVFbHGCSVndXqR+qrpW0FidK6e2ysDRGf1vOeI+hBH5Ra3BlNA1gAAOAhMEXyBQ6ukq5rbHHHOYanMZLwSORBdy7jKnlal1izDJgi+QITBF8oTxCAhVDgRBCuygMKtamvNZY7hT1UfvUTm7ZWu/TwPE+mM/jKsBkwVDuVJTXKmNPWMEkRIJb3U6mxZceZf6LS+raWOPUltZKWj3HnIczPyvaQRyCrFo8MbNZ5d2ndWXOig3FzqeZ8csZ4/K5ox9efqnPE3UjNLG3zNpGzwz72yNDtpGNuCOnUqoQ+K1gkaPOgroX9fhtcB9w7+lMq7GmVmmLVUUjoa69zHe3DnUxaw/bg7Cc01Z9K6Rp5ItMWtsTpMb3jJc/wDk9xLjzKy+TxWsDMiGCvmcOXw2tB+5d/SuXhfqduqTW1BpBTwwFgjaXbnEnPE/gcEw1YNNXWrvlfPWPAjpId0TYwf3Z6+uB9s9FYyVGhbDAHCCKOMOcXODGhoJPM8OqPzFZMS3TqEpA5cVUdlA92AUqam5YQMSy4TDpjnglkamHDggy/x8cZLRb3H9sjx/gLA3HifovorxhtNVc9PNdRRmV8D95jaMuIxxx3Xzm87ZHNcCCMggpAURW/8AgJmKx1z+rpGj8A/9Xz9Duc8NYC5zjgADJJX0h4RWqptenR7Ywxyzu8zyyOLRyGfVKNFEx6p1kmVFATsYUEtr0812QooKcjKCQm5G5TqQjKoiOYmnxZU0tSFig8mek8wcQqrf9BWa9Nl9rpGNmeMefG0NkHrnHP6q+liB0Q7IM40v4a2fT1U6opfPnnIwH1Ba7Z/HAGFd6alEYwAp4hHZOCPggjCPCMNUgRrgxA0GomghObVwaoP/2Q=="},
   {id:"pn40", code:"P1", type:"panel",     name:"Panel 600×600 40W",     lumen:4000, watt:40, beam:120, url:"", thumb:null},
   {id:"tb18", code:"T1", type:"tube",      name:"Tuýp LED 1m2 18W",      lumen:1900, watt:18, beam:150, url:"", thumb:null},
+  {id:"wl8",  code:"DT1",type:"wall",      name:"Đèn gắn tường 8W",      lumen:600,  watt:8,  beam:60,  url:"", thumb:null, mount:"wall", defMh:2.0},
   {id:"pd6",  code:"PD1",type:"pendant",   name:"Đèn thả trang trí 6W",  lumen:400,  watt:6,  beam:120, url:"", thumb:null},
   {id:"ch45", code:"CH1",type:"chandelier",name:"Đèn chùm thả bàn ăn 45W",lumen:2500, watt:45, beam:150, url:"", thumb:null},
   {id:"st10", code:"LD1",type:"strip",     name:"LED dây hắt khe 10W/m", lumen:800,  watt:10, beam:120, url:"", thumb:null},
 ];
-const CODE_PREFIX={downlight:"D", panel:"P", tube:"T", spot:"S", pendant:"PD", chandelier:"CH", strip:"LD"};
+/* "wall" = ĐÈN TƯỜNG, một LOẠI riêng chứ không phải downlight/spot xoay ngang: ký hiệu mặt bằng
+   khác hẳn (nửa đĩa áp tường), mã riêng nên tách được dòng trong bảng vật tư. Chỉ đèn tường và
+   tuýp mới gắn tường được — downlight/rọi thì không (anh Khoa chốt). */
+const CODE_PREFIX={downlight:"D", panel:"P", tube:"T", wall:"DT", spot:"S", pendant:"PD", chandelier:"CH", strip:"LD"};
 /* Mã ký hiệu tự sinh: D1, D2… — phân biệt 2 model cùng loại trên mặt bằng (chuẩn bản vẽ ME) */
 function autoCode(type, lights){
   const p=CODE_PREFIX[type]||"X"; let n=1;
@@ -961,7 +974,7 @@ const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C"
 const TEXT_SCALES = {nho:1.0, vua:1.3, lon:1.7};
 function textScale(){ return TEXT_SCALES[state && state.textScale] || TEXT_SCALES.vua; }
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
-const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, spot:0.14, pendant:0.28,
+const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, wall:0.24, spot:0.14, pendant:0.28,
                   chandelier:0.42, strip:1.0};
 
 /* =========================== STATE =========================== */
@@ -1554,7 +1567,14 @@ function wallMetrics(z, light){
   const tilt = clamp(light.tilt||0, 0, 80);
   const Hc = z.ceilH||2.8;
   let foot, dPx, seg, tFoot;
-  if(tilt>0 || light.aim){ // nghiêng HOẶC đã ghim tường: đo theo HƯỚNG mũi tên (không nhảy tường)
+  if(isWall(light, lamp)){
+    // Đèn GẮN TƯỜNG: diện cần xét là CHÍNH bức tường nó bám vào. Đi theo hướng phát sáng như đèn
+    // rọi trần sẽ đo sang tường ĐỐI DIỆN (cách vài mét, chùm không tới) → mặt cắt vẽ đèn lơ lửng
+    // giữa phòng còn giá đỡ thì dính vào bức tường bên kia.
+    const w=nearestWall(light, z.poly);
+    if(!w) return null;
+    foot={x:w.fx, y:w.fy}; dPx=w.d; seg=w; tFoot=w.t;
+  } else if(tilt>0 || light.aim){ // nghiêng HOẶC đã ghim tường: đo theo HƯỚNG mũi tên (không nhảy tường)
     const r=(light.rot||0)*Math.PI/180;
     const hit=rayHitPoly(light, {x:Math.sin(r), y:-Math.cos(r)}, z.poly);
     if(!hit) return null;
@@ -1665,13 +1685,30 @@ function elevationSVG(z, light){
   const hits=wm.hits, hT=wm.hTop||0, hB=wm.hBottom||0;
   const F=`font-family="JetBrains Mono,monospace"`;              // số liệu
   const F2=`font-family="Inter,sans-serif" font-weight="500"`;   // chữ tiếng Việt (mono thiếu glyph "ờ")
-  let cone;
-  if(hits){
-    cone = hB>0.01? `${X(d)},${Y(Hl)} ${X(0)},${Y(hT)} ${X(0)},${Y(hB)}`
-                  : `${X(d)},${Y(Hl)} ${X(0)},${Y(hT)} ${X(0)},${Y(0)} ${X(xF)},${Y(0)}`;
-  } else {
-    cone = `${X(d)},${Y(Hl)} ${X(Math.max(0,d-Hl*tanN))},${Y(0)} ${X(xF)},${Y(0)}`;
-  }
+  /* NÓN SÁNG THẬT — dò tia: mỗi tia rời đèn dừng ở vật cản ĐẦU TIÊN (tường / nóc tủ / mặt tủ / sàn).
+     Bản cũ vẽ nón bằng đúng phần vệt ăn LÊN TƯỜNG nên sai cả hai đầu: hạ tủ xuống thấp thì nón teo
+     thành một lát mỏng (đèn 36° mà ra tia kim), còn tủ cao thì nón lại xuyên qua tủ xuống sàn.
+     Dò tia xử đúng cả hai, và cho thấy phần sáng rơi lên NÓC TỦ — lý do vệt tường ngắn lại. */
+  const cabB = wm.cab? (wm.cab.bot||0) : 0;
+  const hitAt=(phi)=>{
+    const t=Math.tan(clamp(phi,-1.53,1.53));
+    let drop=Hl, x=d-Hl*t;                                    // mặc định: rơi tới SÀN
+    const take=(dr,xx)=>{ if(dr>=0 && dr<drop-1e-6){ drop=dr; x=xx; } };
+    if(t>1e-6 && d/t<Hl) take(d/t, 0);                        // chạm TƯỜNG
+    if(wm.cab){
+      if(Hl>wm.cab.top){                                      // chạm NÓC tủ
+        const dr=Hl-wm.cab.top, xx=d-dr*t;
+        if(xx>=-1e-6 && xx<=wm.cab.dep) take(dr, Math.max(0,xx));
+      }
+      if(t>1e-6 && d>wm.cab.dep){                             // chạm MẶT TRƯỚC tủ
+        const dr=(d-wm.cab.dep)/t, yy=Hl-dr;
+        if(yy>=cabB && yy<=wm.cab.top) take(dr, wm.cab.dep);
+      }
+    }
+    return {x, y:Math.max(0, Hl-drop)};
+  };
+  let cone=`${X(d)},${Y(Hl)}`;
+  for(let i=0;i<=20;i++){ const p=hitAt(phiF+(phiN-phiF)*i/20); cone+=` ${X(p.x)},${Y(p.y)}`; }
   // trục quang khi đèn nghiêng
   let axis="";
   if(tilt>0){
@@ -1757,6 +1794,9 @@ function symbolShapes(type, P, len, mnt){
     const L=0.6*P, w=0.04*P;
     s.push({tag:"rect", attrs:{x:-L,y:-w,width:L*2,height:w*2}});
     s.push({tag:"line", attrs:{x1:0,y1:-w*2.4,x2:0,y2:w*2.4}});
+  } else if(type==="wall"){   // ĐÈN TƯỜNG: nửa đĩa ĐẶC mở vào phòng, cạnh phẳng áp mặt tường
+    const r=0.11*P;           // đặc để không lẫn với vòng tròn rỗng của đèn thả
+    s.push({tag:"path", attrs:{d:`M${(-r).toFixed(1)},0 A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${r.toFixed(1)},0 Z`}, fill:true});
   } else if(type==="spot"){
     const r=0.05*P;
     s.push({tag:"circle", attrs:{r:r}, fill:true});
@@ -2026,7 +2066,7 @@ function nextDeviceCode(kind){
 /* Icon ký hiệu cho UI — scale + căn tâm theo từng loại để KHỚP ký hiệu trên mặt bằng
    (spot có mũi tên dài lệch tâm — phải dịch xuống, không thì bị cắt mất mũi tên) */
 const ICON_SPEC={downlight:{s:0.28,cy:0}, panel:{s:0.64,cy:0}, tube:{s:1.28,cy:0},
-                 spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
+                 wall:{s:0.30,cy:0}, spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
                  chandelier:{s:0.48,cy:0}, strip:{s:1.06,cy:0}};
 function symbolIconSVG(type, cls, mnt){
   const spec=ICON_SPEC[type]||{s:0.3,cy:0};
@@ -2841,9 +2881,12 @@ function renderLightPop(){
       const zz=selZone();
       if(zz){ zz.placeLightId=l.id; pickLightId=null; }   // có khu vực → gán thẳng cho khu vực đó
       else pickLightId=l.id;                              // chưa có → nhớ tạm, dùng cho lần đặt tới
-      save(); renderAll(); renderLightPop();
-      showHint(zz? `Đèn đang đặt: “${l.name}” · click lên khu vực để đặt · Esc để xong`
-                 : `Đã chọn “${l.name}” · click vào một khu vực để đặt · Esc để xong`); };
+      // Chọn xong mẫu là bảng TỰ THU về — việc kế tiếp là click lên mặt bằng, mà bảng lại đang
+      // che chính chỗ cần click. Muốn đổi mẫu thì bấm lại nút đặt đèn (hoặc phím L).
+      popOpen=false; syncPops();
+      save(); renderAll();
+      showHint(zz? `Đèn đang đặt: “${l.name}” · click lên khu vực để đặt · L để đổi mẫu · Esc để xong`
+                 : `Đã chọn “${l.name}” · click vào một khu vực để đặt · L để đổi mẫu · Esc để xong`); };
     box.appendChild(b);
   });
   const add=document.createElement("button");
@@ -4260,9 +4303,13 @@ function openLibrary(pickMode){
     const b=m.querySelector("#libBody");
     const l=existing||{name:"",type:"downlight",beam:60,lumen:"",watt:12,url:"",thumb:null};
     b.innerHTML=`
-      <div class="inline" style="gap:12px">
-        <img id="nfThumbPrev" class="thumbprev ${l.thumb?"":"hidden"}" src="${l.thumb||""}">
-        <svg id="nfThumbIcon" class="thumbprev ${l.thumb?"hidden":""}" viewBox="-14 -14 28 28" style="color:var(--ink-2);padding:10px"></svg>
+      <!-- KÝ HIỆU và ẢNH là hai thứ khác nhau: ký hiệu là cái IN RA bản vẽ (phải luôn thấy khi sửa,
+           để biết loại đang chọn vẽ ra hình gì), ảnh chỉ để nhận mặt sản phẩm. Trước đây có ảnh là
+           ký hiệu bị ẩn đi → sửa đèn mà không biết nó vẽ ra sao. -->
+      <div class="inline" style="gap:12px; align-items:flex-start">
+        <div class="pvcell"><svg id="nfThumbIcon" viewBox="-14 -14 28 28"></svg><span>Ký hiệu</span></div>
+        <div class="pvcell"><img id="nfThumbPrev" src="${l.thumb||""}" class="${l.thumb?"":"hidden"}">
+          <div id="nfThumbNone" class="ph ${l.thumb?"hidden":""}">chưa có</div><span>Ảnh</span></div>
         <div style="flex:1">
           <button class="btn sm" id="nfThumbBtn" style="width:100%">⤒ Ảnh thumbnail…</button>
           <input type="file" id="nfThumbFile" accept="image/*" class="hidden">
@@ -4295,11 +4342,14 @@ function openLibrary(pickMode){
     const refreshIcon=()=>{ icon.innerHTML="";
       const tmp=symbolIconSVG(b.querySelector("#nfType").value, null, mount);
       icon.innerHTML=tmp.innerHTML; };
-    // Chỉ TUÝP + LED DÂY được gắn tường (anh Khoa chốt). Loại khác: ẩn nút, ép về trần.
-    const wallOK=t=> t==="tube" || t==="strip";
+    // Đèn TƯỜNG luôn gắn tường (không cần hỏi). TUÝP thì ốp trần hay gắn tường đều được → cho chọn.
+    // LED DÂY bỏ phân biệt trần/tường (anh Khoa chốt): nó đi trong hốc/khe, gắn đâu cũng vẽ và bóc
+    // tách y nhau. Loại còn lại (downlight, rọi, thả, chùm, panel): luôn trần.
+    const wallFixed=t=> t==="wall";
+    const wallOK=t=> t==="tube";
     const syncMount=()=>{
       const t=b.querySelector("#nfType").value;
-      if(!wallOK(t)) mount="ceiling";
+      if(wallFixed(t)) mount="wall"; else if(!wallOK(t)) mount="ceiling";
       b.querySelector("#nfMountRow").classList.toggle("hidden", !wallOK(t));
       b.querySelectorAll("#nfMount button").forEach(x=>x.classList.toggle("on", x.dataset.mt===mount));
       b.querySelector("#nfMhRow").classList.toggle("hidden", mount!=="wall"); refreshIcon(); };
@@ -4319,14 +4369,15 @@ function openLibrary(pickMode){
           ctx.drawImage(img,(S-img.width*sc)/2,(S-img.height*sc)/2,img.width*sc,img.height*sc);
           thumb=cv.toDataURL("image/jpeg",0.8);
           const pv=b.querySelector("#nfThumbPrev"); pv.src=thumb; pv.classList.remove("hidden");
-          icon.classList.add("hidden"); b.querySelector("#nfThumbDel").classList.remove("hidden");
+          b.querySelector("#nfThumbNone").classList.add("hidden");
+          b.querySelector("#nfThumbDel").classList.remove("hidden");
         };
         img.src=rd.result; };
       rd.readAsDataURL(f);
     });
     b.querySelector("#nfThumbDel").onclick=()=>{ thumb=null;
       b.querySelector("#nfThumbPrev").classList.add("hidden");
-      icon.classList.remove("hidden");
+      b.querySelector("#nfThumbNone").classList.remove("hidden");
       b.querySelector("#nfThumbDel").classList.add("hidden"); };
     b.querySelector("#nfBack").onclick=renderLib;
     b.querySelector("#nfSave").onclick=()=>{
@@ -4367,8 +4418,8 @@ function openLibrary(pickMode){
     };
   }
 }
-function typeLabel(t){ return {downlight:"Downlight",panel:"Panel",tube:"Tuýp",spot:"Rọi/Spot",
-  pendant:"Đèn thả",chandelier:"Đèn chùm",strip:"LED dây"}[t]||t; }
+function typeLabel(t){ return {downlight:"Downlight",panel:"Panel",tube:"Tuýp",wall:"Đèn tường",
+  spot:"Rọi/Spot",pendant:"Đèn thả",chandelier:"Đèn chùm",strip:"LED dây"}[t]||t; }
 
 /* =========================== BACKGROUND =========================== */
 $("#btnUpload").onclick=()=>$("#fileInput").click();
