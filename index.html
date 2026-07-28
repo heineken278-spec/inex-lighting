@@ -222,18 +222,20 @@
   #floorBar .fladd{border:1px dashed var(--line); background:transparent; cursor:pointer;
     border-radius:7px; width:28px; height:26px; color:var(--ink-3); font-size:14px; flex-shrink:0}
   #floorBar .fladd:hover{border-color:var(--accent); color:var(--accent-dark)}
-  /* chọn TỜ đang xem — tách bản vẽ chiếu sáng và bản vẽ ổ cắm thành 2 tờ riêng.
-     Nằm ngay dưới thanh tầng: cùng là "đang xem cái gì", đọc một mạch từ trên xuống. */
-  #sheetBar{position:absolute; left:14px; top:56px; z-index:15; display:flex; gap:3px;
-    align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
-    padding:4px; box-shadow:var(--shadow); max-width:calc(100% - 28px)}
-  #sheetBar .sblbl{font-family:var(--label); font-size:9px; font-weight:700; letter-spacing:.09em;
-    text-transform:uppercase; color:var(--ink-3); padding:0 5px 0 4px; white-space:nowrap}
-  #sheetBar .sh{border:none; background:transparent; cursor:pointer; border-radius:7px;
-    padding:4px 9px; font-family:var(--label); font-size:11px; font-weight:600;
-    color:var(--ink-2); white-space:nowrap}
-  #sheetBar .sh:hover{background:var(--cream); color:var(--ink)}
-  #sheetBar .sh.on{background:var(--ink); color:#fff}
+  /* chọn TỜ đang xem — NẰM CHUNG một thanh với tầng: hai hộp nổi chồng nhau ở góc trái làm
+     bản vẽ rối và khó biết cái nào thuộc cái nào. Một thanh, hai nhóm, ngăn bằng vạch mảnh. */
+  #floorBar .flgrp{display:flex; gap:5px; align-items:center}
+  #floorBar .bsep{width:1px; align-self:stretch; background:var(--line); margin:2px 5px}
+  #floorBar .sblbl{font-family:var(--label); font-size:10.5px; font-weight:600;
+    color:var(--ink-3); padding-right:2px; white-space:nowrap}
+  #floorBar .sh{border:none; background:transparent; cursor:pointer; border-radius:7px;
+    padding:5px 9px; font-family:var(--label); font-size:11.5px; font-weight:600;
+    color:var(--ink-2); white-space:nowrap; flex-shrink:0}
+  #floorBar .sh:hover{background:var(--cream); color:var(--ink)}
+  /* "Tất cả" là trạng thái mặc định → nền kem lặng. Đang lọc tờ thì tô VÀNG: nhìn thanh là
+     biết ngay bản vẽ đang ẩn bớt thứ gì đó, không bao giờ tưởng app mất lớp. */
+  #floorBar .sh.on{background:var(--cream); color:var(--ink); box-shadow:inset 0 0 0 1px var(--line)}
+  #floorBar .sh.on.filt{background:var(--accent); color:#fff; box-shadow:none}
   /* dải kịch bản — khách bấm xem từng cảnh sáng */
   #sceneBar{position:absolute; left:14px; bottom:52px; z-index:15; display:flex; gap:5px;
     align-items:center; background:var(--bg); border:1px solid var(--line); border-radius:10px;
@@ -748,8 +750,9 @@
         <img id="bg" alt="">
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
-      <div id="floorBar" class="uifloat"></div>
-      <div id="sheetBar" class="uifloat">
+      <div id="floorBar" class="uifloat">
+        <div class="flgrp" id="flList"></div>
+        <span class="bsep"></span>
         <span class="sblbl">Tờ</span>
         <button class="sh" data-sheet="all" title="Làm việc — thấy hết mọi lớp">Tất cả</button>
         <button class="sh" data-sheet="light" title="Tờ chiếu sáng: đèn + công tắc + kích thước định vị. Không có ổ cắm.">Chiếu sáng</button>
@@ -974,7 +977,7 @@ const ZONE_COLORS = ["#C78F57","#7C9A8E","#9A7C86","#8A9BB0","#B0975C","#88997C"
 const TEXT_SCALES = {nho:1.0, vua:1.3, lon:1.7};
 function textScale(){ return TEXT_SCALES[state && state.textScale] || TEXT_SCALES.vua; }
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
-const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, wall:0.24, spot:0.14, pendant:0.28,
+const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, wall:0.16, spot:0.14, pendant:0.28,
                   chandelier:0.42, strip:1.0};
 
 /* =========================== STATE =========================== */
@@ -1794,10 +1797,9 @@ function symbolShapes(type, P, len, mnt){
     const L=0.6*P, w=0.04*P;
     s.push({tag:"rect", attrs:{x:-L,y:-w,width:L*2,height:w*2}});
     s.push({tag:"line", attrs:{x1:0,y1:-w*2.4,x2:0,y2:w*2.4}});
-  } else if(type==="wall"){   // ĐÈN TƯỜNG: nửa đĩa ĐẶC mở vào phòng, cạnh phẳng áp mặt tường
-    const r=0.11*P;           // đặc để không lẫn với vòng tròn rỗng của đèn thả
-    s.push({tag:"path", attrs:{d:`M${(-r).toFixed(1)},0 A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${r.toFixed(1)},0 Z`}, fill:true});
-  } else if(type==="spot"){
+  } else if(type==="spot" || type==="wall"){
+    // Đèn tường dùng CHÍNH ký hiệu đèn rọi (anh Khoa chốt) — phần "gạch tường" phía sau do khối
+    // mnt==="wall" bên dưới thêm vào, nên đọc ra ngay là "đèn rọi bắt trên mặt tường".
     const r=0.05*P;
     s.push({tag:"circle", attrs:{r:r}, fill:true});
     s.push({tag:"line", attrs:{x1:0,y1:-r,x2:0,y2:-r-0.2*P}});
@@ -2037,8 +2039,10 @@ function drawDimChain(ov, inv, segs, line, isH, ppm, froms){
   });
 }
 /* Sinh + vẽ kích thước định vị cho MỌI khu vực có đèn của tầng đang xem */
-function drawDims(ov, inv, P){
+function drawDims(ov0, inv, P){
   const fl=F(); const ppm=fl.pxPerMeter; if(!ppm) return;
+  // gom vào một nhóm không bắt chuột: kích thước là chú thích, không phải đối tượng để click
+  const ov=svg("g",{style:"pointer-events:none"}); ov0.appendChild(ov);
   const tol=DIM_ALIGN_TOL*ppm;
   fl.zones.forEach(z=>{
     if(!z.lights.length) return;
@@ -2066,7 +2070,7 @@ function nextDeviceCode(kind){
 /* Icon ký hiệu cho UI — scale + căn tâm theo từng loại để KHỚP ký hiệu trên mặt bằng
    (spot có mũi tên dài lệch tâm — phải dịch xuống, không thì bị cắt mất mũi tên) */
 const ICON_SPEC={downlight:{s:0.28,cy:0}, panel:{s:0.64,cy:0}, tube:{s:1.28,cy:0},
-                 wall:{s:0.30,cy:0}, spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
+                 wall:{s:0.35,cy:-0.083}, spot:{s:0.35,cy:-0.11}, pendant:{s:0.3,cy:0},
                  chandelier:{s:0.48,cy:0}, strip:{s:1.06,cy:0}};
 function symbolIconSVG(type, cls, mnt){
   const spec=ICON_SPEC[type]||{s:0.3,cy:0};
@@ -2153,7 +2157,9 @@ function drawOverlay(){
   if(state.showGlow && sheetHas("glow")) F().zones.forEach(z=>{
     if(!z.lights.length) return;
     // ánh sáng không xuyên tường: cắt toàn bộ quầng sáng theo ranh khu vực
-    const gz=svg("g",{"clip-path":`url(#zclip-${z.id})`});
+    // pointer-events:none — quầng sáng phủ gần hết mặt sàn, để nó bắt chuột thì click đâu cũng
+    // trúng quầng chứ không trúng khu vực bên dưới
+    const gz=svg("g",{"clip-path":`url(#zclip-${z.id})`, style:"pointer-events:none"});
     z.lights.forEach(l=>{
       if(isOff(l)) return; // đèn tắt trong kịch bản: không có quầng sáng
       const lamp=lightById(l.lightId), r=glowRadius(z,lamp,l);
@@ -2698,13 +2704,14 @@ function renameFloor(i){
   if(v!==null && v.trim()) mutate(()=>{ f.name=v.trim(); });
 }
 function renderFloorBar(){
-  const bar=$("#floorBar"); bar.innerHTML="";
+  const bar=$("#flList"); bar.innerHTML="";
   state.floors.forEach((f,i)=>{
     const b=document.createElement("button");
     b.className="fl"+(i===state.cur?" on":"");
     b.title="Click: chuyển tầng · Double-click: đổi tên";
-    const n=f.zones.reduce((s,z)=>s+z.lights.length,0);
-    b.innerHTML=`${escapeHtml(f.name)}<span class="meta" style="opacity:.6;font-size:10px">${n||""}</span>`;
+    // KHÔNG ghi số đèn cạnh tên tầng (anh Khoa) — con số đó đã có trong bảng tổng hợp bên phải,
+    // ở đây nó chỉ làm nút tầng dài ra và trông như một phần của tên.
+    b.textContent=f.name;
     if(!f.pxPerMeter && f.zones.length){
       const d=document.createElement("span"); d.className="dot"; d.title="Tầng này chưa cân tỉ lệ"; b.appendChild(d);
     }
@@ -2807,7 +2814,10 @@ function renderAll(){
 /* ---- chọn tờ đang xem ---- */
 function syncSheetBar(){
   const s=state.sheet||"all";
-  $$("#sheetBar .sh").forEach(b=>b.classList.toggle("on", b.dataset.sheet===s));
+  $$("#floorBar .sh").forEach(b=>{
+    b.classList.toggle("on", b.dataset.sheet===s);
+    b.classList.toggle("filt", b.dataset.sheet===s && s!=="all");
+  });
 }
 function setSheet(s, quiet){
   if((state.sheet||"all")===s) return;
@@ -2816,7 +2826,7 @@ function setSheet(s, quiet){
     : s==="device"? "Tờ Ổ CẮM — đèn chỉ hiện mờ tham chiếu"
     : "Xem tất cả các lớp");
 }
-$$("#sheetBar .sh").forEach(b=> b.onclick=()=>setSheet(b.dataset.sheet));
+$$("#floorBar .sh").forEach(b=> b.onclick=()=>setSheet(b.dataset.sheet));
 
 /* =========================== VIEW =========================== */
 function zoomAt(factor, px, py){
@@ -3233,6 +3243,30 @@ function handlePointerUp(e){
     if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
     renderAll(); return;
   }
+  if(d.mode==="maybe-marquee"){
+    // CLICK (không kéo) lên nền bản vẽ = CHỌN KHU VỰC dưới con trỏ, click ra ngoài thì bỏ chọn.
+    // Trước đây nhánh này không tồn tại: click vào phòng chẳng chọn được gì, phải vào bảng bên phải
+    // — đó là lý do "chọn khu vực khó quá". Và dò theo HÌNH HỌC chứ không theo DOM: quầng sáng,
+    // số kích thước, nhãn… nằm đè lên polygon nên e.target gần như không bao giờ là .zonepoly.
+    const z=zoneAtClick(d.start);
+    const zid=z? z.id : null;
+    if(F().selectedZone!==zid || selLights.length || selSwitch || selDevice){
+      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null;
+      renderAll();
+    }
+    return;
+  }
+}
+/* Khu vực dưới điểm click — chọn cái NHỎ NHẤT chứa điểm, để phòng nhỏ lồng trong phòng lớn
+   (WC trong phòng ngủ, hốc tủ trong phòng khách) vẫn bấm vào được. */
+function zoneAtClick(w){
+  let best=null, bestA=Infinity;
+  F().zones.forEach(z=>{
+    if(!pointInPoly(w.x,w.y,z.poly)) return;
+    const a=shoelace(z.poly);
+    if(a<bestA){ bestA=a; best=z; }
+  });
+  return best;
 }
 window.addEventListener("pointerup", handlePointerUp);
 
@@ -4321,12 +4355,6 @@ function openLibrary(pickMode){
       <div><label>Loại</label><select id="nfType">
         ${Object.keys(CODE_PREFIX).map(t=>`<option value="${t}" ${l.type===t?"selected":""}>${typeLabel(t)}</option>`).join("")}
       </select></div><div><label>Góc chiếu (°)</label><input id="nfBeam" type="number" value="${l.beam}"></div></div>
-      <div id="nfMountRow">
-      <label>Cách lắp</label>
-      <div class="seg" id="nfMount">
-        <button type="button" data-mt="ceiling" title="Âm trần / ốp trần / thả trần">Trần</button>
-        <button type="button" data-mt="wall" title="Gắn trên mặt tường (đèn hắt tường, tuýp gắn tường…)">Tường</button>
-      </div></div>
       <div id="nfMhRow" class="${(l.mount==="wall")?"":"hidden"}"><label>Cao lắp mặc định (m, tính từ sàn)</label>
         <input id="nfMh" type="number" step="0.05" value="${l.defMh??""}" placeholder="VD: 2,0"></div>
       <div class="row"><div><label>Quang thông (lm)</label><input id="nfLm" type="number" value="${l.lumen||""}" placeholder="trống = quy đổi từ W"></div>
@@ -4342,20 +4370,23 @@ function openLibrary(pickMode){
     const refreshIcon=()=>{ icon.innerHTML="";
       const tmp=symbolIconSVG(b.querySelector("#nfType").value, null, mount);
       icon.innerHTML=tmp.innerHTML; };
-    // Đèn TƯỜNG luôn gắn tường (không cần hỏi). TUÝP thì ốp trần hay gắn tường đều được → cho chọn.
-    // LED DÂY bỏ phân biệt trần/tường (anh Khoa chốt): nó đi trong hốc/khe, gắn đâu cũng vẽ và bóc
-    // tách y nhau. Loại còn lại (downlight, rọi, thả, chùm, panel): luôn trần.
-    const wallFixed=t=> t==="wall";
-    const wallOK=t=> t==="tube";
+    // KHÔNG còn nút chọn trần/tường: cách lắp suy thẳng từ LOẠI. Chỉ "Đèn tường" là gắn tường,
+    // mọi loại còn lại (kể cả TUÝP và LED DÂY — anh Khoa chốt) đều là trần. Một trường ít người
+    // điền đúng đã biến mất; muốn đèn gắn tường thì chọn loại "Đèn tường", thế thôi.
     const syncMount=()=>{
-      const t=b.querySelector("#nfType").value;
-      if(wallFixed(t)) mount="wall"; else if(!wallOK(t)) mount="ceiling";
-      b.querySelector("#nfMountRow").classList.toggle("hidden", !wallOK(t));
-      b.querySelectorAll("#nfMount button").forEach(x=>x.classList.toggle("on", x.dataset.mt===mount));
+      mount = b.querySelector("#nfType").value==="wall" ? "wall" : "ceiling";
       b.querySelector("#nfMhRow").classList.toggle("hidden", mount!=="wall"); refreshIcon(); };
-    b.querySelectorAll("#nfMount button").forEach(x=> x.onclick=()=>{ mount=x.dataset.mt; syncMount(); });
     syncMount();
-    b.querySelector("#nfType").addEventListener("change",syncMount);
+    let lastType=l.type||"downlight";
+    b.querySelector("#nfType").addEventListener("change",()=>{
+      const t=b.querySelector("#nfType").value, codeEl=b.querySelector("#nfCode");
+      // mã còn nguyên dạng tự sinh của loại CŨ → sinh lại theo loại mới. Đổi Tuýp sang Đèn tường
+      // mà mã vẫn là "T1" thì vừa đọc sai vừa trùng mã với tuýp thật. Mã anh tự gõ thì giữ nguyên.
+      const oldPre=CODE_PREFIX[lastType]||"X";
+      if(new RegExp("^"+oldPre+"\\d+$","i").test(codeEl.value.trim()))
+        codeEl.value=autoCode(t, state.lights.filter(x=>x!==existing));
+      lastType=t; syncMount();
+    });
     b.querySelector("#nfThumbBtn").onclick=()=>b.querySelector("#nfThumbFile").click();
     b.querySelector("#nfThumbFile").addEventListener("change",e=>{
       const f=e.target.files[0]; if(!f) return;
