@@ -1786,6 +1786,11 @@ function elevationSVG(z, light){
 /* Trả về mảng shapes [{tag, attrs, fill?}] toạ độ quanh (0,0), đơn vị world px.
    mnt="wall" → bọc thêm LƯNG TƯỜNG phía sau đèn: thanh + gạch hatch hướng +Y (hướng tường,
    ngược hướng chiếu (0,-1) tại rot 0). Nhóm đã rotate(l.rot) nên lưng tự xoay theo đèn. */
+/* Khoảng cách từ tâm ký hiệu tới THANH LƯNG TƯỜNG (m). Đèn tường lấy chính thanh lưng này làm
+   GỐC TOẠ ĐỘ (anh Khoa) — đặt/kéo là bám đúng mặt tường, và kích thước định vị đọc ra đúng
+   khoảng cách tới tường chứ không phải tới tâm vòng tròn. */
+const WALL_BACK = 0.055;
+function symbolAnchorDY(P, mnt){ return mnt==="wall" ? -WALL_BACK*P : 0; }
 function symbolShapes(type, P, len, mnt){
   const s=[];
   if(type==="panel"){
@@ -1831,7 +1836,7 @@ function symbolShapes(type, P, len, mnt){
     s.push({tag:"line", attrs:{x1:0,y1:-e,x2:0,y2:e}});
   }
   if(mnt==="wall"){ // đèn GẮN TƯỜNG: thanh lưng + 3 gạch hatch (mặt tường) phía sau đèn
-    const bx=0.13*P, by=0.055*P, t=0.05*P;
+    const bx=0.13*P, by=WALL_BACK*P, t=0.05*P;
     s.push({tag:"line", attrs:{x1:(-bx).toFixed(1), y1:by.toFixed(1), x2:bx.toFixed(1), y2:by.toFixed(1)}});
     for(let i=-1;i<=1;i++){ const cx=i*bx*0.6;
       s.push({tag:"line", attrs:{x1:cx.toFixed(1), y1:by.toFixed(1), x2:(cx-t).toFixed(1), y2:(by+t).toFixed(1)}}); }
@@ -2038,6 +2043,22 @@ function drawDimChain(ov, inv, segs, line, isH, ppm, froms){
     ov.appendChild(t);
   });
 }
+/* Giao điểm của polygon với ĐÚNG đường ghi (ngang y=c → trả các x; dọc x=c → trả các y).
+   Mốc chuỗi kích thước phải là MẶT TƯỜNG THẬT trên đường ghi, không phải mép bounding-box:
+   phòng chữ L hay phòng xoay thì bbox là một cạnh không có thật, và con số ghi ra sẽ lệch với
+   "khoảng cách tới tường" ở bảng bên phải (vốn đo vuông góc tới cạnh gần nhất). */
+function polyCross(poly, c, isH){
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    const a1=isH? a.y:a.x, b1=isH? b.y:b.x;
+    if((a1<=c&&b1>c)||(b1<=c&&a1>c)){
+      const t=(c-a1)/(b1-a1);
+      out.push(isH? a.x+(b.x-a.x)*t : a.y+(b.y-a.y)*t);
+    }
+  }
+  return out.sort((p,q)=>p-q);
+}
 /* Sinh + vẽ kích thước định vị cho MỌI khu vực có đèn của tầng đang xem */
 function drawDims(ov0, inv, P){
   const fl=F(); const ppm=fl.pxPerMeter; if(!ppm) return;
@@ -2045,19 +2066,25 @@ function drawDims(ov0, inv, P){
   const ov=svg("g",{style:"pointer-events:none"}); ov0.appendChild(ov);
   const tol=DIM_ALIGN_TOL*ppm;
   fl.zones.forEach(z=>{
-    if(!z.lights.length) return;
+    // ĐÈN TƯỜNG không vào chuỗi kích thước (anh Khoa): nó đã bám sát tường rồi, ghi thêm một con số
+    // vài chục mm chỉ làm rối và trông như sai số.
+    const pts=z.lights.filter(l=>!isWall(l));
+    if(!pts.length) return;
     const bb=bbox(z.poly);
-    const xs=clusterCoords(z.lights.map(l=>l.x), tol);
-    const ys=clusterCoords(z.lights.map(l=>l.y), tol);
+    const xs=clusterCoords(pts.map(l=>l.x), tol);
+    const ys=clusterCoords(pts.map(l=>l.y), tol);
     // đường ghi nằm TRONG khu vực, sát mép — nhiều phòng liền nhau nên đặt ngoài sẽ đè phòng bên
     const offH=Math.min(0.34*ppm, bb.h*0.14), offV=Math.min(0.34*ppm, bb.w*0.14);
     const lineH=bb.y1-offH, lineV=bb.x0+offV;
-    // chuỗi NGANG: mốc = mép trái khu vực → các cột đèn
-    drawDimChain(ov, inv, dimSegments([bb.x0, ...xs], ppm), lineH, true, ppm,
-      [{v:bb.x0, from:bb.y1}, ...xs.map(x=>({v:x, from:(z.lights.find(l=>Math.abs(l.x-x)<=tol)||{}).y ?? bb.y1}))]);
-    // chuỗi DỌC: mốc = mép trên khu vực → các hàng đèn
-    drawDimChain(ov, inv, dimSegments([bb.y0, ...ys], ppm), lineV, false, ppm,
-      [{v:bb.y0, from:bb.x0}, ...ys.map(y=>({v:y, from:(z.lights.find(l=>Math.abs(l.y-y)<=tol)||{}).x ?? bb.x0}))]);
+    // mốc = MẶT TƯỜNG THẬT tại đúng đường ghi (không phải mép bbox)
+    const cH=polyCross(z.poly, lineH, true),  x0=cH.length? cH[0] : bb.x0;
+    const cV=polyCross(z.poly, lineV, false), y0=cV.length? cV[0] : bb.y0;
+    // chuỗi NGANG: mốc = tường trái → các cột đèn
+    drawDimChain(ov, inv, dimSegments([x0, ...xs], ppm), lineH, true, ppm,
+      [{v:x0, from:bb.y1}, ...xs.map(x=>({v:x, from:(pts.find(l=>Math.abs(l.x-x)<=tol)||{}).y ?? bb.y1}))]);
+    // chuỗi DỌC: mốc = tường trên → các hàng đèn
+    drawDimChain(ov, inv, dimSegments([y0, ...ys], ppm), lineV, false, ppm,
+      [{v:y0, from:bb.x0}, ...ys.map(y=>({v:y, from:(pts.find(l=>Math.abs(l.y-y)<=tol)||{}).x ?? bb.x0}))]);
   });
 }
 /* Mã thiết bị duy nhất theo TOÀN DỰ ÁN (không theo tầng): bảng thống kê gộp mọi tầng, mã trùng
@@ -2206,10 +2233,13 @@ function drawOverlay(){
       const dx=l.x-wm.foot.x, dy=l.y-wm.foot.y, len=Math.hypot(dx,dy)||1;
       const ux=dx/len, uy=dy/len;
       const off=Math.max((SYM_SIZE[wm.lamp.type]||0.2)*P*0.9, 26*inv);
+      // Khoảng cách ghi bằng MILIMET, đúng đơn vị và đúng cách định dạng của chuỗi kích thước trên
+      // mặt bằng — trước đây chỗ này ghi mét ("0,4m") còn dim ghi "400", đọc ra như hai số khác nhau.
+      const dTxt = fmt(Math.round(wm.dM*1000));
       const txt = wm.hits? (wm.hBottom>0.05
-            ? `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hBottom)}→${fmtPlan(wm.hTop)}m`
-            : `${fmtPlan(wm.dM)}m · hắt tường +${fmtPlan(wm.hTop)}m`)
-          : `${fmtPlan(wm.dM)}m · chưa hắt tới tường`;
+            ? `${dTxt} · hắt tường +${fmtPlan(wm.hBottom)}→${fmtPlan(wm.hTop)} m`
+            : `${dTxt} · hắt tường +${fmtPlan(wm.hTop)} m`)
+          : `${dTxt} · chưa hắt tới tường`;
       const anchor = ux>0.35? "start" : ux<-0.35? "end" : "middle";
       addLabel(ov, l.x+ux*off, l.y+uy*off+4*inv, txt, 11*inv,
         wm.hits?C_ACCENT_D:"#8A8175", inv, anchor);
@@ -2243,10 +2273,16 @@ function drawOverlay(){
       const hov=exportInv==null && hoverLight && hoverLight.zid===z.id && hoverLight.li===li;
       const off=isOff(l);
       const rot=l.rot||0;
-      const g=svg("g",{transform:`translate(${l.x},${l.y}) rotate(${rot})`,
+      const mnt = mountOf(l, lamp);
+      const g0=svg("g",{transform:`translate(${l.x},${l.y}) rotate(${rot})`,
         "data-zid":z.id,"data-li":li, class:"lightm"+(hov&&!sel?" hov":""),
         style:ghostL? "pointer-events:none" : "cursor:pointer",
         opacity: ghostL? .2 : (off? .35 : 1)});
+      // đèn tường: cả ký hiệu, vòng chọn lẫn vùng bắt chuột dời cùng nhau vào trong phòng,
+      // để GỐC toạ độ (l.x,l.y) rơi đúng vệt gạch tường
+      const dy=symbolAnchorDY(P, mnt);
+      const g = dy? svg("g",{transform:`translate(0,${dy.toFixed(2)})`}) : g0;
+      if(dy) g0.appendChild(g);
       const hr=Math.max((SYM_SIZE[lamp.type]||0.2)*0.75*P, 12*inv);
       if(sel){
         g.appendChild(svg("circle",{r:hr, fill:C_ACCENT, "fill-opacity":".16",
@@ -2261,7 +2297,6 @@ function drawOverlay(){
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
       const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : (cir? cir.color : C_INK);
-      const mnt = mountOf(l, lamp);
       appendSymbol(g, lamp.type, P, symW, symColor, l.len, mnt);
       // vùng bắt chuột (ẩn) — LED dây thêm dải hit dọc theo chiều dài
       const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
@@ -2271,7 +2306,7 @@ function drawOverlay(){
         g.appendChild(svg("rect",{x:-Lp/2, y:-Math.max(0.12*P,10*inv), width:Lp,
           height:Math.max(0.24*P,20*inv), fill:"transparent", class:"hit"}));
       }
-      ov.appendChild(g);
+      ov.appendChild(g0);
       // mã ký hiệu cạnh đèn (D1, S2…) — theo chế độ nhãn: Tất cả / Gọn (1 mã mỗi loại) / Ẩn
       let showCode = !ghostL && !!lamp.code && lblMode!=="off";
       if(showCode && lblMode==="compact" && !sel){
@@ -2454,6 +2489,11 @@ function drawOverlay(){
       const pstr=draft.pts.map(p=>`${p.x},${p.y}`).join(" ");
       ov.appendChild(svg("polyline",{points:pstr,fill:"none",stroke:C_ACCENT,
         "stroke-width":2*inv,"stroke-dasharray":`${5*inv},${4*inv}`}));
+      // cạnh đang kéo tới con trỏ — giữ Shift thì thấy ngay nó bị ép thẳng/45°
+      if(draft.cur){ const a=draft.pts[draft.pts.length-1];
+        ov.appendChild(svg("line",{x1:a.x,y1:a.y,x2:draft.cur.x,y2:draft.cur.y,
+          stroke:C_ACCENT,"stroke-width":1.6*inv,"stroke-dasharray":`${3*inv},${3*inv}`,opacity:".7"}));
+      }
       draft.pts.forEach(pt=>ov.appendChild(svg("circle",{cx:pt.x,cy:pt.y,r:4.5*inv,fill:C_ACCENT})));
     }
     if(draft.type==="rect" && draft.pts.length===2){
@@ -2859,9 +2899,9 @@ function setTool(t){
   updateCursor();
   const z=selZone();
   const hints={
-    calibrate:"Click 2 điểm trên một cạnh đã biết chiều dài · Esc để huỷ",
+    calibrate:"Click 2 điểm trên một cạnh đã biết chiều dài · giữ Shift để canh thẳng · Esc để huỷ",
     rect:"Kéo chuột để tạo khu vực · Esc để huỷ",
-    poly:"Click từng đỉnh · double-click hoặc Enter để đóng · Esc để huỷ",
+    poly:"Click từng đỉnh · giữ Shift để canh thẳng 0/45/90° · double-click hoặc Enter để đóng",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
     device:`Click để đặt ${(DEVICE_SPEC[deviceKind]||DEVICE_SPEC.socket).label} · phím 1–9 đổi loại · Esc để xong`,
     light: z? (lightById(z.placeLightId).type==="strip"
@@ -3032,7 +3072,7 @@ vp.addEventListener("pointerdown", e=>{
 
   if(tool==="calibrate"){
     if(!draft||draft.type!=="calibrate") draft={type:"calibrate",pts:[]};
-    draft.pts.push(w);
+    draft.pts.push(orthoSnap(w, draft.pts[0], e.shiftKey));
     if(draft.pts.length===2) openCalibrateModal();
     render(); return;
   }
@@ -3040,7 +3080,8 @@ vp.addEventListener("pointerdown", e=>{
   if(tool==="poly"){
     if(!draft||draft.type!=="poly") draft={type:"poly",pts:[]};
     const last=draft.pts[draft.pts.length-1];
-    if(!last || Math.hypot(w.x-last.x,w.y-last.y)>3/view.scale) draft.pts.push(w);
+    const p=orthoSnap(w, last, e.shiftKey);
+    if(!last || Math.hypot(p.x-last.x,p.y-last.y)>3/view.scale) draft.pts.push(p);
     render(); return;
   }
   if(tool==="switch"){ addSwitchAt(w); return; }
@@ -3123,6 +3164,12 @@ window.addEventListener("pointermove", e=>{
       if(canBat) canBat.classList.add("hov");
     }
     hoverLight=hit;
+  }
+  // xem trước cạnh đang vẽ đa giác (kể cả khi giữ Shift) — không có nó thì Shift là thao tác mù
+  if(!drag && tool==="poly" && draft && draft.type==="poly" && draft.pts.length){
+    const from=draft.pts[draft.pts.length-1];
+    const p=orthoSnap(screenToWorld(e.clientX,e.clientY), from, e.shiftKey);
+    if(!draft.cur || Math.abs(draft.cur.x-p.x)>0.4 || Math.abs(draft.cur.y-p.y)>0.4){ draft.cur=p; render(); }
   }
   if(!drag) return;
   // pointerup bị nuốt (Alt+Tab giữa drag...): kết thúc drag như một cú nhả chuột bình thường
@@ -3494,6 +3541,20 @@ function renderZoneList(){
 }
 
 /* =========================== LIGHT PLACEMENT =========================== */
+/* Giữ SHIFT khi vẽ: ép điểm mới thẳng hàng với điểm trước theo 0 / 45 / 90°.
+   Trên trục ngang-dọc thì CHIẾU vuông góc (giữ đúng vị trí con trỏ theo trục đó) — vẽ tay không
+   bao giờ ra được góc 90° chuẩn, mà tường thì gần như luôn vuông. */
+function orthoSnap(p, from, shift){
+  if(!shift || !from) return p;
+  const dx=p.x-from.x, dy=p.y-from.y;
+  if(!dx && !dy) return p;
+  const step=Math.PI/4, a=Math.round(Math.atan2(dy,dx)/step)*step;
+  const c=Math.cos(a), s=Math.sin(a);
+  if(Math.abs(c)<1e-6) return {x:from.x, y:p.y};   // dọc
+  if(Math.abs(s)<1e-6) return {x:p.x, y:from.y};   // ngang
+  const len=Math.hypot(dx,dy);                      // chéo 45°
+  return {x:from.x+c*len, y:from.y+s*len};
+}
 function zoneAtPoint(w){
   let z=selZone();
   if(!z || !pointInPoly(w.x,w.y,z.poly)){
