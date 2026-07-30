@@ -445,9 +445,12 @@
   .cir.off{opacity:.55}
   .cir.none{border-style:dashed}
   .cir>i{width:9px; height:9px; border-radius:3px; flex-shrink:0}
-  .cir .ckey{width:19px; height:19px; border:1.5px solid; border-radius:5px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
+  /* Cụm nhận diện bằng CHỮ CÁI, không bằng màu (anh Khoa: màu không hiệu quả — và công trường
+     in đen trắng). Ô chữ cái dùng đúng một màu mực cho mọi cụm. */
+  .cir .ckey{width:19px; height:19px; border:1.5px solid var(--line); border-radius:5px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
     font-family:var(--mono); font-size:11px; font-weight:700}
+  .cir.on .ckey, .cir:hover .ckey{border-color:var(--accent)}
   .cir .cnm{cursor:text}
   .cir .cnm:hover{text-decoration:underline dotted}
   .cir .ciredit{border:none;background:transparent;color:var(--ink-3);cursor:pointer;
@@ -462,7 +465,10 @@
   #wallInfo>.grpbox:first-of-type{border-top:none; padding-top:0; margin-top:0}
   .grpbox .gt{font-family:var(--label); font-size:9px; letter-spacing:.09em; text-transform:uppercase;
     color:var(--ink-3); font-weight:700; margin:0 0 7px}
-  .cdot{width:11px; height:11px; border-radius:3px; flex:none; border:1px solid rgba(0,0,0,.08)}
+  .cdot{width:19px; height:19px; border-radius:5px; flex:none; border:1.5px solid var(--line);
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+    font-family:var(--mono); font-size:11px; font-weight:700}
+  .cdot.empty{color:var(--ink-3)}
   /* hàng gán cụm: ô chọn thấp hơn ô nhập thường cho gọn, và có khoảng hở với nhóm bên dưới */
   .cirrow{gap:6px; margin-bottom:2px}
   .cirrow select{flex:1; min-width:0; height:30px; font-size:12.5px; padding:4px 8px}
@@ -1889,6 +1895,12 @@ function appendSwitch(parent, sz, gang, strokeW, color){
 /* ===== THIẾT BỊ (ổ cắm / mạng / TV / wifi / nguồn chờ) — hệ RIÊNG như công tắc, KHÔNG đụng calc() =====
    Danh mục kind: nhãn, tiền tố mã, cao độ mặc định (m), cờ vùng ẩm (cảnh báo IP), cờ nguồn chờ.
    'prov' = nguồn chờ: vẽ NÉT ĐỨT + BẮT BUỘC tên thiết bị (in lên bản vẽ thay hai chữ "nguồn chờ"). */
+/* Cao độ bấm sẵn. Bộ chuẩn 0,3 / 0,6 / 0,9 / 1,2 m là các mốc anh Khoa dùng (ổ sàn nhà, ổ đầu
+   giường/bàn, ổ bàn bếp, ổ trên mặt bàn cao) — chip bấm chứ không gõ, vì trường phải GÕ thì không
+   được điền (đo trên dự án thật: gõ số 3/67, chip 67/67). */
+const DEV_MH_STD = [0.3, 0.6, 0.9, 1.2];
+const DEV_MH_CHIPS = { socket:DEV_MH_STD, socket_wp:DEV_MH_STD, lan:DEV_MH_STD, tv:DEV_MH_STD,
+  socket_floor:[0], wifi:[2.4,2.6], prov:[0.4,1.1,2.0,2.2,2.6] };
 const DEVICE_SPEC = {
   socket:       {label:"Ổ cắm",            prefix:"OC",  mh:0.4},
   socket_wp:    {label:"Ổ cắm chống nước", prefix:"OW",  mh:1.2, wet:true},
@@ -2319,7 +2331,9 @@ function drawOverlay(){
       }
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
-      const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : (cir? cir.color : C_INK);
+      // MÀU KHÔNG còn dùng để phân biệt cụm (anh Khoa: không hiệu quả) — danh tính cụm nằm ở
+      // CHỮ CÁI trong mã ("D2a") và ở giữa mỗi nét đứt. Công trường in đen trắng, chữ mới đọc được.
+      const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : C_INK;
       appendSymbol(g, lamp.type, P, symW, symColor, l.len, mnt, l.vert);
       // vùng bắt chuột (ẩn) — LED dây thêm dải hit dọc theo chiều dài
       const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
@@ -2359,7 +2373,7 @@ function drawOverlay(){
         const vSuffix = (lamp.type==="strip" && l.vert) ? ` ↕${fmtPlan(Math.max(0.3,l.len||1))}m` : "";
         addDragLabel(ov, "L", z.id+":"+li, lx+(l.lx||0), ly+(l.ly||0),
           lamp.code+(cir&&cir.key? cir.key:"")+vSuffix+hSuffix, 8.5*inv,
-          off? "#BDB4A6" : (sel? C_ACCENT_D : (cir? cir.color : "#6E665A")), inv, anch);
+          off? "#BDB4A6" : (sel? C_ACCENT_D : "#6E665A"), inv, anch);
       }
     });
   });
@@ -2385,21 +2399,19 @@ function drawOverlay(){
   }
   wireCircuits.forEach(cid=>{
     const c=circuitById(cid, fl); if(!c) return;
-    const col=c.color||C_ACCENT_D, dash=`${5*inv},${4*inv}`;
+    const col="#8A8175", dash=`${5*inv},${4*inv}`;   // một màu mực duy nhất — cụm nhận ra bằng CHỮ CÁI
     const drawBow=(a,b,op,wd)=>{                // cung cong: nét THẲNG đèn-đèn trông giống ống luồn dây
       const mx=(a.x+b.x)/2,my=(a.y+b.y)/2, nx=-(b.y-a.y),ny=(b.x-a.x);
       const len=Math.hypot(nx,ny)||1, bow=Math.min(len*0.12,40*inv);
       ov.appendChild(svg("path",{ d:`M${a.x},${a.y} Q${(mx+nx/len*bow).toFixed(1)},${(my+ny/len*bow).toFixed(1)} ${b.x},${b.y}`,
         fill:"none", stroke:col, "stroke-width":wd, "stroke-dasharray":dash, opacity:op})); };
-    // chuỗi đèn-với-đèn TRONG TỪNG khu vực: cụm trải nhiều phòng → mỗi phòng một chuỗi, không kéo
-    // cung chéo xuyên tường ngăn (đọc ra như lỗi trên tờ trình bày)
+    // Chuỗi đèn-với-đèn tính trên TOÀN TẦNG, không tách theo khu vực (anh Khoa): một cụm trải 2 phòng
+    // mà nối riêng từng phòng thì hai nửa nằm rời nhau, đọc ra như hai cụm khác nhau. Cung nối liên
+    // phòng chính là thứ nói lên "cụm này chạy qua cả hai phòng".
     const allPts=[];
-    fl.zones.forEach(z=>{
-      const pts=z.lights.filter(l=>l.circuit===cid).map(l=>({x:l.x,y:l.y}));
-      allPts.push(...pts);
-      mstEdges(pts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
-    });
+    fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===cid) allPts.push({x:l.x,y:l.y}); }));
     if(!allPts.length) return;
+    mstEdges(allPts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
     // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất + CHỮ CÁI CỤM ở điểm giữa
     // (danh tính cụm chỉ có màu, mà công trường in đen trắng → chữ cái là thứ đọc được)
     (fl.switches||[]).forEach(sw=>{
@@ -2446,13 +2458,14 @@ function drawOverlay(){
     g.appendChild(svg("circle",{r:Math.max(szD, 14*inv), fill:"transparent", class:"hit"}));
     ov.appendChild(g);
     if(lblMode!=="off"){
-      // Nhãn: mã (OC1…) + số ổ nếu >1; nguồn chờ in TÊN thiết bị + cao độ (ranh giới nghề: dấu chờ
-      // phải có tên, không được là dây sống vô danh trên giấy mang logo INEX).
-      let txt=d.code||spec.prefix||"?";
-      if(d.kind!=="prov" && d.qty>1) txt+="×"+d.qty;
-      if(d.kind==="prov") txt=(d.note? "CHỜ: "+d.note : "CHỜ: ?")+(d.mh!=null? " +"+fmtPlan(d.mh):"");
-      else if(d.mh!=null) txt+=" +"+fmtPlan(d.mh);
-      addDragLabel(ov, "D", d.id, d.x+szD*0.55+3*inv+(d.lx||0), d.y+szD*0.75+7*inv+(d.ly||0),
+      // Nhãn = CAO ĐỘ, không ghi mã (anh Khoa): ổ cắm giống hệt nhau thì đánh số từng cái chỉ rải
+      // thêm hàng chục nhãn "OC7" lên bản vẽ mà thợ chẳng dùng tới — cái thợ cần là ĐẶT CAO BAO NHIÊU.
+      // Số lượng theo phòng đã có ở bảng thống kê. Riêng NGUỒN CHỜ bắt buộc in TÊN thiết bị: dấu chờ
+      // vô danh là lệnh để lại một dây sống vô danh trên giấy mang logo INEX.
+      const txt = d.kind==="prov"
+        ? (d.note? "CHỜ: "+d.note : "CHỜ: ?")+(d.mh!=null? " +"+fmtPlan(d.mh):"")
+        : (d.mh!=null? "+"+fmtPlan(d.mh) : "");
+      if(txt) addDragLabel(ov, "D", d.id, d.x+szD*0.55+3*inv+(d.lx||0), d.y+szD*0.75+7*inv+(d.ly||0),
         txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, "start");
     }
   });
@@ -2472,17 +2485,22 @@ function drawOverlay(){
       !showLux ? `${c.count} đèn · ${cH}`
       : c.actual!=null ? `${Math.round(c.actual)}/${c.E} lx · ${c.count} đèn · ${cH}`
       : `chuẩn ${c.E} lx · ${cH}`) : null;
+    // chỉ vẽ dòng thông số khi ĐANG CHỌN hoặc khi xuất → chỗ cần né cũng tính theo đúng cái sẽ vẽ
+    if(line2 && !active && exportInv==null) line2=null;
+    const ts=textScale();
     const sizeOf=l2=>({
-      lw: Math.max(z.name.length*6.4, (l2||"").length*5.0)*inv + 16*inv,
+      lw: Math.max(z.name.length*6.4, (l2||"").length*5.0)*ts*inv + 12*inv,
       lh: (l2? 31 : 19)*inv,
     });
-    // Thẻ đầy đủ nếu có chỗ thoáng; phòng chật thì HẠ CẤP còn tên (lux vẫn ở panel phải)
-    const full=sizeOf(line2), pFull = line2? placeZoneLabel(z, full.lw, full.lh, inv) : null;
-    let lw=full.lw, lh=full.lh, pos=pFull;
-    if(!line2 || !pFull || !pFull.ok){
+    // Dòng thông số chỉ còn xuất hiện khi ĐANG CHỌN hoặc khi XUẤT — hai lúc đó anh đang cần đọc nó,
+    // nên KHÔNG hạ cấp bỏ nó nữa (logic hạ cấp cũ sinh ra cho cái thẻ nền to, giờ chỉ còn chữ có
+    // quầng trắng, chật một chút vẫn đọc được). Chật thì chỉ mượn khung nhỏ hơn để tìm chỗ thoáng.
+    const size=sizeOf(line2);
+    let lw=size.lw, lh=size.lh;
+    let pos=placeZoneLabel(z, lw, lh, inv);
+    if((!pos || !pos.ok) && line2){
       const sh=sizeOf(null), pSh=placeZoneLabel(z, sh.lw, sh.lh, inv);
-      // ưu tiên thẻ tên (nhỏ, dễ né) trừ khi thẻ đầy đủ vẫn thoáng hơn
-      if(pSh && (!pFull || pSh.ok || pSh.c>pFull.c)){ line2=null; lw=sh.lw; lh=sh.lh; pos=pSh; }
+      if(pSh && (!pos || pSh.c>pos.c)) pos=pSh;
     }
     if(!pos && active) pos={x:bb.x0+5*inv, y:bb.y0+5*inv};
     if(!pos) return;                              // quá chật: panel bên phải vẫn có đủ thông số
@@ -2599,6 +2617,18 @@ function drawTitleBlock(ov, inv, P){
   }
   ov.appendChild(g);
 }
+/* Bề rộng THẬT của một chuỗi ở đúng font/cỡ sắp vẽ — dựng tạm một <text> trong overlay (đang nằm
+   trong DOM ở cả lúc xem lẫn lúc xuất) rồi đo và xoá. Rẻ, và không phải đoán theo số ký tự. */
+function measureText(txt, size, weight){
+  const ov=$("#overlay");
+  const t=svg("text",{x:0,y:0,"font-family":"'Inter',sans-serif",
+    "font-weight":weight||500,"font-size":size*textScale(),
+    style:"visibility:hidden;pointer-events:none"});
+  t.textContent=txt; ov.appendChild(t);
+  let w=0; try{ w=t.getComputedTextLength(); }catch(e){}
+  t.remove();
+  return w;
+}
 /* text trần (không viền) — dùng khi đã có nền thẻ phía dưới */
 function addText(parent, x, y, txt, size, color, anchor, weight){
   size*=textScale();
@@ -2644,18 +2674,25 @@ function placeZoneLabel(z, lw, lh, inv){
 }
 /* Thẻ nhãn khu vực: nền sáng + thanh màu trùng màu zone → thuộc về phòng nào là rõ ngay.
    Kéo được (offset z.lx/ly); pos đã gồm offset. */
+/* Nhãn khu vực TỐI GIẢN (anh Khoa): bỏ hẳn thẻ trắng + viền màu + thanh màu bên trái — cả cụm đó
+   nặng hơn chính cái tên nó đựng. Chỉ còn CHỮ, mờ, có quầng trắng để đọc được trên nền mặt bằng.
+   Dòng thông số (lux · số đèn · trần) chỉ hiện khi khu vực ĐANG CHỌN, hoặc khi xuất tờ có lux —
+   lúc làm việc thì bảng bên phải đã có đủ, in ra cho khách thì mới cần. */
 function drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv){
   const g=svg("g",{class:"dlbl","data-k":"Z","data-r":z.id, style:"cursor:move"});
-  g.appendChild(svg("rect",{x:pos.x, y:pos.y, width:lw, height:lh, rx:3*inv,
-    fill:"#FFFFFF", "fill-opacity":"0.92", stroke:z.color, "stroke-width":1*inv}));
-  g.appendChild(svg("rect",{x:pos.x, y:pos.y, width:2.5*inv, height:lh, fill:z.color}));
-  const tx=pos.x+8*inv;
-  const t1=svg("text",{x:tx, y:pos.y+(line2? 12.5*inv : 12*inv), "text-anchor":"start",
-    "font-family":"'Inter',sans-serif","font-weight":600,"font-size":11*inv, fill:z.color,
-    style:"pointer-events:none"}); t1.textContent=z.name; g.appendChild(t1);
-  if(line2){ const t2=svg("text",{x:tx, y:pos.y+24.5*inv, "text-anchor":"start",
-    "font-family":"'Inter',sans-serif","font-weight":500,"font-size":8.5*inv,
-    fill:ok? "#4B6B39":C_DANGER, style:"pointer-events:none"}); t2.textContent=line2; g.appendChild(t2); }
+  const active = z.id===F().selectedZone;
+  const show2 = line2 && (active || exportInv!=null);
+  // vùng bắt chuột trong suốt để còn kéo được nhãn (không còn thẻ nền để bấm)
+  g.appendChild(svg("rect",{x:pos.x-3*inv, y:pos.y, width:lw, height:lh, fill:"transparent"}));
+  const mk=(txt,dy,size,weight,fill)=>{
+    const t=svg("text",{x:pos.x+5*inv, y:pos.y+dy, "text-anchor":"start",
+      "font-family":"'Inter',sans-serif","font-weight":weight,"font-size":size*textScale(),
+      fill, stroke:C_WHITE, "stroke-width":3*inv, "paint-order":"stroke",
+      style:"pointer-events:none"});
+    t.textContent=txt; g.appendChild(t);
+  };
+  mk(z.name, show2? 12.5*inv : 12*inv, 11*inv, 600, active? C_ACCENT_D : "#8A8175");
+  if(show2) mk(line2, 24.5*inv, 8.5*inv, 500, ok? "#4B6B39" : C_DANGER);
   ov.appendChild(g);
 }
 /* Bảng chú giải cụm điều khiển — góc trên-phải bản vẽ, đúng kiểu legend của bản vẽ ME */
@@ -2666,7 +2703,19 @@ function drawLegend(ov, inv, P){
   const rows=(fl.circuits||[]).filter(c=> fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
   if(!rows.length) return;
   const rh=15*inv, pad=8*inv, hh=15*inv;
-  const w=Math.max(150*inv, ...rows.map(c=>(c.name.length*5.6+58)*inv));
+  // Bề rộng phải tính theo CỠ CHỮ đang dùng — trước đây ước lượng bằng hằng số nên chọn "Lớn"
+  // (×1,7) là tên cụm dài tràn qua cột "n đèn", hai dòng chữ chồng lên nhau.
+  const ts=textScale();
+  const NAME_MAX=30;                                     // tên quá dài thì cắt, không để phá khung
+  const nameOf=c=>c.name.length>NAME_MAX? c.name.slice(0,NAME_MAX-1)+"…" : c.name;
+  const keyX=pad+9*inv;                                  // chữ cái cụm
+  const nameX=pad+22*inv*ts;                             // tên cụm
+  const nOf=c=>fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+  // ĐO thật bề rộng chữ thay vì đoán theo số ký tự: cỡ chữ đổi theo textScale, font Inter không
+  // đều nét, đoán bằng hằng số là cách cũ làm tên cụm dài đè lên cột "n đèn".
+  const w=Math.max(150*inv, ...rows.map(c=>
+    nameX + measureText(nameOf(c), 9*inv, 500) + 10*inv
+          + measureText(nOf(c)+" đèn", 8.5*inv, 400) + pad));
   const h=hh+rows.length*rh+pad;
   const x=worldW()-w-12*inv+(fl.lx||0), y=12*inv+(fl.ly||0);   // offset kéo tay
   const parent=ov;
@@ -2679,10 +2728,9 @@ function drawLegend(ov, inv, P){
   rows.forEach((c,i)=>{
     const ry=y+hh+i*rh+11*inv;
     const off=(fl.liveOff||[]).includes(c.id);
-    ov.appendChild(svg("rect",{x:x+pad, y:ry-7*inv, width:8*inv, height:8*inv, rx:2*inv,
-      fill:c.color, "fill-opacity":off?".35":"1"}));
-    addText(ov, x+pad+13*inv, ry, c.key, 9*inv, c.color, "start", 700);
-    addText(ov, x+pad+24*inv, ry, c.name+(off?" (tắt)":""), 9*inv,
+    // KHÔNG còn ô màu: cụm nhận ra bằng CHỮ CÁI, thứ duy nhất đọc được trên bản in đen trắng
+    addText(ov, x+keyX, ry, c.key, 9.5*inv, off?"#A9A093":C_INK, "middle", 700);
+    addText(ov, x+nameX, ry, nameOf(c)+(off?" (tắt)":""), 9*inv,
       off?"#A9A093":"#3A362F", "start", 500);
     const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
     addText(ov, x+w-pad, ry, `${n} đèn`, 8.5*inv, "#8A8175", "end", 400);
@@ -2859,11 +2907,11 @@ function renderDeviceList(){
     const ic=deviceIconSVG(d.kind); ic.style.color=spec.prov?"#8A6D3B":"var(--ink-2)";
     el.appendChild(ic);
     const nm = d.kind==="prov" ? (d.note? "Chờ: "+escapeHtml(d.note):'<i>chờ: chưa đặt tên</i>')
-      : escapeHtml(spec.label)+(d.qty>1? " ×"+d.qty:"");
+      : escapeHtml(spec.label);
     const dd=document.createElement("div"); dd.className="d"; dd.style.minWidth="0";
     dd.innerHTML=`<b style="font-weight:normal;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</b>
       <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
-        <span style="font-family:var(--mono)">${escapeHtml(d.code||"?")}</span> · ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
+        ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
     el.appendChild(dd);
     el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null;
       const vp=$("#viewport").getBoundingClientRect();
@@ -3727,7 +3775,7 @@ function renderCircuitList(z){
     const el=document.createElement("div");
     el.className="cir"+(off?" off":"");
     el.title="Click: chọn đúng cụm đèn này trên bản vẽ";
-    el.innerHTML=`<b class="ckey" style="color:${c.color};border-color:${c.color}">${c.key}</b>
+    el.innerHTML=`<b class="ckey">${c.key}</b>
       <div class="d"><b class="cnm">${escapeHtml(c.name)}</b>
         <small>${lights.length} đèn · ${fmt(w)} W${sws? " · "+sws : " · <i>chưa gắn công tắc</i>"}</small></div>`;
     const doRename=ev=>{ ev.stopPropagation();
@@ -3811,7 +3859,7 @@ function refreshSwitchPanel(){
     const on=(sw.circuits||[]).includes(c.id);
     const el=document.createElement("label"); el.className="check"; el.style.marginTop="6px";
     el.innerHTML=`<input type="checkbox" ${on?"checked":""}>
-      <b style="font-family:var(--mono);font-size:11px;color:${c.color}">${c.key}</b>
+      <b style="font-family:var(--mono);font-size:11px">${c.key}</b>
       <span style="flex:1">${escapeHtml(c.name)}</span>
       <span class="muted" style="font-family:var(--mono);font-size:10.5px">${n} đèn</span>`;
     el.querySelector("input").onchange=e=>mutate(()=>{
@@ -3833,12 +3881,13 @@ function refreshDevicePanel(){
   p.classList.toggle("hidden", !d);
   if(!d) { p.dataset.dev=""; return; }
   const spec=DEVICE_SPEC[d.kind];
-  if(p.dataset.dev!==d.id){
-    p.dataset.dev=d.id;
+  // Dựng lại khi ĐỔI LOẠI nữa, không chỉ khi đổi thiết bị: chip cao độ và ô ghi chú khác nhau theo
+  // loại (wifi 2,4/2,6 · ổ sàn 0 · nguồn chờ có danh sách tên), giữ nguyên là chip của loại cũ.
+  if(p.dataset.dev!==d.id+"|"+d.kind){
+    p.dataset.dev=d.id+"|"+d.kind;
     const kindOpts=DEVICE_KINDS.map(k=>`<option value="${k}" ${k===d.kind?"selected":""}>${DEVICE_SPEC[k].label}</option>`).join("");
     // cao độ chuẩn VN theo kind (chip bấm — không gõ)
-    const mhChips={ socket:[0.3,0.4,0.9], socket_wp:[1.1,1.2], socket_floor:[0], lan:[0.4,0.9],
-      tv:[0.4,0.6], wifi:[2.4,2.6], prov:[0.4,1.1,2.0,2.2,2.6] }[d.kind]||[0.4];
+    const mhChips=DEV_MH_CHIPS[d.kind]||[0.4];
     const provChips = d.kind==="prov"
       ? `<label>Chờ cho thiết bị</label><div class="seg wrapseg" id="dvNote">${
           PROV_NAMES.map(n=>`<button type="button" data-nt="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}</div>`
@@ -3848,8 +3897,6 @@ function refreshDevicePanel(){
         <select id="dvKind" style="flex:1">${kindOpts}</select>
         <button class="btn sm danger" id="dvDel" title="Xoá thiết bị">✕</button>
       </div>
-      ${d.kind==="socket"||d.kind==="lan"||d.kind==="tv"||d.kind==="socket_floor"||d.kind==="socket_wp"
-        ? `<label>Số ổ / cổng</label><input type="number" id="dvQty" min="1" max="12" step="1">` : ""}
       <label>Cao độ lắp (m, từ sàn)</label>
       <div class="inline" style="gap:6px;flex-wrap:wrap" id="dvMhChips">
         ${mhChips.map(v=>`<button type="button" class="btn sm" data-mh="${v}">+${fmtPlan(v,2)}</button>`).join("")}
@@ -3862,7 +3909,6 @@ function refreshDevicePanel(){
       if(DEVICE_SPEC[d.kind].mh!=null && d.mh==null) d.mh=DEVICE_SPEC[d.kind].mh;
       d.code=nextDeviceCode(d.kind); });
     p.querySelector("#dvDel").onclick=()=>{ mutate(()=>deleteDevice(d.id)); };
-    const qty=p.querySelector("#dvQty"); if(qty) qty.oninput=e=>mutate(()=>{ d.qty=clamp(Math.round(parseNum(e.target.value)||1),1,12); });
     p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{ d.mh=+b.dataset.mh; }));
     p.querySelector("#dvMh").oninput=e=>{ const v=e.target.value.trim(); mutate(()=>{ d.mh = v===""? DEVICE_SPEC[d.kind].mh : parseNum(v); }); };
     const noteSeg=p.querySelector("#dvNote");
@@ -3872,8 +3918,7 @@ function refreshDevicePanel(){
   }
   // cập nhật giá trị (không phá focus)
   const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
-  setV("#dvQty", d.qty||1);
-  setV("#dvMh", d.mh!=null && ![].concat({socket:[0.3,0.4,0.9],socket_wp:[1.1,1.2],socket_floor:[0],lan:[0.4,0.9],tv:[0.4,0.6],wifi:[2.4,2.6],prov:[0.4,1.1,2.0,2.2,2.6]}[d.kind]||[]).includes(d.mh)? d.mh : "");
+  setV("#dvMh", d.mh!=null && !(DEV_MH_CHIPS[d.kind]||[]).includes(d.mh)? d.mh : "");
   const nt=p.querySelector("#dvNoteTxt"); if(nt && document.activeElement!==nt) nt.value=d.note||"";
   p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.classList.toggle("primary", +b.dataset.mh===d.mh));
   const ns=p.querySelector("#dvNote"); if(ns) ns.querySelectorAll("[data-nt]").forEach(b=> b.classList.toggle("on", b.dataset.nt===d.note));
@@ -4190,9 +4235,11 @@ function updateWallbox(){
     + (fl.circuits||[]).map(c2=>
         `<option value="${c2.id}">${escapeHtml(c2.key+" · "+c2.name)}</option>`).join("");
   if(document.activeElement!==sc) sc.value = mix? "__mix" : (cur||"");
+  // Chấm màu đổi thành CHỮ CÁI cụm — màu không còn là cách phân biệt cụm ở bất kỳ đâu
   const dot=wi.querySelector("#cirDot");
-  const cc = cur? (circuitById(cur, fl)||{}).color : null;
-  dot.style.background = mix? "linear-gradient(135deg,#C78F57,#7C9A8E)" : (cc||"#D8D0C2");
+  const ck = cur? (circuitById(cur, fl)||{}).key : null;
+  dot.textContent = mix? "·" : (ck||"–");
+  dot.classList.toggle("empty", !ck || mix);
   const c=selOne();
   wi.querySelector("#oneOnly").classList.toggle("hidden", !c);
   if(!c) return;
@@ -4782,11 +4829,11 @@ $("#btnCsv").onclick=()=>{
   const anyDev=state.floors.some(f=>(f.devices||[]).length);
   if(anyDev){
     lines.push([""],["THIẾT BỊ ĐIỆN (ổ cắm / mạng / TV / wifi / nguồn chờ)"].join(","));
-    lines.push(["Tầng","Mã","Loại","Khu vực","Số ổ/cổng","Cao độ (m)","Ghi chú"].join(","));
+    lines.push(["Tầng","Loại","Khu vực","Số lượng","Cao độ (m)","Ghi chú"].join(","));
     state.floors.forEach(f=>(f.devices||[]).forEach(d=>{
       const spec=DEVICE_SPEC[d.kind]||{}; const z=deviceZone(d,f);
-      lines.push([csvCell(f.name), csvCell(d.code||""), csvCell(spec.label||d.kind),
-        csvCell(z?z.name:"Ngoài khu vực"), d.kind==="prov"?1:(d.qty||1),
+      lines.push([csvCell(f.name), csvCell(spec.label||d.kind),
+        csvCell(z?z.name:"Ngoài khu vực"), 1,
         d.mh!=null?fq(d.mh):"", csvCell(d.note||"")].join(","));
     }));
   }
@@ -4974,8 +5021,8 @@ async function buildPrintDoc(){
       const z=deviceZone(d, fl), zn=z? z.name : "Ngoài khu vực";
       if(d.kind==="prov"){ rows.push({prov:true, d, zn}); return; }
       const key=d.kind+"|"+zn+"|"+(d.mh??"");
-      if(!grp[key]) grp[key]={kind:d.kind, zn, mh:d.mh, qty:0, codes:[]};
-      grp[key].qty += (d.qty||1); grp[key].codes.push(d.code);
+      if(!grp[key]) grp[key]={kind:d.kind, zn, mh:d.mh, qty:0};
+      grp[key].qty += 1;   // 1 vị trí = 1 thiết bị (ổ cắm đôi vẫn là MỘT vị trí)
     });
     Object.values(grp).forEach(g=>rows.push(g));
     const kindLabel=k=>DEVICE_SPEC[k]?DEVICE_SPEC[k].label:k;
@@ -4983,7 +5030,6 @@ async function buildPrintDoc(){
     // thiết bị lắp mới trước, nguồn chờ (RIÊNG cột) sau
     rows.filter(r=>!r.prov).sort((a,b)=>a.zn.localeCompare(b.zn,"vi")).forEach(g=>{
       body+=`<tr><td>${deviceIconSVG(g.kind,"pr-sym").outerHTML}</td>
-        <td><span class="pr-code">${escapeHtml(g.codes.join(", "))}</span></td>
         <td>${escapeHtml(kindLabel(g.kind))}</td>
         <td>${escapeHtml(g.zn)}</td>
         <td class="num">${g.qty}</td>
@@ -4992,13 +5038,14 @@ async function buildPrintDoc(){
     const provs=rows.filter(r=>r.prov);
     provs.sort((a,b)=>a.zn.localeCompare(b.zn,"vi")).forEach(r=>{
       body+=`<tr><td>${deviceIconSVG("prov","pr-sym").outerHTML}</td>
-        <td><span class="pr-code">${escapeHtml(r.d.code||"")}</span></td>
         <td><b>Nguồn chờ:</b> ${r.d.note? escapeHtml(r.d.note):'<span style="color:#B4553C">CHƯA ĐẶT TÊN</span>'}</td>
         <td>${escapeHtml(r.zn)}</td>
         <td class="num">1</td>
         <td class="num">${r.d.mh!=null? "+"+fmtPlan(r.d.mh,2)+"m":"—"}</td></tr>`;
     });
-    devHtml+=`<table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th><th style="width:60px">Mã</th>
+    // Bỏ cột "Mã": bản vẽ không còn ghi mã từng ổ nên cột này chẳng trỏ tới đâu.
+    // Bảng đếm theo (loại × khu vực × cao độ) — đúng thứ dùng để đặt hàng và để thợ đi.
+    devHtml+=`<table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th>
       <th>Loại</th><th style="width:80px">Khu vực</th><th class="num" style="width:40px">SL</th>
       <th class="num" style="width:56px">Cao độ</th></tr></thead><tbody>${body}</tbody></table>
       <p class="pr-hint">Bản vẽ thể hiện VỊ TRÍ ổ cắm / thiết bị theo yêu cầu sử dụng. Đấu nối, tiết diện dây
