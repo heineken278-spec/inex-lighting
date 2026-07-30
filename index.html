@@ -1791,7 +1791,7 @@ function elevationSVG(z, light){
    khoảng cách tới tường chứ không phải tới tâm vòng tròn. */
 const WALL_BACK = 0.055;
 function symbolAnchorDY(P, mnt){ return mnt==="wall" ? -WALL_BACK*P : 0; }
-function symbolShapes(type, P, len, mnt){
+function symbolShapes(type, P, len, mnt, vert){
   const s=[];
   if(type==="panel"){
     const h=0.3*P;
@@ -1823,6 +1823,13 @@ function symbolShapes(type, P, len, mnt){
       s.push({tag:"line", attrs:{x1:(r*1.05*c).toFixed(1), y1:(r*1.05*si).toFixed(1),
         x2:(r*1.45*c).toFixed(1), y2:(r*1.45*si).toFixed(1)}});
     }
+  } else if(type==="strip" && vert){
+    // LED dây DỰNG ĐỨNG: chiếu xuống mặt bằng nó là MỘT ĐIỂM, không có chiều dài.
+    // Vẽ thành đoạn theo mặt bằng là bịa ra một kích thước không có thật → thợ mộc đọc sai.
+    // Hình thoi = tiết diện sợi dây nhìn từ trên xuống; chiều dài thật nằm ở nhãn và mặt cắt.
+    const r=0.07*P;
+    s.push({tag:"path", attrs:{d:`M0,${(-r).toFixed(1)} L${r.toFixed(1)},0 L0,${r.toFixed(1)} L${(-r).toFixed(1)},0 Z`}});
+    s.push({tag:"circle", attrs:{r:(r*0.3).toFixed(1)}, fill:true});
   } else if(type==="strip"){ // LED dây: đường sóng dài THEO CHIỀU DÀI THẬT (len mét)
     const L=Math.max(0.3, len||1), half=L*P/2, st=0.1*P;
     let d=`M${(-half).toFixed(1)},0 Q${(-half+st/2).toFixed(1)},${(-0.06*P).toFixed(1)} ${(-half+st).toFixed(1)},0`;
@@ -1846,8 +1853,8 @@ function symbolShapes(type, P, len, mnt){
 function svg(tag,attrs){ const e=document.createElementNS(SVGNS,tag);
   for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
 /* Vẽ symbol 2 lớp: halo trắng phía dưới + nét mực phía trên (đọc được trên ảnh nền) */
-function appendSymbol(parent, type, P, strokeW, color, len, mnt){
-  const shapes=symbolShapes(type,P,len,mnt);
+function appendSymbol(parent, type, P, strokeW, color, len, mnt, vert){
+  const shapes=symbolShapes(type,P,len,mnt,vert);
   [[C_WHITE, strokeW*3],[color, strokeW]].forEach(([col,w],pass)=>{
     shapes.forEach(sh=>{
       const a={...sh.attrs, stroke:col, "stroke-width":w, fill:"none",
@@ -2067,8 +2074,9 @@ function drawDims(ov0, inv, P){
   const tol=DIM_ALIGN_TOL*ppm;
   fl.zones.forEach(z=>{
     // ĐÈN TƯỜNG không vào chuỗi kích thước (anh Khoa): nó đã bám sát tường rồi, ghi thêm một con số
-    // vài chục mm chỉ làm rối và trông như sai số.
-    const pts=z.lights.filter(l=>!isWall(l));
+    // vài chục mm chỉ làm rối và trông như sai số. Đèn KHÔNG được vẽ trên tờ này (LED dây ở tờ
+    // chiếu sáng) cũng không ghi — ghi kích thước tới một vật vô hình thì đọc không ra.
+    const pts=z.lights.filter(l=>!isWall(l) && lampOnSheet(lightById(l.lightId)));
     if(!pts.length) return;
     const bb=bbox(z.poly);
     const xs=clusterCoords(pts.map(l=>l.x), tol);
@@ -2147,12 +2155,23 @@ let exportOpts=null; // preset tờ xuất: {layers:Set, bg?}. null = xem màn h
    - CHIẾU SÁNG: đèn + công tắc + đường điều khiển + quầng sáng + lux + kích thước, KHÔNG ổ cắm.
    - Ổ CẮM    : ổ cắm/mạng/wifi/nguồn chờ; TẮT quầng sáng, lux, đường công tắc và dim đèn;
                 nền đậm hơn cho thợ đọc tường; ĐÈN chỉ còn bóng mờ tham chiếu (ghostLights). */
-const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims"]) };   // không có "devices"
+/* Tờ CHIẾU SÁNG (anh Khoa chốt): LED dây do XƯỞNG GỖ lắp, thợ điện chỉ chừa nguồn cho driver →
+   tờ này ẨN sợi dây, chỉ để lại điểm CHỜ. Sợi dây vẫn nằm nguyên trong dữ liệu nên số lux và số
+   mét đặt hàng KHÔNG đổi (bỏ nó khỏi phép tính là Bếp tụt từ 751 xuống 440 lx, rớt chuẩn).
+   Quầng sáng thì GIỮ: nó không phải chỉ dẫn cho thợ nào cả, mà là thứ giải thích con số lux in
+   ngay trên tờ đó — bỏ đi thì tờ giấy tự mâu thuẫn với chính nó.
+   devKinds: trong đám thiết bị chỉ cho "nguồn chờ" lên tờ này, ổ cắm/mạng/wifi vẫn ở tờ riêng. */
+const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","devices"]),
+                       devKinds:new Set(["prov"]), hideStrips:true };
 const SHEET_DEVICE = { layers:new Set(["devices"]), bg:0.9, ghostLights:true };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
 const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
 function sheetHas(layer){ const s=curSheet(); return !s || s.layers.has(layer); }
+/* Đèn này có được VẼ trên tờ đang xem không? (chỉ LED dây mới bị ẩn, xem SHEET_LIGHT) */
+function lampOnSheet(lamp){ return !((curSheet()||{}).hideStrips && lamp.type==="strip"); }
+/* Thiết bị này có được vẽ trên tờ đang xem không? */
+function deviceOnSheet(d){ const k=(curSheet()||{}).devKinds; return !k || k.has(d.kind); }
 function drawOverlay(){
   const ov=$("#overlay"); ov.innerHTML="";
   const inv = exportInv!=null? exportInv : 1/view.scale;
@@ -2209,8 +2228,11 @@ function drawOverlay(){
       } else if(lamp.type==="tube"){
         g.appendChild(svg("ellipse",{cx:0,cy:0,rx:r*1.3,ry:r*0.6,fill:"url(#glowGrad)"}));
       } else if(lamp.type==="strip"){ // dải sáng dọc theo chiều dài dây thật
-        g.appendChild(svg("ellipse",{cx:0,cy:0,
-          rx:Math.max(0.3,l.len||1)*P/2+r*0.25, ry:r*0.45, fill:"url(#glowGrad)"}));
+        // dây ĐỨNG: trên mặt bằng nó là một điểm → vệt tròn, không kéo dài theo len
+        g.appendChild(l.vert
+          ? svg("circle",{cx:0,cy:0,r:r*0.55,fill:"url(#glowGrad)"})
+          : svg("ellipse",{cx:0,cy:0,
+              rx:Math.max(0.3,l.len||1)*P/2+r*0.25, ry:r*0.45, fill:"url(#glowGrad)"}));
       } else {
         g.appendChild(svg("circle",{cx:0,cy:0,r:r,fill:"url(#glowGrad)"}));
       }
@@ -2269,6 +2291,7 @@ function drawOverlay(){
       (typeModels[t]=typeModels[t]||new Set()).add(l.lightId); });
     z.lights.forEach((l,li)=>{
       const lamp=lightById(l.lightId);
+      if(!lampOnSheet(lamp)) return;      // tờ chiếu sáng: LED dây để bản vẽ đồ gỗ, chỉ còn nguồn chờ
       const sel=isSel(z.id,li);
       const hov=exportInv==null && hoverLight && hoverLight.zid===z.id && hoverLight.li===li;
       const off=isOff(l);
@@ -2297,11 +2320,11 @@ function drawOverlay(){
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
       const symColor = sel? C_ACCENT_D : off? "#B7AEA0" : (cir? cir.color : C_INK);
-      appendSymbol(g, lamp.type, P, symW, symColor, l.len, mnt);
+      appendSymbol(g, lamp.type, P, symW, symColor, l.len, mnt, l.vert);
       // vùng bắt chuột (ẩn) — LED dây thêm dải hit dọc theo chiều dài
       const hitR=Math.max((SYM_SIZE[lamp.type]||0.2)*0.8*P, 14*inv);
       g.appendChild(svg("circle",{r:hitR, fill:"transparent", class:"hit"}));
-      if(lamp.type==="strip"){
+      if(lamp.type==="strip" && !l.vert){   // dây đứng là một điểm, không có dải hit
         const Lp=Math.max(0.3, l.len||1)*P;
         g.appendChild(svg("rect",{x:-Lp/2, y:-Math.max(0.12*P,10*inv), width:Lp,
           height:Math.max(0.24*P,20*inv), fill:"transparent", class:"hit"}));
@@ -2318,7 +2341,9 @@ function drawOverlay(){
       }
       if(showCode){
         let lx, ly, anch="start";
-        if(lamp.type==="strip"||lamp.type==="tube"){
+        if(lamp.type==="strip" && l.vert){    // dây đứng: nhãn đặt như một đèn điểm
+          const so=0.09*P; lx=l.x+so+3*inv; ly=l.y+so+8*inv;
+        } else if(lamp.type==="strip"||lamp.type==="tube"){
           // loại dài: mã đặt SÁT cạnh dây, vuông góc trục theo hướng xoay
           const rr=rot*Math.PI/180, offp=0.1*P+9*inv;
           lx=l.x-Math.sin(rr)*offp; ly=l.y+Math.cos(rr)*offp+3*inv; anch="middle";
@@ -2330,8 +2355,10 @@ function drawOverlay(){
         // Cao độ chỉ hiện khi khác trần để không rối bản vẽ toàn downlight âm trần.
         const ceilH=z.ceilH||2.8;
         const hSuffix = (l.mh!=null && Math.abs(l.mh-ceilH)>0.03) ? ` +${fmtPlan(l.mh)}` : "";
+        // dây ĐỨNG: chiều dài không đọc được trên mặt bằng nên phải ghi ra chữ
+        const vSuffix = (lamp.type==="strip" && l.vert) ? ` ↕${fmtPlan(Math.max(0.3,l.len||1))}m` : "";
         addDragLabel(ov, "L", z.id+":"+li, lx+(l.lx||0), ly+(l.ly||0),
-          lamp.code+(cir&&cir.key? cir.key:"")+hSuffix, 8.5*inv,
+          lamp.code+(cir&&cir.key? cir.key:"")+vSuffix+hSuffix, 8.5*inv,
           off? "#BDB4A6" : (sel? C_ACCENT_D : (cir? cir.color : "#6E665A")), inv, anch);
       }
     });
@@ -2407,6 +2434,7 @@ function drawOverlay(){
 
   // ---- lớp 4c: THIẾT BỊ (ổ cắm/mạng/TV/wifi/nguồn chờ) — hệ riêng, chỉ hiện khi tờ có lớp này ----
   if(sheetHas("devices")) (fl.devices||[]).forEach(d=>{
+    if(!deviceOnSheet(d)) return;   // tờ chiếu sáng chỉ nhận NGUỒN CHỜ, không nhận ổ cắm/mạng/wifi
     const sel = exportInv==null && selDevice===d.id;
     const szD = Math.max(0.13*P, 16*inv);
     const g=svg("g",{transform:`translate(${d.x},${d.y}) rotate(${d.rot||0})`, "data-dev":d.id,
@@ -2562,6 +2590,13 @@ function drawTitleBlock(ov, inv, P){
   }
   // ghi chú không-đo-số — dán dưới cùng khối
   addText(g, x0+pad, y0+boxH-6*inv, "Không đo số trực tiếp trên bản vẽ", 8*inv, "#A9A093", "start", 500);
+  // Tờ này ẩn LED dây mà tầng lại CÓ dây → phải nói ra, không thì đọc như tầng không có LED dây.
+  if((curSheet()||{}).hideStrips &&
+     F().zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip"))){
+    addText(g, x0+pad, y0-5*inv,
+      "LED dây do xưởng gỗ lắp — xem bản vẽ đồ gỗ. Tờ này chỉ ghi nguồn chờ.",
+      8.5*inv, "#8A6D3B", "start", 600);
+  }
   ov.appendChild(g);
 }
 /* text trần (không viền) — dùng khi đã có nền thẻ phía dưới */
@@ -4000,6 +4035,13 @@ function buildWallbox(wi){
         <div class="hidden" id="wLenRow"><label style="margin-top:0">Dài dây (m)</label>
           <input type="number" id="wLen" step="0.1" min="0.3"></div>
       </div>
+      <div class="hidden" id="wVertRow">
+        <label>Hướng chạy của dây</label>
+        <div class="seg" id="wVertSeg">
+          <button type="button" data-vt="h" title="Dây chạy theo mặt bằng — vẽ đúng chiều dài thật">Nằm ngang</button>
+          <button type="button" data-vt="v" title="Dây dựng đứng trong đồ gỗ — mặt bằng chỉ vẽ được một điểm, chiều dài ghi ở nhãn">Dựng đứng</button>
+        </div>
+      </div>
     </div>
 
     <div class="grpbox">
@@ -4102,6 +4144,11 @@ function buildWallbox(wi){
     const v=parseNum(e.target.value);
     if(v>0) c.l.len=clamp(v, 0.3, 50); // dây dài ra/ngắn lại quanh tâm
   }));
+  // Hướng chạy của dây. "Dựng đứng" chỉ đổi CÁCH VẼ trên mặt bằng (một điểm + nhãn chiều dài),
+  // KHÔNG đổi số mét đặt hàng — mua bao nhiêu mét thì vẫn là bấy nhiêu.
+  wi.querySelectorAll("#wVertSeg button").forEach(b=> b.addEventListener("click", ()=>upd(c=>{
+    if(b.dataset.vt==="v") c.l.vert=true; else delete c.l.vert;
+  })));
   // preset tủ: 1 click là xong, ô số chỉ để tinh chỉnh
   wi.querySelectorAll("#cabSeg button").forEach(b=> b.addEventListener("click", ()=>{
     const c=selOne(); if(!c) return;
@@ -4158,7 +4205,12 @@ function updateWallbox(){
   setV("wMh", c.l.mh!=null? c.l.mh : "");
   const isStrip = lightById(c.l.lightId).type==="strip";
   wi.querySelector("#wLenRow").classList.toggle("hidden", !isStrip);
-  if(isStrip) setV("wLen", +(c.l.len||1).toFixed(2));
+  wi.querySelector("#wVertRow").classList.toggle("hidden", !isStrip);
+  if(isStrip){
+    setV("wLen", +(c.l.len||1).toFixed(2));
+    const vt=c.l.vert? "v":"h";
+    wi.querySelectorAll("#wVertSeg button").forEach(b=>b.classList.toggle("on", b.dataset.vt===vt));
+  }
   const lockBtn=wi.querySelector("#wLock");
   lockBtn.classList.toggle("on", !!c.l.aim);
   lockBtn.title = c.l.aim? "Đang ghim tường này — bấm để bỏ ghim (đo tường gần nhất)"
