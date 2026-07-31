@@ -905,7 +905,7 @@ const SVGNS = "http://www.w3.org/2000/svg";
 const LS_KEY = "inex_lighting_v1";                 // bản cũ — chỉ để nạp lại một lần
 const DB_NAME="inex_lighting", DB_STORE="projects", DB_KEY="current";
 const LIB_KEY="lightLibrary";   // thư viện đèn tuỳ chỉnh — dùng chung MỌI dự án (không mất khi tạo dự án mới)
-const STATE_VERSION=6;          // phiên bản cấu trúc state hiện tại — migrate() nâng dữ liệu cũ lên mức này
+const STATE_VERSION=7;          // phiên bản cấu trúc state hiện tại — migrate() nâng dữ liệu cũ lên mức này
 /* Khi đọc dữ liệu THẤT BẠI, chặn mọi ghi đè: thà không lưu còn hơn ghi đè dự án thật bằng
    một bản dựng lại sai. Xem adoptGuarded() / blockSave(). */
 let saveBlocked=false;
@@ -985,6 +985,11 @@ function textScale(){ return TEXT_SCALES[state && state.textScale] || TEXT_SCALE
 /* Kích thước danh nghĩa ký hiệu ME theo loại (mét) */
 const SYM_SIZE = {downlight:0.16, panel:0.6, tube:1.2, wall:0.16, spot:0.14, pendant:0.28,
                   chandelier:0.42, strip:1.0};
+/* BÁN KÍNH VẼ THẬT của từng ký hiệu (m) — lấy đúng từ symbolShapes, KHÔNG suy từ SYM_SIZE:
+   SYM_SIZE là cỡ danh nghĩa của thiết bị, còn hình vẽ thường lớn hơn (downlight có chữ thập vươn
+   ra 0,13 m trong khi SYM_SIZE chỉ 0,16). Dùng để nhãn tự né đúng mép hình, ở mọi mức zoom. */
+const SYM_R = {downlight:0.14, panel:0.44, tube:0.62, wall:0.20, spot:0.20,
+               pendant:0.15, chandelier:0.23, strip:0.10};
 
 /* =========================== STATE =========================== */
 let state = null;
@@ -1098,7 +1103,7 @@ function lightsOfSwitch(sw, fl){
 }
 function newState(){
   return {
-    version:6, projectName:"Dự án chưa đặt tên",
+    version:STATE_VERSION, projectName:"Dự án chưa đặt tên",
     showGlow:true, labelMode:"all", textScale:"vua",
     lights: initialLights(),
     floors:[newFloor("Tầng 1")], cur:0,
@@ -1159,6 +1164,17 @@ function migrate(s){
   });
   if(s.showLegend===undefined) s.showLegend=true;
   if(!TEXT_SCALES[s.textScale]) s.textScale="vua";
+  // v7: nhãn đổi sang ĐẶT TỰ ĐỘNG, và phần kéo tay đổi đơn vị (thế giới → màn hình). Offset cũ
+  // giờ vô nghĩa (không biết nó được kéo ở mức zoom nào để quy đổi) → xoá MỘT LẦN, có khoá version
+  // nên không bao giờ chạy lại và không nuốt mất offset anh kéo sau này.
+  if((s.version||0) < 7){
+    s.floors.forEach(f=>{
+      f.zones.forEach(z=>{ delete z.lx; delete z.ly;
+        z.lights.forEach(l=>{ delete l.lx; delete l.ly; }); });
+      (f.switches||[]).forEach(o=>{ delete o.lx; delete o.ly; });
+      (f.devices||[]).forEach(o=>{ delete o.lx; delete o.ly; });
+    });
+  }
   // Nâng phiên bản CUỐI CÙNG, sau mọi khối sửa chữa ở trên. Dòng "if(s.version<5) s.version=5"
   // trước đây nằm SAU dòng nâng lên 6 nên không bao giờ chạy — đã bỏ.
   if(s.version<STATE_VERSION) s.version=STATE_VERSION;
@@ -2175,7 +2191,9 @@ let exportOpts=null; // preset tờ xuất: {layers:Set, bg?}. null = xem màn h
    devKinds: trong đám thiết bị chỉ cho "nguồn chờ" lên tờ này, ổ cắm/mạng/wifi vẫn ở tờ riêng. */
 const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","devices"]),
                        devKinds:new Set(["prov"]), hideStrips:true };
-const SHEET_DEVICE = { layers:new Set(["devices"]), bg:0.9, ghostLights:true };
+/* KHÔNG override độ mờ ảnh nền: tờ nào cũng dùng đúng độ mờ anh đang chỉnh ở thanh "Mặt bằng nền".
+   Trước đây tờ ổ cắm bị ép 0,9 nên ảnh trace in ra đậm khác hẳn cái đang xem — đọc như bị lỗi. */
+const SHEET_DEVICE = { layers:new Set(["devices"]), ghostLights:true };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
 const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
@@ -2202,6 +2220,17 @@ function drawOverlay(){
 
   const isSel=(zid,li)=> exportInv==null && selLights.some(s=>s.zid===zid&&s.li===li);
 
+  // vật cản để nhãn tự né: mọi ký hiệu đang CÓ MẶT trên tờ này
+  lblObst=[]; lblBoxes=[];
+  F().zones.forEach(z=>z.lights.forEach(l=>{
+    const lamp=lightById(l.lightId); if(!lampOnSheet(lamp)) return;
+    lblObst.push({x:l.x, y:l.y, r:Math.max((SYM_SIZE[lamp.type]||0.2)*0.5*P, 10*inv)});
+  }));
+  if(sheetHas("switches")) (F().switches||[]).forEach(s=>
+    lblObst.push({x:s.x, y:s.y, r:Math.max(0.11*P, 15*inv)}));
+  if(sheetHas("devices")) (F().devices||[]).forEach(d=>{ if(deviceOnSheet(d))
+    lblObst.push({x:d.x, y:d.y, r:Math.max(0.13*P, 16*inv)}); });
+
   // ---- lớp 1: zone fill/stroke ----
   F().zones.forEach(z=>{
     const active = z.id===F().selectedZone;
@@ -2220,7 +2249,11 @@ function drawOverlay(){
     const gz=svg("g",{"clip-path":`url(#zclip-${z.id})`, style:"pointer-events:none"});
     z.lights.forEach(l=>{
       if(isOff(l)) return; // đèn tắt trong kịch bản: không có quầng sáng
-      const lamp=lightById(l.lightId), r=glowRadius(z,lamp,l);
+      const lamp=lightById(l.lightId);
+      // Đèn không có mặt trên tờ này thì KHÔNG để lại quầng sáng. Một vùng sáng lơ lửng mà không
+      // thấy nguồn nào sinh ra nó đọc như lỗi hiển thị — anh Khoa đã hỏi đúng chỗ này.
+      if(!lampOnSheet(lamp)) return;
+      const r=glowRadius(z,lamp,l);
       let gx=l.x, gy=l.y;
       const tl=clamp(l.tilt||0,0,80);
       if(tl>0){ // đèn nghiêng: tâm vệt dịch theo hướng mũi tên, không vượt quá tường
@@ -2354,26 +2387,19 @@ function drawOverlay(){
         }
       }
       if(showCode){
-        let lx, ly, anch="start";
-        if(lamp.type==="strip" && l.vert){    // dây đứng: nhãn đặt như một đèn điểm
-          const so=0.09*P; lx=l.x+so+3*inv; ly=l.y+so+8*inv;
-        } else if(lamp.type==="strip"||lamp.type==="tube"){
-          // loại dài: mã đặt SÁT cạnh dây, vuông góc trục theo hướng xoay
-          const rr=rot*Math.PI/180, offp=0.1*P+9*inv;
-          lx=l.x-Math.sin(rr)*offp; ly=l.y+Math.cos(rr)*offp+3*inv; anch="middle";
-        } else {
-          const so=(SYM_SIZE[lamp.type]||0.2)*P*0.55;
-          lx=l.x+so+3*inv; ly=l.y+so+8*inv;
-        }
         // mã loại + CHỮ CỤM (chuẩn ME: "D2a") + CAO ĐỘ nếu khác cao trần (đèn tường / thả / hắt).
         // Cao độ chỉ hiện khi khác trần để không rối bản vẽ toàn downlight âm trần.
         const ceilH=z.ceilH||2.8;
         const hSuffix = (l.mh!=null && Math.abs(l.mh-ceilH)>0.03) ? ` +${fmtPlan(l.mh)}` : "";
         // dây ĐỨNG: chiều dài không đọc được trên mặt bằng nên phải ghi ra chữ
         const vSuffix = (lamp.type==="strip" && l.vert) ? ` ↕${fmtPlan(Math.max(0.3,l.len||1))}m` : "";
-        addDragLabel(ov, "L", z.id+":"+li, lx+(l.lx||0), ly+(l.ly||0),
+        // bán kính né: loại DÀI (tuýp / LED dây nằm ngang) né theo nửa chiều dài thật
+        const long = (lamp.type==="strip" && !l.vert) ? Math.max(0.3,l.len||1)*P/2
+                   : lamp.type==="tube" ? 0.62*P : 0;
+        const rSym = Math.max(long, (SYM_R[lamp.type]||0.16)*P, 11*inv);
+        autoLabel(ov, "L", z.id+":"+li, l.x, l.y, rSym,
           lamp.code+(cir&&cir.key? cir.key:"")+vSuffix+hSuffix, 8.5*inv,
-          off? "#BDB4A6" : (sel? C_ACCENT_D : "#6E665A"), inv, anch);
+          off? "#BDB4A6" : (sel? C_ACCENT_D : "#6E665A"), inv, l);
       }
     });
   });
@@ -2438,9 +2464,8 @@ function drawOverlay(){
       // Nhãn công tắc = CHỮ CỤM nó điều khiển (a,b,c) — chuẩn ME, không ghi CT1 (thừa).
       // Chưa gán cụm → hiện "?" mờ để biết công tắc cần cấu hình. Mã CT giữ ở bảng PDF + panel.
       const keys=(sw.circuits||[]).map(cid=>(circuitById(cid,fl)||{}).key||"").filter(Boolean).join("");
-      addDragLabel(ov, "W", sw.id, sw.x+sz*0.5+3*inv+(sw.lx||0), sw.y+sz*0.75+7*inv+(sw.ly||0),
-        keys||"?", 8.5*inv,
-        sel?C_ACCENT_D:(keys?"#6E665A":"#C0B8AA"), inv, "start");
+      autoLabel(ov, "W", sw.id, sw.x, sw.y, sz*0.75, keys||"?", 8.5*inv,
+        sel?C_ACCENT_D:(keys?"#6E665A":"#C0B8AA"), inv, sw);
     }
   });
 
@@ -2465,8 +2490,8 @@ function drawOverlay(){
       const txt = d.kind==="prov"
         ? (d.note? "CHỜ: "+d.note : "CHỜ: ?")+(d.mh!=null? " +"+fmtPlan(d.mh):"")
         : (d.mh!=null? "+"+fmtPlan(d.mh) : "");
-      if(txt) addDragLabel(ov, "D", d.id, d.x+szD*0.55+3*inv+(d.lx||0), d.y+szD*0.75+7*inv+(d.ly||0),
-        txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, "start");
+      if(txt) autoLabel(ov, "D", d.id, d.x, d.y, szD*0.8,
+        txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, d);
     }
   });
 
@@ -2485,8 +2510,10 @@ function drawOverlay(){
       !showLux ? `${c.count} đèn · ${cH}`
       : c.actual!=null ? `${Math.round(c.actual)}/${c.E} lx · ${c.count} đèn · ${cH}`
       : `chuẩn ${c.E} lx · ${cH}`) : null;
-    // chỉ vẽ dòng thông số khi ĐANG CHỌN hoặc khi xuất → chỗ cần né cũng tính theo đúng cái sẽ vẽ
-    if(line2 && !active && exportInv==null) line2=null;
+    // Dòng thông số CHỈ là trợ giúp lúc thao tác: hiện khi đang chọn khu vực, và KHÔNG BAO GIỜ
+    // vào file xuất. Tờ in phải giống hệt cái đang nhìn (anh Khoa) — số lux đã có đủ trong bảng
+    // thống kê ngay dưới bản vẽ trong PDF, in đè lên mặt bằng nữa là thừa.
+    if(line2 && !(active && exportInv==null)) line2=null;
     const ts=textScale();
     const sizeOf=l2=>({
       lw: Math.max(z.name.length*6.4, (l2||"").length*5.0)*ts*inv + 12*inv,
@@ -2681,7 +2708,7 @@ function placeZoneLabel(z, lw, lh, inv){
 function drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv){
   const g=svg("g",{class:"dlbl","data-k":"Z","data-r":z.id, style:"cursor:move"});
   const active = z.id===F().selectedZone;
-  const show2 = line2 && (active || exportInv!=null);
+  const show2 = !!line2;   // lớp 5 đã quyết định: chỉ còn khác null khi đang chọn & không xuất
   // vùng bắt chuột trong suốt để còn kéo được nhãn (không còn thẻ nền để bấm)
   g.appendChild(svg("rect",{x:pos.x-3*inv, y:pos.y, width:lw, height:lh, fill:"transparent"}));
   const mk=(txt,dy,size,weight,fill)=>{
@@ -2747,6 +2774,54 @@ function labelObj(kind, ref){
   if(kind==="Z") return getZone(ref);
   if(kind==="LG") return state.floors.find(f=>f.id===ref);  // bảng chú giải: offset trên tầng
   return null;
+}
+/* ===== ĐẶT NHÃN TỰ ĐỘNG =====
+   Bệnh cũ: phần bù tự động tính bằng đơn vị MÀN HÌNH (nhân inv) còn phần anh kéo tay lại lưu bằng
+   đơn vị THẾ GIỚI. Zoom to kéo cho vừa mắt, zoom nhỏ lại thì hai phần đó giãn ra khác nhau → chữ
+   văng khỏi ký hiệu (đúng cảnh trong ảnh anh gửi).
+   Cách xử: KHÔNG kéo tay nữa mà TÍNH LẠI mỗi lần vẽ — thử 8 hướng quanh ký hiệu, chọn hướng ít đè
+   ký hiệu và ít đè nhãn khác nhất. Mọi khoảng cách đều tính bằng inv, nên vị trí nhãn so với ký
+   hiệu là NHƯ NHAU ở mọi mức zoom và trên cả file xuất. Kéo tay vẫn còn, nhưng cũng lưu bằng inv. */
+let lblObst=[], lblBoxes=[];
+const LBL_DIRS=[ {ux:1,uy:0.55}, {ux:1,uy:-0.55}, {ux:-1,uy:0.55}, {ux:-1,uy:-0.55},
+                 {ux:0,uy:1}, {ux:0,uy:-1}, {ux:1,uy:0}, {ux:-1,uy:0} ];
+function boxOverlap(a,b){
+  const w=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+  const h=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
+  return (w>0&&h>0)? w*h : 0;
+}
+/* Nhãn bám ký hiệu: tự chọn chỗ, tự tránh. cx,cy = tâm ký hiệu; rSym = bán kính ký hiệu. */
+function autoLabel(ov, kind, ref, cx, cy, rSym, txt, size, color, inv, obj){
+  const s=size*textScale();
+  const w=measureText(txt, size, 600)+2*inv, h=s*1.15;
+  const gap=4*inv;
+  const place=dir=>{
+    const n=Math.hypot(dir.ux,dir.uy)||1, ux=dir.ux/n, uy=dir.uy/n;
+    const d=rSym+gap, px=cx+ux*d, py=cy+uy*d;
+    const anchor = ux>0.3? "start" : ux<-0.3? "end" : "middle";
+    return { x: anchor==="start"? px : anchor==="end"? px-w : px-w/2,
+             y: uy>0.3? py : uy<-0.3? py-h : py-h/2, w, h, anchor };
+  };
+  let best=null;
+  const nudged = obj && (obj.lx!=null || obj.ly!=null);
+  if(nudged){
+    // Kéo tay = LỆCH SO VỚI CHỖ TỰ ĐỘNG, đo bằng px màn hình. Phải cộng lên chỗ tự động (vốn đã
+    // bám đúng mép ký hiệu ở mọi zoom) chứ không phải cộng vào tâm ký hiệu — cộng vào tâm thì phần
+    // "ra khỏi ký hiệu" vẫn giãn theo zoom và chữ lại trôi. Luôn lấy hướng đầu cho ổn định.
+    best=place(LBL_DIRS[0]);
+    best.x+=(obj.lx||0)*inv; best.y+=(obj.ly||0)*inv;
+  } else {
+    LBL_DIRS.forEach((dir,i)=>{
+      const box=place(dir);
+      let pen=i*0.35*inv*inv;                       // ưu tiên theo thứ tự hướng (phải-dưới trước)
+      lblObst.forEach(o=>{ pen+=boxOverlap(box,{x:o.x-o.r,y:o.y-o.r,w:o.r*2,h:o.r*2})*3; });
+      lblBoxes.forEach(b=>{ pen+=boxOverlap(box,b)*2; });
+      if(!best || pen<best.pen) best={...box, pen};
+    });
+  }
+  lblBoxes.push({x:best.x, y:best.y, w, h});
+  const tx = best.anchor==="start"? best.x : best.anchor==="end"? best.x+w : best.x+w/2;
+  addDragLabel(ov, kind, ref, tx, best.y+h*0.8, txt, size, color, inv, best.anchor);
 }
 function addDragLabel(ov, kind, ref, x, y, txt, size, color, inv, anchor){
   size*=textScale();   // nhân TRƯỚC khi tính hộp bắt chuột để hitbox khớp cỡ chữ
@@ -3270,7 +3345,10 @@ window.addEventListener("pointermove", e=>{
   if(drag.mode==="rect"&&draft){ draft.pts[1]=w; render(); return; }
   if(drag.mode==="strip"&&draft){ draft.pts[1]=w; render(); return; }
   if(drag.mode==="label"){
-    drag.obj.lx=drag.ox+(w.x-drag.start.x); drag.obj.ly=drag.oy+(w.y-drag.start.y);
+    // lưu bằng ĐƠN VỊ MÀN HÌNH (×view.scale) chứ không phải đơn vị thế giới — có vậy nhãn mới nằm
+    // đúng chỗ đó ở mọi mức zoom và trên file xuất, thay vì giãn ra khi thu nhỏ
+    drag.obj.lx=drag.ox+(w.x-drag.start.x)*view.scale;
+    drag.obj.ly=drag.oy+(w.y-drag.start.y)*view.scale;
     if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
     render(); return;
   }
