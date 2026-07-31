@@ -2131,6 +2131,27 @@ function drawDims(ov0, inv, P){
 /* Mã thiết bị duy nhất theo TOÀN DỰ ÁN (không theo tầng): bảng thống kê gộp mọi tầng, mã trùng
    giữa các tầng sẽ liệt 2 thiết bị khác nhau dưới một mã. */
 function allDevices(){ const r=[]; state.floors.forEach(f=>(f.devices||[]).forEach(d=>r.push(d))); return r; }
+/* Gộp các thiết bị CÙNG LOẠI đứng CHỒNG NHAU tại một vị trí (ví dụ ổ cắm +0,6 và +1,2 trên cùng
+   một điểm tường). Dung sai rất chặt (6 cm) và có snap lúc đặt, nên chỉ gộp khi anh CỐ Ý chồng —
+   hai ổ nằm cạnh nhau thật (cách 15–20 cm) vẫn là hai ký hiệu riêng.
+   Trả [{d: đại diện (thấp nhất), all: [thiết bị… sắp theo cao độ tăng dần]}]. */
+const DEV_STACK_TOL = 0.06;      // m
+function deviceStacks(fl){
+  fl=fl||F();
+  const tol=DEV_STACK_TOL*(fl.pxPerMeter||50), out=[];
+  (fl.devices||[]).forEach(d=>{
+    const g=out.find(o=>o.d.kind===d.kind && Math.hypot(o.d.x-d.x, o.d.y-d.y)<=tol);
+    if(g) g.all.push(d); else out.push({d, all:[d]});
+  });
+  out.forEach(o=>{ o.all.sort((a,b)=>(a.mh??0)-(b.mh??0)); o.d=o.all[0]; });
+  return out;
+}
+/* Mọi thiết bị chồng tại vị trí của d (kể cả chính nó) — dùng để bấm luân phiên chọn từng cái */
+function deviceStackOf(id, fl){
+  fl=fl||F();
+  const st=deviceStacks(fl).find(o=>o.all.some(x=>x.id===id));
+  return st? st.all : [];
+}
 function nextDeviceCode(kind){
   const pre=(DEVICE_SPEC[kind]||{}).prefix||"TB";
   return nextCode(pre, allDevices());
@@ -2477,9 +2498,13 @@ function drawOverlay(){
   });
 
   // ---- lớp 4c: THIẾT BỊ (ổ cắm/mạng/TV/wifi/nguồn chờ) — hệ riêng, chỉ hiện khi tờ có lớp này ----
-  if(sheetHas("devices")) (fl.devices||[]).forEach(d=>{
-    if(!deviceOnSheet(d)) return;   // tờ chiếu sáng chỉ nhận NGUỒN CHỜ, không nhận ổ cắm/mạng/wifi
-    const sel = exportInv==null && selDevice===d.id;
+  // CHỒNG CAO ĐỘ: mặt bằng là hình chiếu NGANG, hai ổ chồng nhau trên tường chỉ là MỘT điểm.
+  // Vẽ thành hai điểm cạnh nhau là sai thật — thợ sẽ đục hai hộp nằm ngang thay vì hai hộp chồng.
+  // Nên: một ký hiệu, nhãn liệt kê cao độ theo ĐÚNG thứ tự đứng ngoài đời (cao nhất ở trên).
+  if(sheetHas("devices")) deviceStacks(fl).forEach(st=>{
+    if(!deviceOnSheet(st.d)) return;   // tờ chiếu sáng chỉ nhận NGUỒN CHỜ
+    const d=st.d;                      // đại diện nhóm (thấp nhất)
+    const sel = exportInv==null && st.all.some(x=>x.id===selDevice);
     const szD = Math.max(0.13*P, 16*inv);
     const g=svg("g",{transform:`translate(${d.x},${d.y}) rotate(${d.rot||0})`, "data-dev":d.id,
       class:"devm", style:"cursor:pointer"});
@@ -2494,16 +2519,17 @@ function drawOverlay(){
       // thêm hàng chục nhãn "OC7" lên bản vẽ mà thợ chẳng dùng tới — cái thợ cần là ĐẶT CAO BAO NHIÊU.
       // Số lượng theo phòng đã có ở bảng thống kê. Riêng NGUỒN CHỜ bắt buộc in TÊN thiết bị: dấu chờ
       // vô danh là lệnh để lại một dây sống vô danh trên giấy mang logo INEX.
-      const txt = d.kind==="prov"
-        ? (d.note? "CHỜ: "+d.note : "CHỜ: ?")+(d.mh!=null? " +"+fmtPlan(d.mh):"")
-        : (d.mh!=null? "+"+fmtPlan(d.mh) : "");
+      const lines = d.kind==="prov"
+        ? st.all.map(x=>(x.note? "CHỜ: "+x.note : "CHỜ: ?")+(x.mh!=null? " +"+fmtPlan(x.mh):""))
+        : st.all.map(x=> x.mh!=null? "+"+fmtPlan(x.mh) : "").filter(Boolean);
+      lines.reverse();                 // cao nhất lên trên, đúng như nhìn vào mặt tường
       // Ổ cắm / mạng / TV / nguồn chờ đều BÁM TƯỜNG (rot do wallSnap đặt, hướng vào phòng) → chữ
       // phải ra phía phòng. Ổ SÀN và WIFI không có lưng nên không ép hướng.
       const rrD=(d.rot||0)*Math.PI/180;
       const frontD = (d.kind==="socket_floor"||d.kind==="wifi") ? null
                    : {fx:Math.sin(rrD), fy:-Math.cos(rrD)};
-      if(txt) autoLabel(ov, "D", d.id, d.x, d.y, szD*0.75, szD*0.75, 0,
-        txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, d, frontD);
+      if(lines.length) autoLabel(ov, "D", d.id, d.x, d.y, szD*0.75, szD*0.75, 0,
+        lines, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, d, frontD);
     }
   });
 
@@ -2808,8 +2834,9 @@ function boxOverlap(a,b){
    tròn 0,62 m thì nhãn đặt phía TRÊN cũng bị đẩy ra 0,62 m, trong khi bề dày cây tuýp chỉ 9 cm —
    đó chính là cảnh "text quá xa ký hiệu". */
 function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, obj, front){
+  const lines = Array.isArray(txt)? txt : [txt];
   const s=size*textScale();
-  const w=measureText(txt, size, 600)+2*inv, h=s*1.15;
+  const w=Math.max(...lines.map(t=>measureText(t, size, 600)))+2*inv, h=s*1.15*lines.length;
   const gap=3*inv;
   const a=(rot||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
   const reach=(ux,uy)=>{                       // khoảng cách tâm → mép hình theo hướng (ux,uy)
@@ -2859,25 +2886,28 @@ function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, ob
   }
   lblBoxes.push({x:best.x, y:best.y, w, h});
   const tx = best.anchor==="start"? best.x : best.anchor==="end"? best.x+w : best.x+w/2;
-  addDragLabel(ov, kind, ref, tx, best.y+h*0.8, txt, size, color, inv, best.anchor);
+  addDragLabel(ov, kind, ref, tx, best.y+s*0.92, lines, size, color, inv, best.anchor);
 }
 function addDragLabel(ov, kind, ref, x, y, txt, size, color, inv, anchor){
   // Hộp BẮT CHUỘT phải phủ đúng chữ được vẽ. Trước đây bề rộng đoán bằng số ký tự × hằng số nên
   // lệch với chữ thật (nhãn có "↕", dấu tiếng Việt, số dài…) → bấm trúng chữ mà không trúng hộp,
   // và đó là lý do double-click trả nhãn về mặc định "không ăn".
-  const w=measureText(txt, size, 600)+2*inv;
+  const lines = Array.isArray(txt)? txt : [txt];
+  const w=Math.max(...lines.map(t=>measureText(t, size, 600)))+2*inv;
   size*=textScale();   // nhân SAU khi đo (measureText đã tự nhân textScale bên trong)
   const g=svg("g",{class:"dlbl","data-k":kind,"data-r":ref, style:"cursor:move"});
-  const h=size*1.3;
+  const lh=size*1.15, h=size*1.3+(lines.length-1)*lh;
   const rx = anchor==="end"? x-w : anchor==="middle"? x-w/2 : x;
-  g.appendChild(svg("rect",{x:rx-3*inv, y:y-h+3*inv, width:w+6*inv, height:h+3*inv,
+  g.appendChild(svg("rect",{x:rx-3*inv, y:y-size*1.3+3*inv, width:w+6*inv, height:h+3*inv,
     rx:3*inv, fill:"transparent", class:"lblhit"}));
-  const t=svg("text",{x, y, "text-anchor":anchor||"start",
-    "font-family":"'Inter',sans-serif","font-weight":600,"font-size":size, fill:color,
-    stroke:"#FFFFFF","stroke-width":2.4*inv,"paint-order":"stroke",
-    style:"letter-spacing:.01em; pointer-events:none"});
-  t.textContent=txt;
-  g.appendChild(t);
+  lines.forEach((ln,i)=>{
+    const t=svg("text",{x, y:y+i*lh, "text-anchor":anchor||"start",
+      "font-family":"'Inter',sans-serif","font-weight":600,"font-size":size, fill:color,
+      stroke:"#FFFFFF","stroke-width":2.4*inv,"paint-order":"stroke",
+      style:"letter-spacing:.01em; pointer-events:none"});
+    t.textContent=ln;
+    g.appendChild(t);
+  });
   ov.appendChild(g);
 }
 /* text có viền trắng (paint-order) để đọc được trên nền ảnh */
@@ -3315,7 +3345,15 @@ vp.addEventListener("pointerdown", e=>{
   }
   const dvg=e.target.closest? e.target.closest(".devm") : null;
   if(dvg){
-    selDevice=dvg.dataset.dev; selLights=[]; selSwitch=null;
+    // Một ký hiệu có thể là NHIỀU thiết bị chồng cao độ → bấm lại để xoay vòng chọn từng cái,
+    // nếu không thì cái ở trên không bao giờ chọn/sửa/xoá được.
+    const stack=deviceStackOf(dvg.dataset.dev);
+    if(stack.length>1){
+      const i=stack.findIndex(x=>x.id===selDevice);
+      selDevice = stack[(i+1)%stack.length].id;
+      showHint(`Vị trí này có ${stack.length} thiết bị chồng cao độ — bấm tiếp để chọn cái kế`);
+    } else selDevice=dvg.dataset.dev;
+    selLights=[]; selSwitch=null;
     const d=deviceById(selDevice);
     drag={mode:"device", start:w, moved:false, preSnap:snapshot(), ox:d.x, oy:d.y};
     renderAll(); return;
@@ -3810,9 +3848,18 @@ function addDeviceAt(w){
     fl.zones.forEach(z=>{ const nw=nearestWall(w, z.poly); if(nw&&nw.d<bd){bd=nw.d;bz=z;} });
     if(bz && bd < 1.5*(fl.pxPerMeter||50)){ const sn=wallSnap(w, bz.poly); if(sn){ dev.x=sn.x; dev.y=sn.y; dev.rot=sn.rot; } }
   }
+  // Thả CHỒNG lên một cái cùng loại đã có → dính đúng toạ độ của nó, thành "một vị trí, nhiều cao
+  // độ". Bán kính bắt 12 cm — hẹp hơn khoảng cách giữa hai hộp âm tường nằm cạnh nhau ngoài đời,
+  // nên chỉ dính khi anh CỐ Ý chồng, đặt hai ổ cạnh nhau vẫn ra hai ký hiệu riêng.
+  const near=(fl.devices||[]).filter(o=>o.kind===dev.kind &&
+    Math.hypot(o.x-dev.x, o.y-dev.y) <= 0.12*(fl.pxPerMeter||50));
+  let stacked=false;
+  if(near.length){ const t=near[0]; dev.x=t.x; dev.y=t.y; dev.rot=t.rot; stacked=true; }
   mutate(()=>{ fl.devices.push(dev); });
   selDevice=dev.id; selLights=[]; selSwitch=null;
-  showHint(`Đã đặt ${spec.label} · click tiếp để thêm, phím 1–9 đổi loại, Esc để xong`);
+  showHint(stacked
+    ? `Đã chồng thêm ${spec.label} tại vị trí này — đặt cao độ khác nhau, bản vẽ ghi cả hai`
+    : `Đã đặt ${spec.label} · click tiếp để thêm, phím 1–9 đổi loại, Esc để xong`);
 }
 function addLightAt(w){
   // đặt vào zone chứa điểm click (ưu tiên zone đang chọn)
