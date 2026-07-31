@@ -2657,18 +2657,40 @@ function drawTitleBlock(ov, inv, P){
     segs = Math.max(2, Math.round(target/unit));
     barW = segs*unit*F().pxPerMeter;
   }
-  const th=6*inv;
-  // ước lượng bề rộng khối = max(thước, chữ dài nhất). Chữ dùng addText nên đã nhân textScale.
-  const line1=escapeHtml(state.projectName||"Dự án");
+  const th=6*inv, ts=textScale();
+  const line1=state.projectName||"Dự án";
   const line2=F().name+(F().pxPerMeter? "":" · CHƯA CÂN TỈ LỆ");
-  const boxW=Math.max(barW+2*pad, 150*inv);
-  const boxH=(F().pxPerMeter? th+30*inv : 8*inv) + 44*inv;
+  const FOOT="Không đo số trực tiếp trên bản vẽ";
+  // Tờ này ẩn LED dây mà tầng lại CÓ dây → phải nói ra, không thì đọc như tầng không có LED dây.
+  const note = ((curSheet()||{}).hideStrips &&
+      F().zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip")))
+    ? "LED dây do xưởng gỗ lắp — xem bản vẽ đồ gỗ. Tờ này chỉ ghi nguồn chờ." : null;
+
+  // BỀ RỘNG / CHIỀU CAO khối tính từ CHỮ THẬT (đã gồm textScale), không phải hằng số. Bản trước
+  // dùng hằng số nên chọn cỡ chữ Vừa/Lớn là chữ tràn khỏi khung và dòng chân đè lên số thước tỉ lệ.
+  // Trần bề rộng: khối tiêu đề không được nuốt quá ~42% tờ giấy dù tên dự án dài tới đâu.
+  const capW=Math.min(W-24*inv, Math.max(barW+2*pad, W*0.42));
+  let nameLines=wrapText(line1, capW-2*pad, 12*inv, 600);
+  // dài quá 2 dòng thì dồn phần còn lại vào dòng 2 rồi cắt (clipText tự thêm "…" cho vừa khung)
+  if(nameLines.length>2)
+    nameLines=[nameLines[0], clipText(nameLines.slice(1).join(" "), capW-2*pad, 12*inv, 600)];
+  const need=Math.max(barW, ...nameLines.map(t=>measureText(t,12*inv,600)),
+                      measureText(line2,10*inv,500), measureText(FOOT,8*inv,500));
+  const boxW=Math.min(Math.max(need+2*pad, 150*inv), capW);
+  // ghi chú dài thì XUỐNG DÒNG trong khung — trước đây nó nằm NGOÀI khung, canh trái từ mép khối
+  // nên chạy thẳng ra khỏi mép phải tờ giấy và bị cắt cụt.
+  const noteLines = note? wrapText(note, boxW-2*pad, 8.5*inv, 600) : [];
+
+  const lh1=12*inv*ts*1.35, lh2=10*inv*ts*1.55;
+  const lhN=8.5*inv*ts*1.30, lhF=8*inv*ts*1.55;
+  const hBar=F().pxPerMeter? (th+8.5*inv*ts*1.55+4*inv) : 0;
+  const boxH=pad + nameLines.length*lh1 + lh2 + hBar + noteLines.length*lhN + lhF + pad*0.5;
   const x0=W-boxW-12*inv, y0=H-boxH-12*inv;
   g.appendChild(svg("rect",{x:x0, y:y0, width:boxW, height:boxH, rx:4*inv,
     fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
-  let cy=y0+pad+11*inv;
-  addText(g, x0+pad, cy, line1, 12*inv, C_INK, "start", 600); cy+=15*inv;
-  addText(g, x0+pad, cy, line2, 10*inv, "#8A8175", "start", 500); cy+=16*inv;
+  let cy=y0+pad;
+  nameLines.forEach(ln=>{ addText(g, x0+pad, cy+lh1*0.75, ln, 12*inv, C_INK, "start", 600); cy+=lh1; });
+  addText(g, x0+pad, cy+lh2*0.70, line2, 10*inv, "#8A8175", "start", 500); cy+=lh2;
   if(F().pxPerMeter){
     const bx=x0+pad, by=cy;
     for(let i=0;i<segs;i++){
@@ -2677,18 +2699,12 @@ function drawTitleBlock(ov, inv, P){
     }
     for(let i=0;i<=segs;i++){
       const lx=bx+i*unit*F().pxPerMeter;
-      addText(g, lx, by+th+11*inv, fmtPlan(i*unit,0)+(i===segs?" m":""), 8.5*inv, "#6E665A", "middle", 500);
+      addText(g, lx, by+th+8.5*inv*ts*1.15, fmtPlan(i*unit,0)+(i===segs?" m":""), 8.5*inv, "#6E665A", "middle", 500);
     }
+    cy+=hBar;
   }
-  // ghi chú không-đo-số — dán dưới cùng khối
-  addText(g, x0+pad, y0+boxH-6*inv, "Không đo số trực tiếp trên bản vẽ", 8*inv, "#A9A093", "start", 500);
-  // Tờ này ẩn LED dây mà tầng lại CÓ dây → phải nói ra, không thì đọc như tầng không có LED dây.
-  if((curSheet()||{}).hideStrips &&
-     F().zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip"))){
-    addText(g, x0+pad, y0-5*inv,
-      "LED dây do xưởng gỗ lắp — xem bản vẽ đồ gỗ. Tờ này chỉ ghi nguồn chờ.",
-      8.5*inv, "#8A6D3B", "start", 600);
-  }
+  noteLines.forEach(ln=>{ addText(g, x0+pad, cy+lhN*0.78, ln, 8.5*inv, "#8A6D3B", "start", 600); cy+=lhN; });
+  addText(g, x0+pad, cy+lhF*0.72, FOOT, 8*inv, "#A9A093", "start", 500);
   ov.appendChild(g);
 }
 /* Bề rộng THẬT của một chuỗi ở đúng font/cỡ sắp vẽ — dựng tạm một <text> trong overlay (đang nằm
@@ -2702,6 +2718,27 @@ function measureText(txt, size, weight){
   let w=0; try{ w=t.getComputedTextLength(); }catch(e){}
   t.remove();
   return w;
+}
+/* Ngắt dòng theo bề rộng THẬT của chữ (dùng measureText). Tham lam theo từ; từ nào một mình đã
+   dài hơn khung thì vẫn để nguyên một dòng — thà hơi dài còn hơn cắt giữa chữ. */
+function wrapText(txt, maxW, size, weight){
+  const words=String(txt).split(/\s+/).filter(Boolean), out=[];
+  let cur="";
+  words.forEach(w=>{
+    const t=cur? cur+" "+w : w;
+    if(cur && measureText(t,size,weight)>maxW){ out.push(cur); cur=w; }
+    else cur=t;
+  });
+  if(cur) out.push(cur);
+  // một "từ" dài hơn cả khung (tên viết liền không dấu cách) thì cắt cứng — thà mất đuôi còn hơn
+  // đâm thủng khung, vì khung tiêu đề nằm sát mép tờ giấy
+  return out.map(ln=>clipText(ln, maxW, size, weight));
+}
+function clipText(txt, maxW, size, weight){
+  let s=String(txt);
+  if(measureText(s,size,weight)<=maxW) return s;
+  while(s.length>1 && measureText(s+"…",size,weight)>maxW) s=s.slice(0,-1);
+  return s+"…";
 }
 /* text trần (không viền) — dùng khi đã có nền thẻ phía dưới */
 function addText(parent, x, y, txt, size, color, anchor, weight){
