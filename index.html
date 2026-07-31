@@ -2247,15 +2247,24 @@ function drawOverlay(){
   const isSel=(zid,li)=> exportInv==null && selLights.some(s=>s.zid===zid&&s.li===li);
 
   // vật cản để nhãn tự né: mọi ký hiệu đang CÓ MẶT trên tờ này
+  // Vật cản của nhãn lưu bằng HỘP BAO đúng theo hình vẽ (nửa rộng / nửa cao), không phải một BÁN
+  // KÍNH TRÒN. Dùng bán kính tròn thì cây tuýp dài 1,2 m hoá thành ô vuông 1,2×1,2 m: mọi chỗ sát
+  // cạnh thân đều bị chấm là "đè", nhãn bị đẩy ra tận ĐẦU cây — đúng bệnh "text quá xa ký hiệu".
   lblObst=[]; lblBoxes=[];
+  const obst=(x,y,rx,ry,rot)=>{                  // hộp bao của một chữ nhật đã xoay
+    const a=(rot||0)*Math.PI/180, c=Math.abs(Math.cos(a)), s=Math.abs(Math.sin(a));
+    lblObst.push({x, y, hw:rx*c+ry*s, hh:rx*s+ry*c});
+  };
   F().zones.forEach(z=>z.lights.forEach(l=>{
     const lamp=lightById(l.lightId); if(!lampOnSheet(lamp)) return;
-    lblObst.push({x:l.x, y:l.y, r:Math.max((SYM_SIZE[lamp.type]||0.2)*0.5*P, 10*inv)});
+    const rxy=SYM_RXY[lamp.type]||[0.16,0.16];
+    const rX=(lamp.type==="strip" && !l.vert)? Math.max(0.3,l.len||1)/2 : rxy[0];
+    obst(l.x, l.y, Math.max(rX*P, 8*inv), Math.max(rxy[1]*P, 8*inv), l.rot||0);
   }));
-  if(sheetHas("switches")) (F().switches||[]).forEach(s=>
-    lblObst.push({x:s.x, y:s.y, r:Math.max(0.11*P, 15*inv)}));
-  if(sheetHas("devices")) (F().devices||[]).forEach(d=>{ if(deviceOnSheet(d))
-    lblObst.push({x:d.x, y:d.y, r:Math.max(0.13*P, 16*inv)}); });
+  if(sheetHas("switches")) (F().switches||[]).forEach(s=>{
+    const r=Math.max(0.11*P, 15*inv); obst(s.x, s.y, r, r, 0); });
+  if(sheetHas("devices")) (F().devices||[]).forEach(d=>{ if(!deviceOnSheet(d)) return;
+    const r=Math.max(0.13*P, 16*inv); obst(d.x, d.y, r, r, 0); });
 
   // ---- lớp 1: zone fill/stroke ----
   F().zones.forEach(z=>{
@@ -2823,6 +2832,11 @@ function labelObj(kind, ref){
 let lblObst=[], lblBoxes=[];
 const LBL_DIRS=[ {ux:1,uy:0.55}, {ux:1,uy:-0.55}, {ux:-1,uy:0.55}, {ux:-1,uy:-0.55},
                  {ux:0,uy:1}, {ux:0,uy:-1}, {ux:1,uy:0}, {ux:-1,uy:0} ];
+/* chỗ đặt thêm cho vật DÀI: vẫn nằm cạnh thân, chỉ lùi dọc theo thân ±nửa/±toàn nửa bề dài */
+const LBL_SIDE=[ {ux:0,uy:1,along:-0.5}, {ux:0,uy:1,along:0.5},
+                 {ux:0,uy:-1,along:-0.5}, {ux:0,uy:-1,along:0.5},
+                 {ux:0,uy:1,along:-0.9}, {ux:0,uy:1,along:0.9},
+                 {ux:0,uy:-1,along:-0.9}, {ux:0,uy:-1,along:0.9} ];
 function boxOverlap(a,b){
   const w=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
   const h=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
@@ -2847,7 +2861,11 @@ function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, ob
   };
   const place=dir=>{
     const n=Math.hypot(dir.ux,dir.uy)||1, ux=dir.ux/n, uy=dir.uy/n;
-    const d=Math.max(reach(ux,uy), 9*inv)+gap, px=cx+ux*d, py=cy+uy*d;
+    // "along" = trượt dọc theo TRỤC của ký hiệu (đơn vị: lần nửa bề dài). Vật DÀI (tuýp, LED dây)
+    // cần được trượt như vậy: chỗ ngay cạnh giữa thân bị vướng thì lùi dọc theo thân, chứ không
+    // phải nhảy ra tận ĐẦU vật — ra đầu thì nhìn như nhãn của một thứ khác.
+    const off=(dir.along||0)*rx, ox=off*ca, oy=off*sa;
+    const d=Math.max(reach(ux,uy), 9*inv)+gap, px=cx+ox+ux*d, py=cy+oy+uy*d;
     const anchor = ux>0.3? "start" : ux<-0.3? "end" : "middle";
     return { x: anchor==="start"? px : anchor==="end"? px-w : px-w/2,
              y: uy>0.3? py : uy<-0.3? py-h : py-h/2, w, h, anchor };
@@ -2864,23 +2882,33 @@ function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, ob
     // Thiết bị áp tường có MẶT TRƯỚC (hướng nó quay ra phòng) và có LƯNG (nằm trong tường).
     // Chữ phải ở phía MẶT TRƯỚC (anh Khoa chốt) — đặt về phía lưng là ghi chữ vào trong tường.
     const dot=(ux,uy)=> front? ux*front.fx+uy*front.fy : 0;
-    let dirs=LBL_DIRS;
+    // vật DÀI: thêm các chỗ nằm CẠNH thân nhưng lùi dọc theo thân, để không phải chạy ra đầu vật
+    let dirs = rx>ry*2 ? LBL_DIRS.concat(LBL_SIDE) : LBL_DIRS;
     if(front){
       // chỉ giữ nửa mặt trước, bỏ cả hướng đi ngang bằng (dot≈0) — "ngang" chưa phải là "trước"
       const ok=LBL_DIRS.filter(d=>{ const n=Math.hypot(d.ux,d.uy)||1;
         return dot(d.ux/n, d.uy/n) > 0.05; });
       if(ok.length) dirs=ok;
     }
+    // CHẤM ĐIỂM BẰNG PX MÀN HÌNH. Bản trước trộn ba đại lượng co giãn khác nhau theo zoom
+    // (reach lai giữa mét và px, phạt hướng theo inv², diện tích đè lại theo đơn vị thế giới) →
+    // thứ hạng các hướng ĐẢO khi đổi zoom, nên cùng một ổ cắm mà zoom mức này chữ nằm cạnh, zoom
+    // mức khác chữ văng ra xa. Quy hết về px màn hình thì trọng số cố định ở mọi mức zoom.
+    const S=1/inv;
     dirs.forEach((dir,i)=>{
       const n=Math.hypot(dir.ux,dir.uy)||1, ux=dir.ux/n, uy=dir.uy/n;
       const box=place(dir);
-      // Ưu tiên 1: không đè. Ưu tiên 2: đúng MẶT TRƯỚC. Ưu tiên 3: BÁM SÁT — hướng nào phải đi xa
-      // tâm thì bị phạt, nên nhãn cây tuýp chạy ra CẠNH BÊN (dày 9 cm) chứ không ra đầu cây (62 cm).
-      let pen = reach(ux,uy)*10*inv
-              + (front? (1-dot(ux,uy))*420*inv*inv : 0)
-              + i*2*inv*inv;                        // tiebreak: giữ thứ tự hướng cho ổn định
-      lblObst.forEach(o=>{ pen+=boxOverlap(box,{x:o.x-o.r,y:o.y-o.r,w:o.r*2,h:o.r*2})*3; });
-      lblBoxes.forEach(b=>{ pen+=boxOverlap(box,b)*2; });
+      // Thứ tự ưu tiên: đè KÝ HIỆU (nặng nhất) → đúng MẶT TRƯỚC → đè nhãn khác → bám sát.
+      // Đè nhãn khác cố ý nhẹ hơn hướng: zoom nhỏ thì nhãn nào cũng chen nhau, thà để chúng
+      // nằm đúng chỗ tiêu chuẩn rồi anh zoom vào đọc, còn hơn mỗi mức zoom một kiểu.
+      let pen = reach(ux,uy)*S*3
+              + (front? (1-dot(ux,uy))*3000 : 0)
+              + i*5;                                // tiebreak: giữ thứ tự hướng cho ổn định
+      lblObst.forEach(o=>{ pen+=boxOverlap(box,{x:o.x-o.hw,y:o.y-o.hh,w:o.hw*2,h:o.hh*2})*S*S*40; });
+      // Vật CÓ mặt trước (ổ cắm, đèn tường): giữ chỗ tiêu chuẩn quan trọng hơn việc né nhãn khác,
+      // nên phạt nhẹ. Vật KHÔNG có mặt trước (đèn trần…): hướng nào cũng như nhau, ưu tiên né.
+      const wLbl = front? 4 : 12;
+      lblBoxes.forEach(b=>{ pen+=boxOverlap(box,b)*S*S*wLbl; });
       if(!best || pen<best.pen) best={...box, pen};
     });
   }
