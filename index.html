@@ -2401,9 +2401,12 @@ function drawOverlay(){
         // nửa kích thước hình vẽ theo trục riêng — LED dây nằm ngang lấy đúng nửa chiều dài thật
         const rxy=SYM_RXY[lamp.type]||[0.16,0.16];
         const rX = (lamp.type==="strip" && !l.vert) ? Math.max(0.3,l.len||1)/2 : rxy[0];
+        // đèn GẮN TƯỜNG: lưng nó nằm trong tường → mặt trước là hướng chiếu vào phòng
+        const rr=rot*Math.PI/180;
+        const front = mnt==="wall"? {fx:Math.sin(rr), fy:-Math.cos(rr)} : null;
         autoLabel(ov, "L", z.id+":"+li, l.x, l.y, rX*P, rxy[1]*P, rot,
           lamp.code+(cir&&cir.key? cir.key:"")+vSuffix+hSuffix, 8.5*inv,
-          off? "#BDB4A6" : (sel? C_ACCENT_D : "#6E665A"), inv, l);
+          off? "#BDB4A6" : (sel? C_ACCENT_D : "#6E665A"), inv, l, front);
       }
     });
   });
@@ -2494,8 +2497,13 @@ function drawOverlay(){
       const txt = d.kind==="prov"
         ? (d.note? "CHỜ: "+d.note : "CHỜ: ?")+(d.mh!=null? " +"+fmtPlan(d.mh):"")
         : (d.mh!=null? "+"+fmtPlan(d.mh) : "");
+      // Ổ cắm / mạng / TV / nguồn chờ đều BÁM TƯỜNG (rot do wallSnap đặt, hướng vào phòng) → chữ
+      // phải ra phía phòng. Ổ SÀN và WIFI không có lưng nên không ép hướng.
+      const rrD=(d.rot||0)*Math.PI/180;
+      const frontD = (d.kind==="socket_floor"||d.kind==="wifi") ? null
+                   : {fx:Math.sin(rrD), fy:-Math.cos(rrD)};
       if(txt) autoLabel(ov, "D", d.id, d.x, d.y, szD*0.75, szD*0.75, 0,
-        txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, d);
+        txt, 8*inv, sel?C_ACCENT_D:(spec.prov?"#8A6D3B":"#6E665A"), inv, d, frontD);
     }
   });
 
@@ -2799,7 +2807,7 @@ function boxOverlap(a,b){
    Phải đo theo TỪNG HƯỚNG chứ không dùng một bán kính tròn: cây tuýp dài 1,2 m mà lấy bán kính
    tròn 0,62 m thì nhãn đặt phía TRÊN cũng bị đẩy ra 0,62 m, trong khi bề dày cây tuýp chỉ 9 cm —
    đó chính là cảnh "text quá xa ký hiệu". */
-function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, obj){
+function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, obj, front){
   const s=size*textScale();
   const w=measureText(txt, size, 600)+2*inv, h=s*1.15;
   const gap=3*inv;
@@ -2826,11 +2834,23 @@ function autoLabel(ov, kind, ref, cx, cy, rx, ry, rot, txt, size, color, inv, ob
     best=place(LBL_DIRS[0]);
     best.x+=(obj.lx||0)*inv; best.y+=(obj.ly||0)*inv;
   } else {
-    LBL_DIRS.forEach((dir,i)=>{
+    // Thiết bị áp tường có MẶT TRƯỚC (hướng nó quay ra phòng) và có LƯNG (nằm trong tường).
+    // Chữ phải ở phía MẶT TRƯỚC (anh Khoa chốt) — đặt về phía lưng là ghi chữ vào trong tường.
+    const dot=(ux,uy)=> front? ux*front.fx+uy*front.fy : 0;
+    let dirs=LBL_DIRS;
+    if(front){
+      // chỉ giữ nửa mặt trước, bỏ cả hướng đi ngang bằng (dot≈0) — "ngang" chưa phải là "trước"
+      const ok=LBL_DIRS.filter(d=>{ const n=Math.hypot(d.ux,d.uy)||1;
+        return dot(d.ux/n, d.uy/n) > 0.05; });
+      if(ok.length) dirs=ok;
+    }
+    dirs.forEach((dir,i)=>{
+      const n=Math.hypot(dir.ux,dir.uy)||1, ux=dir.ux/n, uy=dir.uy/n;
       const box=place(dir);
-      // Ưu tiên 1: không đè. Ưu tiên 2: BÁM SÁT — hướng nào phải đi xa tâm thì bị phạt, nên nhãn
-      // của cây tuýp chạy ra CẠNH BÊN (dày 9 cm) chứ không ra đầu cây (dài 62 cm).
-      let pen = reach(dir.ux/(Math.hypot(dir.ux,dir.uy)||1), dir.uy/(Math.hypot(dir.ux,dir.uy)||1))*10*inv
+      // Ưu tiên 1: không đè. Ưu tiên 2: đúng MẶT TRƯỚC. Ưu tiên 3: BÁM SÁT — hướng nào phải đi xa
+      // tâm thì bị phạt, nên nhãn cây tuýp chạy ra CẠNH BÊN (dày 9 cm) chứ không ra đầu cây (62 cm).
+      let pen = reach(ux,uy)*10*inv
+              + (front? (1-dot(ux,uy))*420*inv*inv : 0)
               + i*2*inv*inv;                        // tiebreak: giữ thứ tự hướng cho ổn định
       lblObst.forEach(o=>{ pen+=boxOverlap(box,{x:o.x-o.r,y:o.y-o.r,w:o.r*2,h:o.r*2})*3; });
       lblBoxes.forEach(b=>{ pen+=boxOverlap(box,b)*2; });
