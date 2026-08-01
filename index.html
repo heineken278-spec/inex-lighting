@@ -568,10 +568,10 @@
   /* ---------- Print ---------- */
   #printArea{display:none}
   @media print{
-    /* Khai báo KHỔ GIẤY: hồ sơ vẽ theo A4 DỌC. Không khai thì trình duyệt lấy cài đặt cuối cùng
-       của máy — anh Khoa đang để Letter + KHỔ NGANG, vùng in chỉ còn ~190mm cao thay vì 273mm,
-       nên bản vẽ không lọt và bị đẩy sang trang sau, để lại trang chỉ có tiêu đề. */
-    @page{size:A4 portrait; margin:12mm}
+    /* size:auto = ĐỂ NGƯỜI DÙNG TỰ CHỌN khổ và hướng giấy. Từng thử ghim "A4 portrait" cho chắc,
+       nhưng khai hướng giấy trong @page là Chrome KHOÁ LUÔN ô Layout trong hộp thoại in — mất
+       quyền chọn ngang/dọc. Không cần ghim: chặn chiều cao đã tính theo vh nên khổ nào cũng lọt. */
+    @page{size:auto; margin:12mm}
     /* CHỈ hồ sơ được in. Trước đây mới ẩn #app, còn #toast (position:fixed) và mọi modal/thẻ tạm
        khác vẫn lọt vào bản in — phần tử fixed trong bản in của Chrome có thể chiếm nguyên một
        trang. Chặn tất cả, chỉ chừa #printArea. */
