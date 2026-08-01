@@ -451,8 +451,8 @@
     display:flex; align-items:center; justify-content:center; color:var(--ink);
     font-family:var(--mono); font-size:11px; font-weight:700}
   .cir.on .ckey, .cir:hover .ckey{border-color:var(--accent)}
-  .cir .cnm{cursor:text}
-  .cir .cnm:hover{text-decoration:underline dotted}
+  /* cụm không còn tên để sửa → bỏ luôn dấu hiệu "gõ được vào đây" */
+  .cir .cnm{font-weight:600}
   .cir .ciredit{border:none;background:transparent;color:var(--ink-3);cursor:pointer;
     font-size:12px;min-width:26px;height:26px;border-radius:6px;flex-shrink:0;opacity:.5}
   .cir:hover .ciredit{opacity:1}
@@ -585,9 +585,12 @@
        sang trang sau, để lại một trang trống. Vùng in A4 = 297 − 2×13 = 271mm.
          · trang sau : 271 − ~16 (tên tầng) − lề an toàn  → 228mm
          · TRANG ĐẦU : còn phải chứa khối đầu trang (~27mm) → 196mm */
-    #printArea .plan{max-width:100%; max-height:228mm; display:block;
+    #printArea .plan{max-width:100%; max-height:210mm; display:block;
       border:1px solid var(--line); border-radius:6px}
-    #printArea .pr-first .plan{max-height:196mm}
+    #printArea .pr-first .plan{max-height:180mm}
+    /* Tên tầng và bản vẽ phải ĐI CÙNG NHAU. Không có dòng này thì tiêu đề ở lại trang trước còn
+       ảnh nhảy sang trang sau — ra đúng cảnh "trang chỉ có tiêu đề rồi bỏ trống" (anh Khoa). */
+    #printArea .pr-plan{break-inside:avoid; page-break-inside:avoid}
     #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
     #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
@@ -595,8 +598,10 @@
     table.pr{width:100%; border-collapse:collapse; font-size:10.5px; font-family:var(--body)}
     table.pr thead{display:table-header-group}          /* lặp tiêu đề khi sang trang */
     table.pr tr{break-inside:avoid}
+    /* Tiêu đề cột KHÔNG xuống dòng: bảng còn thừa bề ngang mà chữ "CAO ĐỘ (M)" lại gãy 3 dòng,
+       làm hàng tiêu đề cao gấp ba và đọc rất khó (anh Khoa). Ô nào cần thì tự nới ra. */
     table.pr th{font-family:var(--label); text-transform:uppercase; letter-spacing:.04em;
-      font-size:8.5px; font-weight:600; text-align:left; color:var(--ink-2);
+      font-size:8.5px; font-weight:600; text-align:left; color:var(--ink-2); white-space:nowrap;
       background:var(--cream); padding:6px 7px; border:1px solid var(--line)}
     table.pr td{padding:5px 7px; border:1px solid var(--line); vertical-align:middle}
     table.pr td.num,table.pr th.num{text-align:right; font-family:var(--mono); font-size:10px}
@@ -2898,13 +2903,15 @@ function drawLegend(ov, inv, P){
   // Bề rộng phải tính theo CỠ CHỮ đang dùng — trước đây ước lượng bằng hằng số nên chọn "Lớn"
   // (×1,7) là tên cụm dài tràn qua cột "n đèn", hai dòng chữ chồng lên nhau.
   const ts=textScale();
-  const NAME_MAX=30;                                     // tên quá dài thì cắt, không để phá khung
-  const nameOf=c=>c.name.length>NAME_MAX? c.name.slice(0,NAME_MAX-1)+"…" : c.name;
   const keyX=pad+9*inv;                                  // chữ cái cụm
-  const nameX=pad+22*inv*ts;                             // tên cụm
+  const nameX=pad+22*inv*ts;                             // khu vực cụm chạy qua
   const nOf=c=>fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
-  // ĐO thật bề rộng chữ thay vì đoán theo số ký tự: cỡ chữ đổi theo textScale, font Inter không
-  // đều nét, đoán bằng hằng số là cách cũ làm tên cụm dài đè lên cột "n đèn".
+  // CỤM KHÔNG CÒN TÊN (anh Khoa) — chỗ đó ghi KHU VỰC cụm chạy qua, thứ suy ra được từ chính bản
+  // vẽ và thật sự giúp đọc; tên tự sinh "Cụm b" thì không.
+  const zOf=c=>fl.zones.filter(z=>z.lights.some(l=>l.circuit===c.id)).map(z=>z.name).join(", ");
+  // ĐO thật bề rộng chữ thay vì đoán theo số ký tự: cỡ chữ đổi theo textScale, font Inter không đều nét.
+  const NAME_MAX=30;
+  const nameOf=c=>{ const s=zOf(c); return s.length>NAME_MAX? s.slice(0,NAME_MAX-1)+"…" : s; };
   const w=Math.max(150*inv, ...rows.map(c=>
     nameX + measureText(nameOf(c), 9*inv, 500) + 10*inv
           + measureText(nOf(c)+" đèn", 8.5*inv, 400) + pad));
@@ -4093,22 +4100,17 @@ function renderCircuitList(z){
     const el=document.createElement("div");
     el.className="cir"+(off?" off":"");
     el.title="Click: chọn đúng cụm đèn này trên bản vẽ";
+    // CỤM KHÔNG CÒN TÊN (anh Khoa) — mã chữ là đủ, và cũng là thứ duy nhất in ra bản vẽ.
+    // Bỏ luôn nút đổi tên: một trường không hiện ở đâu thì giữ ô nhập chỉ tổ mời gõ vô ích.
     el.innerHTML=`<b class="ckey">${c.key}</b>
-      <div class="d"><b class="cnm">${escapeHtml(c.name)}</b>
+      <div class="d"><b class="cnm">Cụm ${c.key}</b>
         <small>${lights.length} đèn · ${fmt(w)} W${sws? " · "+sws : " · <i>chưa gắn công tắc</i>"}</small></div>`;
-    const doRename=ev=>{ ev.stopPropagation();
-      const v=prompt("Tên cụm "+c.key+" (mô tả hiện trong chú giải, VD: Đèn trần khách):", c.name);
-      if(v!==null && v.trim()) mutate(()=>{ c.name=v.trim(); }); };
-    const ed=document.createElement("button"); ed.className="ciredit"; ed.textContent="✎";
-    ed.title="Đổi tên cụm"; ed.onclick=doRename;
-    el.appendChild(ed);
-    el.querySelector(".cnm").ondblclick=doRename;
     // Xoá cụm: đèn KHÔNG mất, chỉ trở về "chưa gán cụm". Cần có để đòi lại chữ cái khi cạn 26.
     const cdel=document.createElement("button"); cdel.className="ciredit"; cdel.textContent="✕";
     cdel.title="Xoá cụm "+c.key+" — đèn giữ nguyên, chỉ bỏ gán cụm";
     cdel.onclick=ev=>{ ev.stopPropagation();
       const tong=fl.zones.reduce((s,zz)=>s+zz.lights.filter(l=>l.circuit===c.id).length,0);
-      if(!confirm(`Xoá cụm ${c.key} · ${c.name}?\n${tong} đèn sẽ trở về “chưa gán cụm” (đèn không bị xoá).`)) return;
+      if(!confirm(`Xoá cụm ${c.key}?\n${tong} đèn sẽ trở về “chưa gán cụm” (đèn không bị xoá).`)) return;
       mutate(()=>deleteCircuit(c.id, fl));
       toast(`Đã xoá cụm ${c.key} — Ctrl+Z để hoàn tác`); };
     el.appendChild(cdel);
@@ -4137,7 +4139,7 @@ function renderCircuitList(z){
     const el=document.createElement("div"); el.className="cir none";
     el.style.cssText="opacity:.7;cursor:default";
     el.innerHTML=`<i style="background:#D8D0C2"></i><div class="d"><b>Cụm rỗng</b>
-      <small>${rong.map(c=>escapeHtml(c.key+"·"+c.name)).join(", ")} — không còn đèn nào</small></div>`;
+      <small>${rong.map(c=>escapeHtml("Cụm "+c.key)).join(", ")} — không còn đèn nào</small></div>`;
     const del=document.createElement("button");
     del.className="ciredit"; del.textContent="✕";
     del.title="Xoá "+rong.length+" cụm rỗng — đòi lại chữ cái cho cụm mới";
@@ -4178,7 +4180,7 @@ function refreshSwitchPanel(){
     const el=document.createElement("label"); el.className="check"; el.style.marginTop="6px";
     el.innerHTML=`<input type="checkbox" ${on?"checked":""}>
       <b style="font-family:var(--mono);font-size:11px">${c.key}</b>
-      <span style="flex:1">${escapeHtml(c.name)}</span>
+      <span style="flex:1">Cụm ${c.key}</span>
       <span class="muted" style="font-family:var(--mono);font-size:10.5px">${n} đèn</span>`;
     el.querySelector("input").onchange=e=>mutate(()=>{
       sw.circuits=sw.circuits||[];
@@ -4331,7 +4333,7 @@ function refreshRight(){
     && z.lights.some(l=>l.circuit===c.id));
   if(offC.length){
     flag.innerHTML+=`<div class="miniflag" style="background:#F0EBE2;color:var(--ink-2)">⏻ Đang tắt cụm ${
-      offC.map(c=>`<b>${c.key}</b> ${escapeHtml(c.name)}`).join(" · ")} — lux dưới đây tính theo đèn đang bật.</div>`;
+      offC.map(c=>`<b>${c.key}</b>`).join(" · ")} — lux dưới đây tính theo đèn đang bật.</div>`;
   }
   if(c.actual!=null && c.E){
     const ratio=c.actual/c.E;
@@ -5182,7 +5184,7 @@ function preflightIssues(){
         out.push({lv:"warn", msg:`Ổ cắm ${d.code} ở “${z.name}” (vùng ẩm) — nên dùng loại chống nước IP44.`});
     });
     // cụm rỗng in vào hồ sơ
-    emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}·${c.name}” (${f.name}) — nên xoá trước khi xuất.`}));
+    emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}” (${f.name}) — nên xoá trước khi xuất.`}));
   });
   return out;
 }
@@ -5321,17 +5323,19 @@ async function buildPrintDoc(){
         <td class="num">${ls.length}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
-    // Tên cụm KHÔNG lặp ở từng dòng (anh Khoa) — gom vào một bảng tra chữ cái đọc một lần.
+    // CỤM CHỈ CÓ MÃ CHỮ, KHÔNG CÓ TÊN (anh Khoa chốt) — tên tự sinh kiểu "Cụm b" chẳng nói lên gì,
+    // lặp ở mọi dòng chỉ tổ rối. Bảng tra dưới đây cho biết mỗi chữ có mấy đèn và do công tắc nào bật.
     const usedCirs=(fl.circuits||[]).filter(c=>fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
     if(usedCirs.length){
       ctlHtml+=`<table class="pr" style="margin-top:6px"><thead><tr>
-        <th style="width:34px">Cụm</th><th>Tên cụm</th><th class="num" style="width:52px">Số đèn</th>
-        <th style="width:120px">Công tắc điều khiển</th></tr></thead><tbody>`;
+        <th>Cụm</th><th class="num">Số đèn</th><th>Ở khu vực</th>
+        <th>Công tắc điều khiển</th></tr></thead><tbody>`;
       usedCirs.forEach(c=>{
         const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
-        ctlHtml+=`<tr><td><b style="font-family:var(--mono);font-weight:700">${c.key}</b>${
+        const zs=fl.zones.filter(z=>z.lights.some(l=>l.circuit===c.id)).map(z=>z.name);
+        ctlHtml+=`<tr><td><b style="font-family:var(--mono);font-weight:700;font-size:12px">${c.key}</b>${
           twoWay.has(c.id)?'<span style="color:#8A8175">↔</span>':''}</td>
-          <td>${escapeHtml(c.name)}</td><td class="num">${n}</td>
+          <td class="num">${n}</td><td>${escapeHtml(zs.join(", "))}</td>
           <td>${escapeHtml((swByCir[c.id]||[]).join(", ")||"chưa gắn công tắc")}</td></tr>`;
       });
       ctlHtml+=`</tbody></table>`;
@@ -5352,7 +5356,7 @@ async function buildPrintDoc(){
         n++;
       }));
       ctlHtml+=`<tr><td><b style="font-weight:600">${escapeHtml(sc.name)}</b></td>
-        <td>${onC.map(c=>escapeHtml(c.name)).join(", ")||"— tắt hết —"}</td>
+        <td>${onC.map(c=>c.key).join(" · ")||"— tắt hết —"}</td>
         <td class="num">${n}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
