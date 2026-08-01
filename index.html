@@ -580,7 +580,11 @@
     .pr-head .sub{font-family:var(--label); text-transform:uppercase; letter-spacing:.12em;
       font-size:9px; font-weight:600; color:var(--ink-3); margin-top:2px}
     .pr-head .pj{font-family:var(--serif); font-weight:600; font-size:14px}
-    #printArea .plan{max-width:100%; border:1px solid var(--line); border-radius:6px}
+    /* CHẶN CHIỀU CAO ảnh bản vẽ. Từ khi thêm dải chú thích dưới tờ, ảnh cao thêm ~17% và không
+       lọt phần còn lại của trang → trình duyệt đẩy nguyên khối sang trang sau, để lại MỘT TRANG
+       TRỐNG. Chặn cao thì ảnh tự thu theo tỉ lệ và luôn nằm cùng trang với đầu trang. */
+    #printArea .plan{max-width:100%; max-height:118mm; display:block;
+      border:1px solid var(--line); border-radius:6px}
     #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
     #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
