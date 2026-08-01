@@ -580,10 +580,10 @@
     .pr-head .sub{font-family:var(--label); text-transform:uppercase; letter-spacing:.12em;
       font-size:9px; font-weight:600; color:var(--ink-3); margin-top:2px}
     .pr-head .pj{font-family:var(--serif); font-weight:600; font-size:14px}
-    /* CHẶN CHIỀU CAO ảnh bản vẽ. Từ khi thêm dải chú thích dưới tờ, ảnh cao thêm ~17% và không
-       lọt phần còn lại của trang → trình duyệt đẩy nguyên khối sang trang sau, để lại MỘT TRANG
-       TRỐNG. Chặn cao thì ảnh tự thu theo tỉ lệ và luôn nằm cùng trang với đầu trang. */
-    #printArea .plan{max-width:100%; max-height:118mm; display:block;
+    /* Bản vẽ CHIẾM TRỌN MỘT TRANG, bảng thống kê sang trang sau (anh Khoa). Vẫn phải chặn chiều
+       cao: trình duyệt không cắt đôi được tấm ảnh, ảnh cao hơn vùng in là bị đẩy sang trang sau và
+       để lại một trang trống. 218mm = 271 (vùng in) − 27 (đầu trang) − ~10 (tên tầng) − lề an toàn. */
+    #printArea .plan{max-width:100%; max-height:218mm; display:block;
       border:1px solid var(--line); border-radius:6px}
     #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
@@ -5373,14 +5373,18 @@ async function buildPrintDoc(){
       <p class="pr-hint">Bản vẽ thể hiện VỊ TRÍ ổ cắm / thiết bị theo yêu cầu sử dụng. Đấu nối, tiết diện dây
       và bảo vệ do kỹ sư M&amp;E triển khai. Nguồn chờ = chừa sẵn nguồn cho thiết bị lắp sau (ghi rõ thiết bị).</p>`;
   }
-  // Tờ THI CÔNG (ổ cắm & điện nhẹ) = trang riêng sau tờ chiếu sáng của cùng tầng
+  // BẢN VẼ và BẢNG THỐNG KÊ ở HAI TRANG RIÊNG (anh Khoa): tờ bản vẽ để nguyên một trang thì mặt
+  // bằng được in to hết cỡ, thợ đọc được; nhét bảng xuống dưới là ép ảnh nhỏ lại vô ích.
+  const suffix = multi? " — "+escapeHtml(fl.name) : "";
   const devSheet = (imgsDev[fi] && devHtml)
-    ? `<section class="pr-floor"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${multi? " — "+escapeHtml(fl.name):""}</h2>
-        <img class="plan" src="${imgsDev[fi]}">${devHtml}</section>`
+    ? `<section class="pr-floor pr-plan"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${suffix}</h2>
+        <img class="plan" src="${imgsDev[fi]}"></section>
+       <section class="pr-floor"><h2>Bảng thống kê ổ cắm &amp; thiết bị${suffix}</h2>${devHtml}</section>`
     : "";
-  return `<section class="pr-floor">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
-    <img class="plan" src="${imgs[fi]}">
-    <h2>Bảng thống kê đèn${multi? " — "+escapeHtml(fl.name):""}</h2>${table}${ctlHtml}</section>${devSheet}`;
+  return `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
+      <img class="plan" src="${imgs[fi]}"></section>
+    <section class="pr-floor">
+      <h2>Bảng thống kê đèn${suffix}</h2>${table}${ctlHtml}</section>${devSheet}`;
   }).join("");
   const totQty=qty(totUnits,totMeters);
   // bảng tổng toàn dự án khi có nhiều tầng
