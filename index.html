@@ -569,6 +569,10 @@
   #printArea{display:none}
   @media print{
     @page{margin:13mm}
+    /* CHỈ hồ sơ được in. Trước đây mới ẩn #app, còn #toast (position:fixed) và mọi modal/thẻ tạm
+       khác vẫn lọt vào bản in — phần tử fixed trong bản in của Chrome có thể chiếm nguyên một
+       trang. Chặn tất cả, chỉ chừa #printArea. */
+    body > *:not(#printArea){display:none!important}
     #app{display:none!important}
     #printArea{display:block!important}
     body{background:#fff; color:var(--ink); font-family:var(--body); -webkit-print-color-adjust:exact; print-color-adjust:exact}
