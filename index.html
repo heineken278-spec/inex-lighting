@@ -592,15 +592,22 @@
        sang trang sau, để lại một trang trống. Vùng in A4 = 297 − 2×13 = 271mm.
          · trang sau : 271 − ~16 (tên tầng) − lề an toàn  → 228mm
          · TRANG ĐẦU : còn phải chứa khối đầu trang (~27mm) → 196mm */
-    /* Chặn cao theo VH chứ không chỉ theo mm: trong bản in, 1vh = 1% CHIỀU CAO VÙNG IN THẬT, nên
-       nó tự đúng với mọi khổ giấy / hướng giấy / và cả khi Chrome nới lề để nhét header-footer của
-       nó. Chốt mm chỉ là trần trên. Trang ĐẦU thấp hơn vì còn phải chứa khối đầu trang. */
-    #printArea .plan{max-width:100%; max-height:min(205mm, 68vh); display:block;
+    /* TRANG BẢN VẼ = ĐÚNG MỘT TRANG, ảnh TỰ LẤP ĐẦY phần còn lại.
+       Không đặt chặn cao bằng con số nữa: đoán bao nhiêu cũng sai với khổ giấy khác. Thay vào đó
+       cho cả section cao đúng một trang (100vh = chiều cao VÙNG IN THẬT, tự đúng với mọi khổ/hướng
+       giấy và cả khi Chrome nới lề cho header-footer của nó), rồi để ảnh chiếm hết chỗ thừa bằng
+       flex. object-fit:contain giữ đúng tỉ lệ mặt bằng, không kéo méo.
+       break-inside:avoid để tên tầng và bản vẽ không bao giờ tách trang. */
+    #printArea .pr-plan{display:flex; flex-direction:column; height:calc(100vh - 2mm);
+      break-inside:avoid; page-break-inside:avoid}
+    /* .planbox nuốt hết chỗ thừa của trang; ảnh bên trong chỉ nhận max-width/max-height 100% nên
+       nó TỰ ÔM SÁT nội dung — viền bám đúng mép bản vẽ, không bao quanh một vùng trắng trống. */
+    #printArea .planbox{flex:1 1 auto; min-height:0; display:flex;
+      align-items:center; justify-content:center}
+    #printArea .planbox > .plan{max-width:100%; max-height:100%; width:auto; height:auto;
       border:1px solid var(--line); border-radius:6px}
-    #printArea .pr-first .plan{max-height:min(175mm, 56vh)}
-    /* Tên tầng và bản vẽ phải ĐI CÙNG NHAU. Không có dòng này thì tiêu đề ở lại trang trước còn
-       ảnh nhảy sang trang sau — ra đúng cảnh "trang chỉ có tiêu đề rồi bỏ trống" (anh Khoa). */
-    #printArea .pr-plan{break-inside:avoid; page-break-inside:avoid}
+    #printArea .plan{max-width:100%; display:block;
+      border:1px solid var(--line); border-radius:6px}
     #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
     #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
@@ -5421,11 +5428,11 @@ async function buildPrintDoc(){
   const suffix = multi? " — "+escapeHtml(fl.name) : "";
   const devSheet = (imgsDev[fi] && devHtml)
     ? `<section class="pr-floor pr-plan"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${suffix}</h2>
-        <img class="plan" src="${imgsDev[fi]}"></section>
+        <div class="planbox"><img class="plan" src="${imgsDev[fi]}"></div></section>
        <section class="pr-floor"><h2>Bảng thống kê ổ cắm &amp; thiết bị${suffix}</h2>${devHtml}</section>`
     : "";
   return `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
-      <img class="plan" src="${imgs[fi]}"></section>
+      <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>
     <section class="pr-floor">
       <h2>Bảng thống kê đèn${suffix}</h2>${table}${ctlHtml}</section>${devSheet}`;
   }).join("");
