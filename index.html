@@ -581,10 +581,13 @@
       font-size:9px; font-weight:600; color:var(--ink-3); margin-top:2px}
     .pr-head .pj{font-family:var(--serif); font-weight:600; font-size:14px}
     /* Bản vẽ CHIẾM TRỌN MỘT TRANG, bảng thống kê sang trang sau (anh Khoa). Vẫn phải chặn chiều
-       cao: trình duyệt không cắt đôi được tấm ảnh, ảnh cao hơn vùng in là bị đẩy sang trang sau và
-       để lại một trang trống. 218mm = 271 (vùng in) − 27 (đầu trang) − ~10 (tên tầng) − lề an toàn. */
-    #printArea .plan{max-width:100%; max-height:218mm; display:block;
+       cao: trình duyệt KHÔNG cắt đôi được tấm ảnh — ảnh cao hơn chỗ còn lại là bị đẩy nguyên khối
+       sang trang sau, để lại một trang trống. Vùng in A4 = 297 − 2×13 = 271mm.
+         · trang sau : 271 − ~16 (tên tầng) − lề an toàn  → 228mm
+         · TRANG ĐẦU : còn phải chứa khối đầu trang (~27mm) → 196mm */
+    #printArea .plan{max-width:100%; max-height:228mm; display:block;
       border:1px solid var(--line); border-radius:6px}
+    #printArea .pr-first .plan{max-height:196mm}
     #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
     #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
@@ -5288,32 +5291,52 @@ async function buildPrintDoc(){
     // cụm do ≥2 công tắc điều khiển = đảo chiều (2 nơi bật/tắt cùng một đèn — cầu thang, hành lang dài)
     const swByCir={}; fl.switches.forEach(sw=>(sw.circuits||[]).forEach(cid=>{ (swByCir[cid]=swByCir[cid]||[]).push(sw.code); }));
     const twoWay=new Set(Object.keys(swByCir).filter(cid=>swByCir[cid].length>1));
-    // phòng của công tắc: theo vị trí đặt, không được thì theo phòng của đèn nó điều khiển
+    // PHÒNG ĐẶT CÔNG TẮC — theo VỊ TRÍ của chính nó, không theo phòng của đèn nó điều khiển:
+    // một công tắc điều khiển đèn ở 2 khu vực thì "phòng của đèn" là con số vô nghĩa (anh Khoa).
+    // Công tắc nằm trên tường ngoài polygon thì lấy khu vực gần nhất — vẫn là chỗ đi tới lắp nó.
     const roomOf=sw=>{ const z=zoneAtPoint({x:sw.x,y:sw.y});
       if(z) return z.name;
-      const ls=lightsOfSwitch(sw,fl); return ls.length? ls[0].z.name : "—"; };
+      let bz=null,bd=Infinity;
+      fl.zones.forEach(zz=>{ const nw=nearestWall({x:sw.x,y:sw.y}, zz.poly); if(nw&&nw.d<bd){bd=nw.d;bz=zz;} });
+      return bz? bz.name : "—"; };
     const rows=fl.switches.map(sw=>({sw, room:roomOf(sw)}))
-      .sort((a,b)=>a.room.localeCompare(b.room,"vi"));   // gom theo phòng
+      .sort((a,b)=>a.room.localeCompare(b.room,"vi") || String(a.sw.code).localeCompare(String(b.sw.code),"vi"));
     // BỎ cột "Tổng W" — tải theo mạch là số thợ dùng chọn tiết diện dây/aptomat, vượt phạm vi ME.
     ctlHtml+=`<h2>Công tắc & cụm điều khiển${multi? " — "+escapeHtml(fl.name):""}</h2>
       <table class="pr"><thead><tr><th style="width:44px">Công tắc</th><th style="width:40px">Số nút</th>
-      <th style="width:56px">Cao độ</th><th style="width:74px">Ở phòng</th>
-      <th>Điều khiển cụm</th><th class="num" style="width:52px">Số đèn</th></tr></thead><tbody>`;
+      <th class="num" style="width:52px">Cao độ (m)</th><th style="width:74px">Vị trí đặt</th>
+      <th>Cụm điều khiển</th><th class="num" style="width:52px">Số đèn</th></tr></thead><tbody>`;
     rows.forEach(({sw,room})=>{
       const ls=lightsOfSwitch(sw, fl);
-      const twk=(sw.circuits||[]).some(cid=>twoWay.has(cid));
-      const names=(sw.circuits||[]).map(c=>circuitById(c,fl)).filter(Boolean)
-        .map(c=>`${escapeHtml(c.name)} (${c.key})`).join(", ")||"—";
-      ctlHtml+=`<tr><td><span class="pr-code">${escapeHtml(sw.code||"CT")}</span>${twk?' <span style="color:#8A8175">↔</span>':''}</td>
+      // ĐÁNH DẤU ĐẢO CHIỀU THEO TỪNG NÚT, không theo cả công tắc: một công tắc 3 nút có thể có
+      // 2 nút đảo chiều và 1 nút thường — gắn ↔ vào mã công tắc thì đọc ra là cả 3 nút đảo chiều.
+      const keys=(sw.circuits||[]).map(c=>circuitById(c,fl)).filter(Boolean)
+        .map(c=>`<b style="font-family:var(--mono);font-weight:700">${c.key}</b>`
+                +(twoWay.has(c.id)?'<span style="color:#8A8175">↔</span>':''))
+        .join(' <span style="color:#CFC6B8">·</span> ')||"—";
+      ctlHtml+=`<tr><td><span class="pr-code">${escapeHtml(sw.code||"CT")}</span></td>
         <td class="num">${switchGang(sw)}</td>
-        <td class="num">+${fmtPlan(sw.mh!=null?sw.mh:1.25,2)} m</td>
-        <td>${escapeHtml(room)}</td><td>${names}</td>
+        <td class="num">+${fmtPlan(sw.mh!=null?sw.mh:1.25,2)}</td>
+        <td>${escapeHtml(room)}</td><td>${keys}</td>
         <td class="num">${ls.length}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
-    if(twoWay.size) ctlHtml+=`<p class="pr-hint">↔ = công tắc đảo chiều (điều khiển cùng cụm từ hai vị trí).
-      Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
-    else ctlHtml+=`<p class="pr-hint">Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
+    // Tên cụm KHÔNG lặp ở từng dòng (anh Khoa) — gom vào một bảng tra chữ cái đọc một lần.
+    const usedCirs=(fl.circuits||[]).filter(c=>fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
+    if(usedCirs.length){
+      ctlHtml+=`<table class="pr" style="margin-top:6px"><thead><tr>
+        <th style="width:34px">Cụm</th><th>Tên cụm</th><th class="num" style="width:52px">Số đèn</th>
+        <th style="width:120px">Công tắc điều khiển</th></tr></thead><tbody>`;
+      usedCirs.forEach(c=>{
+        const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+        ctlHtml+=`<tr><td><b style="font-family:var(--mono);font-weight:700">${c.key}</b>${
+          twoWay.has(c.id)?'<span style="color:#8A8175">↔</span>':''}</td>
+          <td>${escapeHtml(c.name)}</td><td class="num">${n}</td>
+          <td>${escapeHtml((swByCir[c.id]||[]).join(", ")||"chưa gắn công tắc")}</td></tr>`;
+      });
+      ctlHtml+=`</tbody></table>`;
+    }
+    ctlHtml+=`<p class="pr-hint">${twoWay.size? "↔ = cụm đảo chiều: bật/tắt được từ hai công tắc (đánh dấu theo TỪNG NÚT, không phải cả công tắc). ":""}Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
   }
   if((fl.scenes||[]).length){
     // BỎ cột "Công suất" — cùng lý do với Tổng W công tắc.
@@ -5337,41 +5360,59 @@ async function buildPrintDoc(){
   // ---- Bảng THIẾT BỊ (ổ cắm / mạng / TV / wifi / nguồn chờ) — đi kèm tờ THI CÔNG riêng ----
   let devHtml="";
   if((fl.devices||[]).length){
-    // gộp theo (kind, khu vực); nguồn chờ liệt RIÊNG từng cái (mỗi cái một tên thiết bị khác nhau)
-    const rows=[]; const grp={};
+    // NGUYÊN LÝ TRÌNH BÀY (anh Khoa chốt): giống hệt bảng đèn — GOM THEO PHÒNG, mỗi phòng một
+    // hàng tiêu đề, bên trong gộp theo (loại × cao độ) và đếm số VỊ TRÍ. Lý do: thợ đi lắp theo
+    // từng phòng, và chủ nhà đọc/duyệt cũng theo từng phòng; cả hồ sơ đọc chung một mạch.
+    // Nguồn chờ liệt RIÊNG TỪNG CÁI trong phòng của nó vì mỗi cái chờ cho một thiết bị khác nhau.
+    const kindLabel=k=>DEVICE_SPEC[k]?DEVICE_SPEC[k].label:k;
+    const kindOrder=Object.keys(DEVICE_SPEC);
+    const byZone=new Map();
     (fl.devices||[]).forEach(d=>{
       const z=deviceZone(d, fl), zn=z? z.name : "Ngoài khu vực";
-      if(d.kind==="prov"){ rows.push({prov:true, d, zn}); return; }
-      const key=d.kind+"|"+zn+"|"+(d.mh??"");
-      if(!grp[key]) grp[key]={kind:d.kind, zn, mh:d.mh, qty:0};
-      grp[key].qty += 1;   // 1 vị trí = 1 thiết bị (ổ cắm đôi vẫn là MỘT vị trí)
+      if(!byZone.has(zn)) byZone.set(zn, {grp:new Map(), prov:[]});
+      const b=byZone.get(zn);
+      if(d.kind==="prov"){ b.prov.push(d); return; }
+      const key=d.kind+"|"+(d.mh??"");
+      if(!b.grp.has(key)) b.grp.set(key, {kind:d.kind, mh:d.mh, qty:0});
+      b.grp.get(key).qty += 1;   // 1 vị trí = 1 thiết bị (ổ cắm đôi vẫn là MỘT vị trí)
     });
-    Object.values(grp).forEach(g=>rows.push(g));
-    const kindLabel=k=>DEVICE_SPEC[k]?DEVICE_SPEC[k].label:k;
-    let body="";
-    // thiết bị lắp mới trước, nguồn chờ (RIÊNG cột) sau
-    rows.filter(r=>!r.prov).sort((a,b)=>a.zn.localeCompare(b.zn,"vi")).forEach(g=>{
-      body+=`<tr><td>${deviceIconSVG(g.kind,"pr-sym").outerHTML}</td>
-        <td>${escapeHtml(kindLabel(g.kind))}</td>
-        <td>${escapeHtml(g.zn)}</td>
-        <td class="num">${g.qty}</td>
-        <td class="num">${g.mh!=null? "+"+fmtPlan(g.mh,2)+"m":"—"}</td></tr>`;
+    // thứ tự phòng theo đúng thứ tự khu vực trên bản vẽ, "Ngoài khu vực" xuống cuối
+    const zOrder=fl.zones.map(z=>z.name);
+    const zoneNames=[...byZone.keys()].sort((a,b)=>{
+      const ia=zOrder.indexOf(a), ib=zOrder.indexOf(b);
+      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || a.localeCompare(b,"vi"); });
+    let body="", tong=0;
+    zoneNames.forEach(zn=>{
+      const b=byZone.get(zn);
+      const n=[...b.grp.values()].reduce((s,g)=>s+g.qty,0)+b.prov.length;
+      tong+=n;
+      body+=`<tr class="zh"><td colspan="4"><span class="zn">${escapeHtml(zn)}</span>
+        <span class="zm">${n} vị trí</span></td></tr>`;
+      [...b.grp.values()]
+        .sort((x,y)=>kindOrder.indexOf(x.kind)-kindOrder.indexOf(y.kind) || (x.mh??0)-(y.mh??0))
+        .forEach(g=>{
+          body+=`<tr><td>${deviceIconSVG(g.kind,"pr-sym").outerHTML}</td>
+            <td>${escapeHtml(kindLabel(g.kind))}</td>
+            <td class="num">${g.qty}</td>
+            <td class="num">${g.mh!=null? "+"+fmtPlan(g.mh,2):"—"}</td></tr>`;
+        });
+      b.prov.sort((x,y)=>(x.mh??0)-(y.mh??0)).forEach(d=>{
+        body+=`<tr><td>${deviceIconSVG("prov","pr-sym").outerHTML}</td>
+          <td><b>Nguồn chờ:</b> ${d.note? escapeHtml(d.note):'<span style="color:#B4553C">CHƯA ĐẶT TÊN</span>'}</td>
+          <td class="num">1</td>
+          <td class="num">${d.mh!=null? "+"+fmtPlan(d.mh,2):"—"}</td></tr>`;
+      });
     });
-    const provs=rows.filter(r=>r.prov);
-    provs.sort((a,b)=>a.zn.localeCompare(b.zn,"vi")).forEach(r=>{
-      body+=`<tr><td>${deviceIconSVG("prov","pr-sym").outerHTML}</td>
-        <td><b>Nguồn chờ:</b> ${r.d.note? escapeHtml(r.d.note):'<span style="color:#B4553C">CHƯA ĐẶT TÊN</span>'}</td>
-        <td>${escapeHtml(r.zn)}</td>
-        <td class="num">1</td>
-        <td class="num">${r.d.mh!=null? "+"+fmtPlan(r.d.mh,2)+"m":"—"}</td></tr>`;
-    });
+    body+=`<tr class="tot"><td colspan="2">Tổng${multi? " — "+escapeHtml(fl.name):""}</td>
+      <td class="num">${tong}</td><td></td></tr>`;
     // Bỏ cột "Mã": bản vẽ không còn ghi mã từng ổ nên cột này chẳng trỏ tới đâu.
-    // Bảng đếm theo (loại × khu vực × cao độ) — đúng thứ dùng để đặt hàng và để thợ đi.
+    // Bỏ cột "Khu vực": đã thành hàng tiêu đề. Đơn vị mét đưa lên tiêu đề cột, không lặp từng dòng.
     devHtml+=`<table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th>
-      <th>Loại</th><th style="width:80px">Khu vực</th><th class="num" style="width:40px">SL</th>
-      <th class="num" style="width:56px">Cao độ</th></tr></thead><tbody>${body}</tbody></table>
-      <p class="pr-hint">Bản vẽ thể hiện VỊ TRÍ ổ cắm / thiết bị theo yêu cầu sử dụng. Đấu nối, tiết diện dây
-      và bảo vệ do kỹ sư M&amp;E triển khai. Nguồn chờ = chừa sẵn nguồn cho thiết bị lắp sau (ghi rõ thiết bị).</p>`;
+      <th>Loại</th><th class="num" style="width:46px">SL</th>
+      <th class="num" style="width:56px">Cao độ (m)</th></tr></thead><tbody>${body}</tbody></table>
+      <p class="pr-hint">SL = số VỊ TRÍ lắp (một ổ đôi vẫn là một vị trí). Bản vẽ thể hiện VỊ TRÍ ổ cắm /
+      thiết bị theo yêu cầu sử dụng. Đấu nối, tiết diện dây và bảo vệ do kỹ sư M&amp;E triển khai.
+      Nguồn chờ = chừa sẵn nguồn cho thiết bị lắp sau (ghi rõ thiết bị).</p>`;
   }
   // BẢN VẼ và BẢNG THỐNG KÊ ở HAI TRANG RIÊNG (anh Khoa): tờ bản vẽ để nguyên một trang thì mặt
   // bằng được in to hết cỡ, thợ đọc được; nhét bảng xuống dưới là ép ảnh nhỏ lại vô ích.
@@ -5385,7 +5426,11 @@ async function buildPrintDoc(){
       <img class="plan" src="${imgs[fi]}"></section>
     <section class="pr-floor">
       <h2>Bảng thống kê đèn${suffix}</h2>${table}${ctlHtml}</section>${devSheet}`;
-  }).join("");
+  }).join("")
+  // Trang ĐẦU còn phải chứa khối đầu trang nên bản vẽ ở đó phải thấp hơn các trang sau. Không đánh
+  // dấu riêng thì ảnh cao bằng các trang khác → không lọt chỗ còn lại → trình duyệt đẩy sang trang
+  // sau và để lại một TRANG TRỐNG chỉ có tiêu đề (đúng cảnh anh Khoa gửi).
+  .replace('class="pr-floor pr-plan"', 'class="pr-floor pr-plan pr-first"');
   const totQty=qty(totUnits,totMeters);
   // bảng tổng toàn dự án khi có nhiều tầng
   const grand=multi? `<h2>Tổng hợp toàn dự án</h2><table class="pr"><thead><tr>
@@ -5460,6 +5505,12 @@ async function buildPrintDoc(){
     ${spec}
     ${note}
     <div class="pr-foot">INEX DESIGN · inexdesign.vn — Số liệu tính theo phương pháp quang thông, mang tính tham khảo cho thiết kế sơ bộ.</div>`;
+
+  // ĐỢI ẢNH GIẢI MÃ XONG rồi mới trả về. Ảnh bản vẽ là data-URL cỡ MB; nút Xuất PDF chỉ chờ 60ms
+  // rồi gọi window.print(), nên trình duyệt có thể phân trang lúc ảnh CHƯA CÓ kích thước thật —
+  // ra bố cục sai và trang trống. decode() bảo đảm ảnh đã sẵn sàng trước khi in.
+  await Promise.all([...$("#printArea").querySelectorAll("img")]
+    .map(im=> im.decode? im.decode().catch(()=>{}) : Promise.resolve()));
 }
 
 /* =========================== SEED =========================== */
