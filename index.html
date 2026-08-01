@@ -2205,6 +2205,7 @@ function render(){
 
 let exportInv=null; // khi xuất PNG/PDF: cỡ nhãn/nét cố định theo ảnh, bỏ selection/guides
 let exportOpts=null; // preset tờ xuất: {layers:Set, bg?}. null = xem màn hình / xuất đầy đủ
+let exportPad=0;     // chiều cao DẢI CHÚ THÍCH thêm dưới tờ xuất (khối tiêu đề + bảng ký hiệu)
 /* Hai preset tờ (anh Khoa chốt: khách xem màn hình, thợ in giấy):
    - CHIẾU SÁNG: đèn + công tắc + đường điều khiển + quầng sáng + lux + kích thước, KHÔNG ổ cắm.
    - Ổ CẮM    : ổ cắm/mạng/wifi/nguồn chờ; TẮT quầng sáng, lux, đường công tắc và dim đèn;
@@ -2640,17 +2641,27 @@ function drawOverlay(){
       "stroke-width":inv,"stroke-dasharray":`${4*inv},${3*inv}`}));
   }
 
-  // ---- lớp 8: khối tiêu đề + bảng chú thích ký hiệu — CHỈ khi xuất (PNG/PDF) ----
+  // ---- lớp 8: DẢI CHÚ THÍCH dưới bản vẽ — CHỈ khi xuất (PNG/PDF) ----
+  // Hai khối này KHÔNG được đè lên mặt bằng (anh Khoa). Chúng nằm trong một dải trắng thêm vào
+  // DƯỚI tờ vẽ: đo trước chiều cao cần thiết, gán vào exportPad để composite() nới canvas ra.
+  exportPad=0;
   if(exportInv!=null){
-    const tb=drawTitleBlock(ov, inv, P);
-    drawSymbolLegend(ov, inv, P, tb && tb.x0);
+    const tb=titleBlockBox(inv, P), sl=symbolLegendBox(inv, P);
+    const m=12*inv;
+    exportPad = Math.max(tb.h, sl? sl.h:0) + m*2;
+    const y=worldH()+m;
+    if(sl) sl.draw(ov, m, y);
+    tb.draw(ov, worldW()-tb.w-m, y);
+    // vạch ngăn giữa bản vẽ và dải chú thích
+    ov.appendChild(svg("line",{x1:0, y1:worldH(), x2:worldW(), y2:worldH(),
+      stroke:"#D8D0C2", "stroke-width":1.5*inv}));
   }
 }
-/* Khối góc dưới-phải của bản xuất: thước tỉ lệ ĐỒ HOẠ (đúng ở mọi khổ in vì co theo bản vẽ) +
-   tên dự án/tầng/ngày + ghi chú không-đo-số-trực-tiếp. Vẽ trong world coords nên vào thẳng PNG/PDF. */
-function drawTitleBlock(ov, inv, P){
-  const pad=10*inv, g=svg("g",{});
-  const W=worldW(), H=worldH();
+/* Khối tiêu đề: thước tỉ lệ ĐỒ HOẠ (đúng ở mọi khổ in vì co theo bản vẽ) + tên dự án/tầng +
+   ghi chú không-đo-số. Tách ĐO và VẼ vì phải biết chiều cao trước khi biết đặt ở đâu. */
+function titleBlockBox(inv, P){
+  const pad=10*inv;
+  const W=worldW();
   // ---- thước tỉ lệ đồ hoạ ----
   let barW=0, segs=0, unit=1;
   if(F().pxPerMeter){
@@ -2664,12 +2675,10 @@ function drawTitleBlock(ov, inv, P){
   const line1=state.projectName||"Dự án";
   const line2=F().name+(F().pxPerMeter? "":" · CHƯA CÂN TỈ LỆ");
   const FOOT="Không đo số trực tiếp trên bản vẽ";
-  // Ghi chú LED dây ĐÃ CHUYỂN xuống mục "Chú thích" cuối hồ sơ PDF (anh Khoa) — chỗ của nó trên
-  // bản vẽ nay là BẢNG CHÚ THÍCH KÝ HIỆU (drawSymbolLegend, góc dưới-trái).
 
   // BỀ RỘNG / CHIỀU CAO khối tính từ CHỮ THẬT (đã gồm textScale), không phải hằng số. Bản trước
   // dùng hằng số nên chọn cỡ chữ Vừa/Lớn là chữ tràn khỏi khung và dòng chân đè lên số thước tỉ lệ.
-  // Trần bề rộng: khối tiêu đề không được nuốt quá ~42% tờ giấy dù tên dự án dài tới đâu.
+  // Trần bề rộng: khối tiêu đề không được nuốt quá ~42% bề ngang tờ dù tên dự án dài tới đâu.
   const capW=Math.min(W-24*inv, Math.max(barW+2*pad, W*0.42));
   let nameLines=wrapText(line1, capW-2*pad, 12*inv, 600);
   // dài quá 2 dòng thì dồn phần còn lại vào dòng 2 rồi cắt (clipText tự thêm "…" cho vừa khung)
@@ -2677,36 +2686,38 @@ function drawTitleBlock(ov, inv, P){
     nameLines=[nameLines[0], clipText(nameLines.slice(1).join(" "), capW-2*pad, 12*inv, 600)];
   const need=Math.max(barW, ...nameLines.map(t=>measureText(t,12*inv,600)),
                       measureText(line2,10*inv,500), measureText(FOOT,8*inv,500));
-  const boxW=Math.min(Math.max(need+2*pad, 150*inv), capW);
+  const w=Math.min(Math.max(need+2*pad, 150*inv), capW);
   const lh1=12*inv*ts*1.35, lh2=10*inv*ts*1.55, lhF=8*inv*ts*1.55;
   const hBar=F().pxPerMeter? (th+8.5*inv*ts*1.55+4*inv) : 0;
-  const boxH=pad + nameLines.length*lh1 + lh2 + hBar + lhF + pad*0.5;
-  const x0=W-boxW-12*inv, y0=H-boxH-12*inv;
-  g.appendChild(svg("rect",{x:x0, y:y0, width:boxW, height:boxH, rx:4*inv,
-    fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
-  let cy=y0+pad;
-  nameLines.forEach(ln=>{ addText(g, x0+pad, cy+lh1*0.75, ln, 12*inv, C_INK, "start", 600); cy+=lh1; });
-  addText(g, x0+pad, cy+lh2*0.70, line2, 10*inv, "#8A8175", "start", 500); cy+=lh2;
-  if(F().pxPerMeter){
-    const bx=x0+pad, by=cy;
-    for(let i=0;i<segs;i++){
-      g.appendChild(svg("rect",{x:bx+i*unit*F().pxPerMeter, y:by, width:unit*F().pxPerMeter, height:th,
-        fill:i%2? "#FFFFFF":C_INK, stroke:C_INK,"stroke-width":inv}));
+  const h=pad + nameLines.length*lh1 + lh2 + hBar + lhF + pad*0.5;
+  return { w, h, draw(ov, x0, y0){
+    const g=svg("g",{});
+    g.appendChild(svg("rect",{x:x0, y:y0, width:w, height:h, rx:4*inv,
+      fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
+    let cy=y0+pad;
+    nameLines.forEach(ln=>{ addText(g, x0+pad, cy+lh1*0.75, ln, 12*inv, C_INK, "start", 600); cy+=lh1; });
+    addText(g, x0+pad, cy+lh2*0.70, line2, 10*inv, "#8A8175", "start", 500); cy+=lh2;
+    if(F().pxPerMeter){
+      const bx=x0+pad, by=cy;
+      for(let i=0;i<segs;i++){
+        g.appendChild(svg("rect",{x:bx+i*unit*F().pxPerMeter, y:by, width:unit*F().pxPerMeter, height:th,
+          fill:i%2? "#FFFFFF":C_INK, stroke:C_INK,"stroke-width":inv}));
+      }
+      for(let i=0;i<=segs;i++){
+        const lx=bx+i*unit*F().pxPerMeter;
+        addText(g, lx, by+th+8.5*inv*ts*1.15, fmtPlan(i*unit,0)+(i===segs?" m":""), 8.5*inv, "#6E665A", "middle", 500);
+      }
+      cy+=hBar;
     }
-    for(let i=0;i<=segs;i++){
-      const lx=bx+i*unit*F().pxPerMeter;
-      addText(g, lx, by+th+8.5*inv*ts*1.15, fmtPlan(i*unit,0)+(i===segs?" m":""), 8.5*inv, "#6E665A", "middle", 500);
-    }
-    cy+=hBar;
-  }
-  addText(g, x0+pad, cy+lhF*0.72, FOOT, 8*inv, "#A9A093", "start", 500);
-  ov.appendChild(g);
-  return {x0, y0};                       // để bảng ký hiệu biết mà không đè lên
+    addText(g, x0+pad, cy+lhF*0.72, FOOT, 8*inv, "#A9A093", "start", 500);
+    ov.appendChild(g);
+  }};
 }
-/* BẢNG CHÚ THÍCH KÝ HIỆU — góc dưới-trái tờ xuất. Liệt mọi ký hiệu ĐANG CÓ MẶT trên đúng tờ này:
-   từng mẫu đèn (ký hiệu + mã + tên), công tắc, và từng loại thiết bị. Người cầm tờ giấy đọc được
-   ngay ký hiệu nào là cái gì, không phải lật sang bảng thông số ở cuối hồ sơ. */
-function drawSymbolLegend(ov, inv, P, avoidX){
+/* BẢNG CHÚ THÍCH KÝ HIỆU — nằm trong DẢI DƯỚI tờ xuất, bên trái. Liệt mọi ký hiệu ĐANG CÓ MẶT
+   trên đúng tờ này: từng mẫu đèn (ký hiệu + mã + tên), công tắc, và từng loại thiết bị. Người cầm
+   tờ giấy đọc được ngay ký hiệu nào là cái gì, không phải lật sang bảng thông số ở cuối hồ sơ.
+   Tách ĐO và VẼ: phải biết chiều cao trước để nới dải dưới cho vừa. */
+function symbolLegendBox(inv, P){
   const fl=F(), rows=[], seen=new Set();
   const ghost=!!(curSheet()||{}).ghostLights;
   if(ghost){
@@ -2728,41 +2739,47 @@ function drawSymbolLegend(ov, inv, P, avoidX){
     const ks=[]; (fl.devices||[]).forEach(d=>{ if(deviceOnSheet(d) && !ks.includes(d.kind)) ks.push(d.kind); });
     ks.forEach(k=>rows.push({dev:k, txt:(DEVICE_SPEC[k]||{}).label||k}));
   }
-  if(!rows.length) return;
+  if(!rows.length) return null;
 
   const ts=textScale(), pad=10*inv, ic=15*inv, gap=8*inv;
   const hh=8*inv*ts*1.9, rh=Math.max(ic*1.25, 9*inv*ts*1.55);
-  // bề rộng đo từ CHỮ THẬT, và không được chạm vào khối tiêu đề bên phải
-  const room=(avoidX!=null? avoidX-24*inv : worldW()*0.45);
-  const capW=Math.max(160*inv, Math.min(worldW()*0.45, room));
-  rows.forEach(r=> r.txt=clipText(r.txt, capW-2*pad-ic-gap, 9*inv, 500));
-  const boxW=Math.min(capW, pad+ic+gap+Math.max(...rows.map(r=>measureText(r.txt,9*inv,500)))+pad);
-  const boxH=pad*0.6+hh+rows.length*rh+pad*0.6;
-  const x=12*inv, y=worldH()-boxH-12*inv;
-  const g=svg("g",{});
-  g.appendChild(svg("rect",{x, y, width:boxW, height:boxH, rx:4*inv,
-    fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
-  addText(g, x+pad, y+pad*0.6+8*inv*ts*1.15, "CHÚ THÍCH KÝ HIỆU", 8*inv, "#8A8175", "start", 700);
-  g.appendChild(svg("line",{x1:x, y1:y+pad*0.6+hh, x2:x+boxW, y2:y+pad*0.6+hh,
-    stroke:"#E7DFD3","stroke-width":inv}));
-  rows.forEach((r,i)=>{
-    const cy=y+pad*0.6+hh+i*rh+rh/2, cxi=x+pad+ic/2;
-    const gi=svg("g",{transform:`translate(${cxi},${cy})`});
-    if(r.sw) appendSwitch(gi, ic*0.55, 2, Math.max(0.9*inv,ic*0.055), C_INK);
-    else if(r.dev) appendDevice(gi, r.dev, ic*0.62, Math.max(0.9*inv,ic*0.055),
-      (DEVICE_SPEC[r.dev]||{}).prov? "#8A6D3B" : C_INK);
-    else {
-      // ký hiệu đèn vẽ theo cỡ CỐ ĐỊNH của ô, không theo tỉ lệ mét — dùng lại ICON_SPEC của thư viện
-      const sp=ICON_SPEC[r.t]||{s:0.3,cy:0}, Pi=ic*0.86/sp.s;
-      const gg=svg("g",{transform:`translate(0,${(-sp.cy*Pi).toFixed(1)})`});
-      appendSymbol(gg, r.t, Pi, Math.max(0.9*inv, Pi*0.014), C_INK,
-        r.t==="strip"? ic*0.9/Pi : undefined, r.mnt, r.vert);
-      gi.appendChild(gg);
-    }
-    g.appendChild(gi);
-    addText(g, x+pad+ic+gap, cy+9*inv*ts*0.36, r.txt, 9*inv, "#3A362F", "start", 500);
-  });
-  ov.appendChild(g);
+  // Nhiều dòng thì CHIA CỘT thay vì kéo dài xuống — dải dưới cao quá sẽ nuốt mất chỗ của bản vẽ.
+  const colMax=Math.max(4, Math.ceil(rows.length/3));
+  const nCol=Math.ceil(rows.length/colMax), nRow=Math.ceil(rows.length/nCol);
+  // bề rộng cột đo từ CHỮ THẬT; cả bảng chừa chỗ cho khối tiêu đề bên phải
+  const avail=worldW()-24*inv;
+  const capCol=Math.max(150*inv, (avail*0.62)/nCol - gap);
+  rows.forEach(r=> r.txt=clipText(r.txt, capCol-pad*2-ic-gap, 9*inv, 500));  // chừa cả lề phải
+  const colW=Math.min(capCol, pad+ic+gap+Math.max(...rows.map(r=>measureText(r.txt,9*inv,500)))+pad);
+  const w=colW*nCol+(nCol-1)*gap, h=pad*0.6+hh+nRow*rh+pad*0.6;
+  return { w, h, draw(ov, x, y){
+    const g=svg("g",{});
+    g.appendChild(svg("rect",{x, y, width:w, height:h, rx:4*inv,
+      fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
+    addText(g, x+pad, y+pad*0.6+8*inv*ts*1.15, "CHÚ THÍCH KÝ HIỆU", 8*inv, "#8A8175", "start", 700);
+    g.appendChild(svg("line",{x1:x, y1:y+pad*0.6+hh, x2:x+w, y2:y+pad*0.6+hh,
+      stroke:"#E7DFD3","stroke-width":inv}));
+    rows.forEach((r,i)=>{
+      const col=Math.floor(i/nRow), row=i%nRow;
+      const x0=x+col*(colW+gap);
+      const cy=y+pad*0.6+hh+row*rh+rh/2, cxi=x0+pad+ic/2;
+      const gi=svg("g",{transform:`translate(${cxi},${cy})`});
+      if(r.sw) appendSwitch(gi, ic*0.55, 2, Math.max(0.9*inv,ic*0.055), C_INK);
+      else if(r.dev) appendDevice(gi, r.dev, ic*0.62, Math.max(0.9*inv,ic*0.055),
+        (DEVICE_SPEC[r.dev]||{}).prov? "#8A6D3B" : C_INK);
+      else {
+        // ký hiệu đèn vẽ theo cỡ CỐ ĐỊNH của ô, không theo tỉ lệ mét — dùng lại ICON_SPEC của thư viện
+        const sp=ICON_SPEC[r.t]||{s:0.3,cy:0}, Pi=ic*0.86/sp.s;
+        const gg=svg("g",{transform:`translate(0,${(-sp.cy*Pi).toFixed(1)})`});
+        appendSymbol(gg, r.t, Pi, Math.max(0.9*inv, Pi*0.014), C_INK,
+          r.t==="strip"? ic*0.9/Pi : undefined, r.mnt, r.vert);
+        gi.appendChild(gg);
+      }
+      g.appendChild(gi);
+      addText(g, x0+pad+ic+gap, cy+9*inv*ts*0.36, r.txt, 9*inv, "#3A362F", "start", 500);
+    });
+    ov.appendChild(g);
+  }};
 }
 /* Bề rộng THẬT của một chuỗi ở đúng font/cỡ sắp vẽ — dựng tạm một <text> trong overlay (đang nằm
    trong DOM ở cả lúc xem lẫn lúc xuất) rồi đo và xoá. Rẻ, và không phải đoán theo số ký tự. */
@@ -4960,28 +4977,35 @@ function syncTxtSeg(){
 function composite(){
   return new Promise((resolve)=>{
     const W=worldW(), H=worldH();
-    const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+    // Dựng overlay TRƯỚC để biết dải chú thích dưới cao bao nhiêu (drawOverlay đặt exportPad),
+    // rồi mới tạo canvas cho vừa. Nhờ vậy khối tiêu đề + bảng ký hiệu nằm NGOÀI mặt bằng,
+    // không đè lên bản vẽ nữa (anh Khoa).
+    exportInv = Math.max(W,H)/1200;
+    exportPad = 0;
+    drawOverlay();
+    const ovClone=$("#overlay").cloneNode(true);
+    const PADB=Math.round(exportPad);
+    exportInv=null; exportPad=0; drawOverlay();
+
+    const HT=H+PADB;
+    const cv=document.createElement("canvas"); cv.width=W; cv.height=HT;
     const ctx=cv.getContext("2d");
-    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,H);
-    const drawOv=()=>{
-      // vẽ lại overlay ở chế độ xuất: nhãn/nét cố định theo cỡ ảnh, không dính selection
-      exportInv = Math.max(W,H)/1200;
-      drawOverlay();
-      const ovClone=$("#overlay").cloneNode(true);
-      exportInv=null; drawOverlay();
-      ovClone.setAttribute("xmlns",SVGNS); ovClone.setAttribute("width",W); ovClone.setAttribute("height",H);
-      const s=new XMLSerializer().serializeToString(ovClone);
+    ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,W,HT);
+    ovClone.setAttribute("xmlns",SVGNS);
+    ovClone.setAttribute("width",W); ovClone.setAttribute("height",HT);
+    ovClone.setAttribute("viewBox",`0 0 ${W} ${HT}`);
+    const s=new XMLSerializer().serializeToString(ovClone);
+    const paint=()=>{
       const img2=new Image();
-      img2.onload=()=>{ ctx.drawImage(img2,0,0,W,H); resolve(cv.toDataURL("image/png")); };
+      img2.onload=()=>{ ctx.drawImage(img2,0,0,W,HT); resolve(cv.toDataURL("image/png")); };
       img2.onerror=()=>resolve(cv.toDataURL("image/png"));
       img2.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s);
     };
     if(F().bg){ const b=new Image();
-      // tờ thi công tăng độ đậm nền để thợ đọc rõ tường (nét chú thích đứng trên nền mờ 0,7 mặc định)
       const alpha = (exportOpts && exportOpts.bg!=null)? exportOpts.bg : F().bgOpacity;
-      b.onload=()=>{ ctx.globalAlpha=alpha; ctx.drawImage(b,0,0,W,H); ctx.globalAlpha=1; drawOv(); };
-      b.onerror=drawOv; b.src=F().bg; }
-    else drawOv();
+      b.onload=()=>{ ctx.globalAlpha=alpha; ctx.drawImage(b,0,0,W,H); ctx.globalAlpha=1; paint(); };
+      b.onerror=paint; b.src=F().bg; }
+    else paint();
   });
 }
 function downloadURL(url,name){ const a=document.createElement("a"); a.href=url; a.download=name;
