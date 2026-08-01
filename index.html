@@ -629,7 +629,10 @@
     .pr-foot{margin-top:12px; font-family:var(--label); font-size:8.5px; letter-spacing:.04em;
       color:var(--ink-3); border-top:1px solid var(--line); padding-top:7px}
     .pr-floor{break-before:page}                 /* mỗi tầng bắt đầu một trang */
-    .pr-floor:first-of-type{break-before:auto}
+    /* Khối ĐẦU TIÊN không được ngắt trang trước nó. Bám vào class .pr-first (do JS gắn) chứ không
+       chỉ dựa vào :first-of-type — selector đó phụ thuộc thứ tự thẻ anh em, sửa cấu trúc một lần
+       là hỏng ngầm mà không ai thấy. */
+    .pr-floor:first-of-type, #printArea .pr-first{break-before:auto; page-break-before:auto}
   }
   /* summary table (screen) */
   table.tbl{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px}
@@ -5238,7 +5241,7 @@ async function buildPrintDoc(){
 
   // ---- Mỗi TẦNG: bản vẽ + bảng thống kê (mỗi khu vực một cụm có hàng tiêu đề riêng) ----
   const multi=state.floors.length>1;
-  const floorBlocks=state.floors.map((fl,fi)=>{
+  let floorBlocks=state.floors.map((fl,fi)=>{
   let rowsHtml="";
   let flUnits=0, flMeters=0, flW=0;
   fl.zones.forEach(z=>{
@@ -5323,23 +5326,8 @@ async function buildPrintDoc(){
         <td class="num">${ls.length}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
-    // CỤM CHỈ CÓ MÃ CHỮ, KHÔNG CÓ TÊN (anh Khoa chốt) — tên tự sinh kiểu "Cụm b" chẳng nói lên gì,
-    // lặp ở mọi dòng chỉ tổ rối. Bảng tra dưới đây cho biết mỗi chữ có mấy đèn và do công tắc nào bật.
-    const usedCirs=(fl.circuits||[]).filter(c=>fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
-    if(usedCirs.length){
-      ctlHtml+=`<table class="pr" style="margin-top:6px"><thead><tr>
-        <th>Cụm</th><th class="num">Số đèn</th><th>Ở khu vực</th>
-        <th>Công tắc điều khiển</th></tr></thead><tbody>`;
-      usedCirs.forEach(c=>{
-        const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
-        const zs=fl.zones.filter(z=>z.lights.some(l=>l.circuit===c.id)).map(z=>z.name);
-        ctlHtml+=`<tr><td><b style="font-family:var(--mono);font-weight:700;font-size:12px">${c.key}</b>${
-          twoWay.has(c.id)?'<span style="color:#8A8175">↔</span>':''}</td>
-          <td class="num">${n}</td><td>${escapeHtml(zs.join(", "))}</td>
-          <td>${escapeHtml((swByCir[c.id]||[]).join(", ")||"chưa gắn công tắc")}</td></tr>`;
-      });
-      ctlHtml+=`</tbody></table>`;
-    }
+    // BỎ bảng tra cụm (anh Khoa): cụm chỉ còn mã chữ, mà chữ cái đó đã có đủ ở cột "Cụm điều khiển"
+    // của bảng công tắc và ở chú giải trên bản vẽ — thêm một bảng nữa là lặp lại chính nó.
     ctlHtml+=`<p class="pr-hint">${twoWay.size? "↔ = cụm đảo chiều: bật/tắt được từ hai công tắc (đánh dấu theo TỪNG NÚT, không phải cả công tắc). ":""}Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
   }
   if((fl.scenes||[]).length){
@@ -5430,11 +5418,18 @@ async function buildPrintDoc(){
       <img class="plan" src="${imgs[fi]}"></section>
     <section class="pr-floor">
       <h2>Bảng thống kê đèn${suffix}</h2>${table}${ctlHtml}</section>${devSheet}`;
-  }).join("")
-  // Trang ĐẦU còn phải chứa khối đầu trang nên bản vẽ ở đó phải thấp hơn các trang sau. Không đánh
-  // dấu riêng thì ảnh cao bằng các trang khác → không lọt chỗ còn lại → trình duyệt đẩy sang trang
-  // sau và để lại một TRANG TRỐNG chỉ có tiêu đề (đúng cảnh anh Khoa gửi).
-  .replace('class="pr-floor pr-plan"', 'class="pr-floor pr-plan pr-first"');
+  }).join("");
+  // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
+  // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
+  // rồi bỏ trống. Nhét vào trong cùng một <section> có break-inside:avoid thì KHÔNG THỂ tách.
+  const headHtml=`<div class="pr-head">
+      <div><div class="wm">InEx <b>Lighting</b></div>
+        <div class="sub">Hồ sơ thiết kế chiếu sáng</div></div>
+      <div style="text-align:right"><div class="pj">${escapeHtml(state.projectName)}</div>
+        <div class="sub">${multi? state.floors.length+" tầng · ":""}Ngày ${dstr}</div></div>
+    </div>`;
+  floorBlocks = floorBlocks.replace('<section class="pr-floor pr-plan">',
+    `<section class="pr-floor pr-plan pr-first">${headHtml}`);
   const totQty=qty(totUnits,totMeters);
   // bảng tổng toàn dự án khi có nhiều tầng
   const grand=multi? `<h2>Tổng hợp toàn dự án</h2><table class="pr"><thead><tr>
@@ -5498,12 +5493,6 @@ async function buildPrintDoc(){
   </div>`;
 
   $("#printArea").innerHTML=`
-    <div class="pr-head">
-      <div><div class="wm">InEx <b>Lighting</b></div>
-        <div class="sub">Hồ sơ thiết kế chiếu sáng</div></div>
-      <div style="text-align:right"><div class="pj">${escapeHtml(state.projectName)}</div>
-        <div class="sub">${multi? state.floors.length+" tầng · ":""}Ngày ${dstr}</div></div>
-    </div>
     ${floorBlocks}
     ${grand}
     ${spec}
