@@ -568,7 +568,10 @@
   /* ---------- Print ---------- */
   #printArea{display:none}
   @media print{
-    @page{margin:13mm}
+    /* Khai báo KHỔ GIẤY: hồ sơ vẽ theo A4 DỌC. Không khai thì trình duyệt lấy cài đặt cuối cùng
+       của máy — anh Khoa đang để Letter + KHỔ NGANG, vùng in chỉ còn ~190mm cao thay vì 273mm,
+       nên bản vẽ không lọt và bị đẩy sang trang sau, để lại trang chỉ có tiêu đề. */
+    @page{size:A4 portrait; margin:12mm}
     /* CHỈ hồ sơ được in. Trước đây mới ẩn #app, còn #toast (position:fixed) và mọi modal/thẻ tạm
        khác vẫn lọt vào bản in — phần tử fixed trong bản in của Chrome có thể chiếm nguyên một
        trang. Chặn tất cả, chỉ chừa #printArea. */
@@ -589,9 +592,12 @@
        sang trang sau, để lại một trang trống. Vùng in A4 = 297 − 2×13 = 271mm.
          · trang sau : 271 − ~16 (tên tầng) − lề an toàn  → 228mm
          · TRANG ĐẦU : còn phải chứa khối đầu trang (~27mm) → 196mm */
-    #printArea .plan{max-width:100%; max-height:210mm; display:block;
+    /* Chặn cao theo VH chứ không chỉ theo mm: trong bản in, 1vh = 1% CHIỀU CAO VÙNG IN THẬT, nên
+       nó tự đúng với mọi khổ giấy / hướng giấy / và cả khi Chrome nới lề để nhét header-footer của
+       nó. Chốt mm chỉ là trần trên. Trang ĐẦU thấp hơn vì còn phải chứa khối đầu trang. */
+    #printArea .plan{max-width:100%; max-height:min(205mm, 68vh); display:block;
       border:1px solid var(--line); border-radius:6px}
-    #printArea .pr-first .plan{max-height:180mm}
+    #printArea .pr-first .plan{max-height:min(175mm, 56vh)}
     /* Tên tầng và bản vẽ phải ĐI CÙNG NHAU. Không có dòng này thì tiêu đề ở lại trang trước còn
        ảnh nhảy sang trang sau — ra đúng cảnh "trang chỉ có tiêu đề rồi bỏ trống" (anh Khoa). */
     #printArea .pr-plan{break-inside:avoid; page-break-inside:avoid}
