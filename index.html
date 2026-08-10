@@ -89,7 +89,11 @@
   .railbtn:hover{border-color:var(--accent); color:var(--accent-dark)}
   .railbtn .ico{width:20px; height:20px}
   .railsep{width:24px; height:1px; background:var(--line); margin:2px 0}
-  .railtools{display:flex; flex-direction:column; gap:6px}
+  /* Rail dọc 58px: 8 công cụ đã sát trần màn hình 720px. Cho phép CUỘN thay vì cắt cụt — không có
+     nó thì trên laptop màn thấp nút cuối cùng nằm ngoài vùng nhìn và không cách nào bấm tới. */
+  .railtools{display:flex; flex-direction:column; gap:6px; min-height:0; overflow-y:auto;
+    scrollbar-width:none}
+  .railtools::-webkit-scrollbar{width:0;height:0}
   #bgPop, #devPop, #lightPop{
     position:absolute; left:66px; top:12px; width:242px; z-index:30;
     background:var(--bg); border:1px solid var(--line); border-radius:12px;
@@ -361,7 +365,7 @@
 
   /* light groups in zone */
   /* danh sách dài không đẩy các nút bên dưới ra khỏi màn — cuộn trong khung, nút luôn thấy */
-  #grpList, #devList{max-height:230px; overflow-y:auto; margin:-2px -2px 2px; padding:2px}
+  #grpList, #devList, #trLights{max-height:230px; overflow-y:auto; margin:-2px -2px 2px; padding:2px}
   /* hàng "cây bút": mẫu đèn sẽ được đặt — khác hẳn danh sách đã đặt bên dưới */
   .brush{display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px;
     border:1px dashed var(--accent-soft); background:#FBF7F0}
@@ -717,6 +721,10 @@
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M6 6l1.5 1.5M18 18l-1.5-1.5M18 6l-1.5 1.5M6 18l1.5-1.5"/></svg>
           <span class="kbd">L</span>
         </button>
+        <button class="tool" data-tool="track" title="Ray nam châm — kéo để vẽ thanh ray trên trần (Y)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h18M3 13h18M5 9v4M19 9v4"/><circle cx="9" cy="17" r="1.7" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="1.7" fill="currentColor" stroke="none"/><path d="M9 13v2.3M15 13v2.3"/></svg>
+          <span class="kbd">Y</span>
+        </button>
         <button class="tool" data-tool="switch" title="Đặt công tắc — click lên tường (W)">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M12 8.5v7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
           <span class="kbd">W</span>
@@ -844,6 +852,7 @@
       </div>
       <div id="swPanel" class="panel-sec ctxsec hidden"></div>
       <div id="devPanel" class="panel-sec ctxsec hidden"></div>
+      <div id="trkPanel" class="panel-sec ctxsec hidden"></div>
       <div id="wallInfo" class="panel-sec ctxsec hidden"></div>
       <div id="noZone" class="panel-sec">
         <p class="eyebrow">Thông số & kết quả</p>
@@ -908,6 +917,11 @@
       <details class="sec" id="devSec">
         <summary>Thiết bị trên tầng <span class="n" id="devCount">0</span></summary>
         <div class="secbody"><div id="devList"></div></div>
+      </details>
+
+      <details class="sec" id="trkSec">
+        <summary>Ray nam châm <span class="n" id="trkCount">0</span></summary>
+        <div class="secbody"><div id="trkList"></div></div>
       </details>
 
       <details class="sec" id="secSum">
@@ -1037,6 +1051,7 @@ let drag = null;            // thao tác kéo hiện tại
 let selLights = [];         // [{zid, li}]
 let selSwitch = null;       // id công tắc đang chọn
 let selDevice = null;       // id thiết bị đang chọn
+let selTrack  = null;       // id ray nam châm đang chọn
 let visOpen = false;        // bảng kiểm tra vệt chiếu (nổi trên canvas) đang mở?
 let visTab = "side";        // "side" = mặt bên (dùng thường xuyên) · "face" = mặt đứng chính diện
 let hoverLight = null;      // {zid, li}
@@ -1060,9 +1075,68 @@ function newFloor(name, pxPerMeter){
     circuits:[], switches:[], scenes:[], liveOff:[], scene:null,
     // ổ cắm / mạng / TV / wifi / nguồn chờ — hệ riêng, không tính vào chiếu sáng
     devices:[],
+    // RAY NAM CHÂM: thanh ray trên trần. Bản thân ray KHÔNG phát sáng — đèn gắn lên nó là các
+    // phần tử bình thường trong z.lights, mang thêm {trk: id ray, t: mét tính từ đầu ray}.
+    // [{id, code, x, y, rot, len, mh}] — x,y là ĐIỂM GIỮA ray, len tính bằng mét.
+    tracks:[],
     // kích thước định vị vẽ tay: [{id, x1,y1,x2,y2, off}] — off = đẩy đường ghi ra khỏi vật thể
     dims:[],
   };
+}
+/* ========================= RAY NAM CHÂM =========================
+   Ray là một ĐOẠN THẲNG có chiều dài thật, đặt trên trần. Đèn gắn lên ray giữ vị trí bằng `t`
+   (mét tính từ đầu A) — đó mới là số gốc; `l.x/l.y` chỉ là kết quả suy ra và được tính lại mỗi
+   khi ray dời/xoay/đổi dài hoặc khi trượt đèn. Nhờ vậy mọi thứ sẵn có (lux, bóc tách, nhãn, kích
+   thước, nét đứt cụm…) vẫn chạy đúng mà không phải sửa gì. */
+function allTracks(){ const r=[]; state.floors.forEach(f=>(f.tracks||[]).forEach(t=>r.push(t))); return r; }
+function trackById(id, fl){ return ((fl||F()).tracks||[]).find(t=>t.id===id)||null; }
+function trackGeom(tr){
+  const P=ppm(), r=(tr.rot||0)*Math.PI/180;
+  const ux=Math.cos(r), uy=Math.sin(r), half=(tr.len||1)*P/2;
+  return { ux, uy, P, a:{x:tr.x-ux*half, y:tr.y-uy*half}, b:{x:tr.x+ux*half, y:tr.y+uy*half} };
+}
+/* Toạ độ world của điểm cách đầu A đúng t mét */
+function trackPos(tr, t){
+  const g=trackGeom(tr), d=clamp(t||0, 0, tr.len||1)*g.P;
+  return { x:g.a.x+g.ux*d, y:g.a.y+g.uy*d };
+}
+/* Chiếu một điểm world lên trục ray → t (mét, đã kẹp trong đoạn) */
+function trackT(tr, w){
+  const g=trackGeom(tr);
+  const d=((w.x-g.a.x)*g.ux + (w.y-g.a.y)*g.uy)/g.P;
+  return clamp(d, 0, tr.len||1);
+}
+/* Khoảng cách world từ một điểm tới ĐOẠN ray */
+function trackDist(tr, w){
+  const p=trackPos(tr, trackT(tr, w));
+  return Math.hypot(w.x-p.x, w.y-p.y);
+}
+/* Ray gần điểm click nhất trong bán kính cho trước (mét) */
+function trackNear(w, rM, fl){
+  fl=fl||F(); let best=null, bd=Infinity;
+  const lim=(rM||0.3)*ppm();
+  (fl.tracks||[]).forEach(tr=>{ const d=trackDist(tr,w); if(d<=lim && d<bd){ bd=d; best=tr; } });
+  return best;
+}
+function trackLights(id, fl){
+  fl=fl||F(); const r=[];
+  fl.zones.forEach(z=>z.lights.forEach((l,li)=>{ if(l.trk===id) r.push({z, l, li}); }));
+  return r;
+}
+/* Đặt lại x/y/rot/cao lắp cho mọi đèn trên ray — gọi sau mỗi lần ray đổi vị trí, góc hoặc dài */
+function syncTrackLights(tr, fl){
+  trackLights(tr.id, fl).forEach(({l})=>{
+    l.t=clamp(l.t||0, 0, tr.len||1);
+    const p=trackPos(tr, l.t);
+    l.x=p.x; l.y=p.y; l.rot=tr.rot||0;
+    if(tr.mh!=null) l.mh=tr.mh; else delete l.mh;
+  });
+}
+function deleteTrack(id, fl){
+  fl=fl||F();
+  trackLights(id, fl).forEach(({z,l})=>{ const i=z.lights.indexOf(l); if(i>=0) z.lights.splice(i,1); });
+  fl.tracks=(fl.tracks||[]).filter(t=>t.id!==id);
+  if(selTrack===id) selTrack=null;
 }
 const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
@@ -1195,9 +1269,14 @@ function migrate(s){
     f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.off; }));
     // lớp thiết bị (ổ cắm/mạng/wifi/nguồn chờ) — mặc định luỹ đẳng, file cũ không có thì thêm rỗng
     if(!f.devices) f.devices=[];
+    if(!f.tracks) f.tracks=[];      // ray nam châm
     if(!f.dims) f.dims=[];          // kích thước định vị
     // bỏ cờ ghim kích thước cũ (đã thay bằng công cụ Dim)
     f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.dim; }));
+    // Đèn còn trỏ tới thanh ray KHÔNG CÒN TỒN TẠI → gỡ cờ, thành đèn thường. Bỏ mặc thì nó là một
+    // tham chiếu chết: panel không hiện được, mà kéo thì code vẫn thử chiếu lên ray không có.
+    { const ids=new Set(f.tracks.map(t=>t.id));
+      f.zones.forEach(z=>z.lights.forEach(l=>{ if(l.trk && !ids.has(l.trk)){ delete l.trk; delete l.t; } })); }
   });
   if(s.showLegend===undefined) s.showLegend=true;
   if(!TEXT_SCALES[s.textScale]) s.textScale="vua";
@@ -1405,7 +1484,16 @@ function nudgeSelected(dx,dy){
   clearTimeout(arrowSeq.timer);
   arrowSeq.timer=setTimeout(flushArrowSeq, 700);
   selLights.forEach(s=>{ const z=getZone(s.zid); const l=z&&z.lights[s.li];
-    if(l){ l.x+=dx; l.y+=dy; } });
+    if(!l) return;
+    const tr=l.trk? trackById(l.trk) : null;
+    if(tr){
+      // Phím mũi tên với đèn trên ray = TRƯỢT DỌC RAY, không dời ngang. Chiếu véc-tơ nhấn lên trục
+      // ray nên mũi tên nào cũng đúng chiều dù ray xoay bao nhiêu độ.
+      const g=trackGeom(tr);
+      l.t=clamp((l.t||0)+(dx*g.ux+dy*g.uy)/g.P, 0, tr.len||1);
+      const p=trackPos(tr, l.t); l.x=p.x; l.y=p.y; l.rot=tr.rot||0;
+    } else { l.x+=dx; l.y+=dy; }
+  });
   save(); render(); refreshRight(); renderSummary();
 }
 function updateUndoBtns(){ $("#btnUndo").disabled=!hist.length; $("#btnRedo").disabled=!future.length; }
@@ -2298,6 +2386,8 @@ function drawOverlay(){
     const r=Math.max(0.11*P, 15*inv); obst(s.x, s.y, r, r, 0); });
   if(sheetHas("devices")) (F().devices||[]).forEach(d=>{ if(!deviceOnSheet(d)) return;
     const r=Math.max(0.13*P, 16*inv); obst(d.x, d.y, r, r, 0); });
+  (F().tracks||[]).forEach(t=>            // thân ray là vật cản DÀI — nhãn phải né dọc, không cắt ngang
+    obst(t.x, t.y, (t.len||1)*P/2, Math.max(0.03*P, 5*inv), t.rot||0));
 
   // ---- lớp 1: zone fill/stroke ----
   F().zones.forEach(z=>{
@@ -2395,6 +2485,42 @@ function drawOverlay(){
   // đặt ổ cắm), để tờ này đọc ra đúng một thứ là hệ ổ cắm — nhưng vẫn thấy đèn mà né.
   const ghostL = !!(curSheet()||{}).ghostLights;
   const lblMode=state.labelMode||"compact";   // KHÔNG tắt theo ghostL — nhãn ổ cắm dùng chung biến này
+
+  // ---- lớp 3c: RAY NAM CHÂM — vẽ TRƯỚC đèn để đèn nằm đè lên ray, đúng như ngoài đời ----
+  // Trên tờ Ổ cắm ray vẫn hiện MỜ như đèn (ghostL) — bỏ hẳn thì đèn mờ trôi lơ lửng, đọc ra như lỗi.
+  (F().tracks||[]).forEach(tr=>{
+    const g=trackGeom(tr);
+    const sel = exportInv==null && selTrack===tr.id && !ghostL;
+    const col = sel? C_ACCENT_D : C_INK;
+    const wRail=Math.max(0.028*P, 2.2*inv);        // bề rộng thanh ray vẽ theo mét thật (~28mm)
+    const gg=svg("g",{"data-trk":tr.id, class:"trackm",
+      style: ghostL? "pointer-events:none" : "cursor:pointer",
+      opacity: ghostL? .2 : 1});
+    // thân ray: nét trắng lót rồi nét mực — đọc được trên mọi nền ảnh
+    [[C_WHITE, wRail+3*inv],[col, wRail]].forEach(([c,w])=>{
+      gg.appendChild(svg("line",{x1:g.a.x,y1:g.a.y,x2:g.b.x,y2:g.b.y,
+        stroke:c,"stroke-width":w,"stroke-linecap":"butt"}));
+    });
+    // hai đầu bịt
+    const cap=Math.max(0.05*P, 4*inv);
+    [g.a,g.b].forEach(p=>gg.appendChild(svg("line",{
+      x1:p.x-g.uy*cap, y1:p.y+g.ux*cap, x2:p.x+g.uy*cap, y2:p.y-g.ux*cap,
+      stroke:col,"stroke-width":Math.max(0.012*P,1.2*inv),"stroke-linecap":"round"})));
+    if(sel) gg.appendChild(svg("line",{x1:g.a.x,y1:g.a.y,x2:g.b.x,y2:g.b.y,
+      stroke:C_ACCENT,"stroke-width":wRail+7*inv,"stroke-linecap":"round",opacity:".22"}));
+    // vùng bắt chuột rộng hơn thân ray cho dễ trúng
+    gg.appendChild(svg("line",{x1:g.a.x,y1:g.a.y,x2:g.b.x,y2:g.b.y,
+      stroke:"transparent","stroke-width":Math.max(wRail*2, 14*inv), class:"hit"}));
+    ov.appendChild(gg);
+    if(lblMode!=="off" && !ghostL){
+      // nhãn ray: mã + chiều dài — thợ cần biết cắt/đặt hàng bao nhiêu mét
+      const rSym=Math.max(0.02*P, 7*inv);
+      autoLabel(ov, "T", tr.id, tr.x, tr.y, (tr.len||1)*P/2, rSym, tr.rot||0,
+        `${tr.code||"RAY"} · ${fmtPlan(tr.len||1)}m`, 8*inv,
+        sel? C_ACCENT_D : "#6E665A", inv, tr);
+    }
+  });
+
   F().zones.forEach(z=>{
     const seenCode=new Set(); // chế độ "Gọn": mỗi loại chỉ ghi mã 1 lần / khu vực
     // nếu ≥2 model CÙNG loại (cùng ký hiệu) trong khu vực → mã là thứ duy nhất
@@ -2665,6 +2791,18 @@ function drawOverlay(){
           fmtPlan(Math.hypot(b.x-a.x,b.y-a.y)/ppm())+" m", 10.5*inv, C_ACCENT_D, inv);
       }
     }
+    if(draft.type==="track" && draft.pts.length===2){
+      const [a,b]=draft.pts;
+      ov.appendChild(svg("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:C_ACCENT,
+        "stroke-width":Math.max(0.028*P,2.2*inv),"stroke-linecap":"butt"}));
+      [a,b].forEach(p=>{ const r=(Math.atan2(b.y-a.y,b.x-a.x))+Math.PI/2, c=Math.max(0.05*P,4*inv);
+        ov.appendChild(svg("line",{x1:p.x-Math.cos(r)*c,y1:p.y-Math.sin(r)*c,
+          x2:p.x+Math.cos(r)*c,y2:p.y+Math.sin(r)*c,stroke:C_ACCENT,"stroke-width":1.6*inv})); });
+      if(F().pxPerMeter){
+        addLabel(ov,(a.x+b.x)/2,(a.y+b.y)/2-13*inv,
+          "Ray "+fmtPlan(Math.hypot(b.x-a.x,b.y-a.y)/ppm())+" m", 10.5*inv, C_ACCENT_D, inv);
+      }
+    }
   }
   if(drag && drag.mode==="marquee"){
     const {x0,y0,x1,y1}=marqueeRect(drag);
@@ -2765,6 +2903,10 @@ function symbolLegendBox(inv, P){
       txt:(lamp.code? lamp.code+" · ":"")+lamp.name+" — "+typeLabel(lamp.type)
           +(mnt==="wall"? ", gắn tường":"")});
   }));
+  if(!ghost && (fl.tracks||[]).length){
+    const m=(fl.tracks||[]).reduce((s,t)=>s+(t.len||0),0);
+    rows.push({trk:true, txt:`Ray nam châm gắn trần — tổng ${fmtPlan(m)} m, đèn trượt trên ray`});
+  }
   if(sheetHas("switches") && (fl.switches||[]).length)
     rows.push({sw:true, txt:"Công tắc — chữ cạnh nó là cụm điều khiển"});
   if(sheetHas("devices")){
@@ -2796,7 +2938,13 @@ function symbolLegendBox(inv, P){
       const x0=x+col*(colW+gap);
       const cy=y+pad*0.6+hh+row*rh+rh/2, cxi=x0+pad+ic/2;
       const gi=svg("g",{transform:`translate(${cxi},${cy})`});
-      if(r.sw) appendSwitch(gi, ic*0.55, 2, Math.max(0.9*inv,ic*0.055), C_INK);
+      if(r.trk){
+        const hw=ic*0.46, sw2=Math.max(0.9*inv, ic*0.10);
+        gi.appendChild(svg("line",{x1:-hw,y1:0,x2:hw,y2:0,stroke:C_INK,"stroke-width":sw2}));
+        [-hw,hw].forEach(px=>gi.appendChild(svg("line",{x1:px,y1:-ic*0.2,x2:px,y2:ic*0.2,
+          stroke:C_INK,"stroke-width":Math.max(0.9*inv,ic*0.05)})));
+      }
+      else if(r.sw) appendSwitch(gi, ic*0.55, 2, Math.max(0.9*inv,ic*0.055), C_INK);
       else if(r.dev) appendDevice(gi, r.dev, ic*0.62, Math.max(0.9*inv,ic*0.055),
         (DEVICE_SPEC[r.dev]||{}).prov? "#8A6D3B" : C_INK);
       else {
@@ -2963,6 +3111,7 @@ function labelObj(kind, ref){
     return z&&z.lights[+ref.slice(i+1)]; }
   if(kind==="W") return (F().switches||[]).find(s=>s.id===ref);
   if(kind==="D") return (F().devices||[]).find(d=>d.id===ref);
+  if(kind==="T") return trackById(ref);
   if(kind==="Z") return getZone(ref);
   if(kind==="LG") return state.floors.find(f=>f.id===ref);  // bảng chú giải: offset trên tầng
   return null;
@@ -3233,15 +3382,46 @@ function renderDeviceList(){
       <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
         ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
     el.appendChild(dd);
-    el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null;
+    el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null; selTrack=null;
       const vp=$("#viewport").getBoundingClientRect();
       view.tx=vp.width/2 - d.x*view.scale; view.ty=vp.height/2 - d.y*view.scale;
       renderAll(); };
     box.appendChild(el);
   });
 }
+/* Danh sách RAY của tầng — đường DUYỆT. Khi đèn đã gắn kín thanh ray thì gần như không còn chỗ
+   trống nào trên ray để bấm trúng nó; đây là lối vào chắc chắn. */
+function renderTrackList(){
+  const fl=F(), box=$("#trkList"), sec=$("#trkSec");
+  const trs=fl.tracks||[];
+  $("#trkCount").textContent=trs.length;
+  sec.classList.toggle("hidden", !trs.length);
+  box.innerHTML="";
+  trs.forEach(tr=>{
+    const z=deviceZone(tr, fl), n=trackLights(tr.id, fl).length;
+    const el=document.createElement("div"); el.className="grp"+(tr.id===selTrack?" on":"");
+    el.style.cursor="pointer"; el.title="Click: chọn ray trên bản vẽ";
+    const ic=svg("svg",{viewBox:"0 0 24 24",width:22,height:22,fill:"none",
+      stroke:"currentColor","stroke-width":1.6,"stroke-linecap":"round"});
+    ic.style.color="var(--ink-2)"; ic.style.flex="0 0 auto";
+    ic.appendChild(svg("path",{d:"M3 12h18M4 9v6M20 9v6"}));
+    ic.appendChild(svg("circle",{cx:9,cy:12,r:1.8,fill:"currentColor",stroke:"none"}));
+    ic.appendChild(svg("circle",{cx:15,cy:12,r:1.8,fill:"currentColor",stroke:"none"}));
+    el.appendChild(ic);
+    const dd=document.createElement("div"); dd.className="d"; dd.style.minWidth="0";
+    dd.innerHTML=`<b style="font-weight:normal;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(tr.code||"RAY")} · ${fmtPlan(tr.len||1)} m</b>
+      <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
+        ${z?escapeHtml(z.name):'ngoài khu vực'} · ${n} đèn${tr.mh!=null? " · +"+fmtPlan(tr.mh)+"m":""}</small>`;
+    el.appendChild(dd);
+    el.onclick=()=>{ selTrack=tr.id; selLights=[]; selSwitch=null; selDevice=null;
+      const vp=$("#viewport").getBoundingClientRect();
+      view.tx=vp.width/2 - tr.x*view.scale; view.ty=vp.height/2 - tr.y*view.scale;
+      renderAll(); };
+    box.appendChild(el);
+  });
+}
 function renderAll(){
-  render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); refreshRight(); renderSummary(); updateUndoBtns();
+  render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); renderTrackList(); refreshRight(); renderSummary(); updateUndoBtns();
   if(tool==="light" && !$("#lightPop").classList.contains("hidden")) renderLightPop();
   // đồng bộ các control ngoài right-panel sau undo/redo/nạp dữ liệu
   const pn=$("#projName"); if(document.activeElement!==pn) pn.value=state.projectName;
@@ -3294,7 +3474,7 @@ function setTool(t){
   // đang xem một tờ mà lớp của công cụ bị ẩn thì thoát về "Tất cả" — nếu không, anh đặt ổ cắm
   // trên tờ Chiếu sáng sẽ không thấy gì hiện ra và tưởng app hỏng
   if(t==="device" && !sheetHas("devices")) setSheet("all", true);
-  else if((t==="light"||t==="switch") && (curSheet()||{}).ghostLights) setSheet("all", true);
+  else if((t==="light"||t==="switch"||t==="track") && (curSheet()||{}).ghostLights) setSheet("all", true);
   tool=t; draft=null;
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
   popOpen=true;            // đổi công cụ thì mở lại bảng chọn mẫu
@@ -3306,6 +3486,7 @@ function setTool(t){
     rect:"Kéo chuột để tạo khu vực · Esc để huỷ",
     poly:"Click từng đỉnh · giữ Shift để canh thẳng 0/45/90° · double-click hoặc Enter để đóng",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
+    track:"Kéo để vẽ thanh ray nam châm trên trần · giữ Shift để canh thẳng · Esc để huỷ",
     device:`Click để đặt ${(DEVICE_SPEC[deviceKind]||DEVICE_SPEC.socket).label} · phím 1–9 đổi loại · Esc để xong`,
     light: z? (lightById(z.placeLightId).type==="strip"
               ? "Kéo để vẽ dây theo chiều dài thật · click 1 lần = 1 m · Esc để xong"
@@ -3487,6 +3668,9 @@ vp.addEventListener("pointerdown", e=>{
     if(!last || Math.hypot(p.x-last.x,p.y-last.y)>3/view.scale) draft.pts.push(p);
     render(); return;
   }
+  if(tool==="track"){   // kéo để vẽ thanh ray — giống LED dây, giữ Shift để canh thẳng
+    drag={mode:"trackdraw"}; draft={type:"track", pts:[w,{...w}]}; render(); return;
+  }
   if(tool==="switch"){ addSwitchAt(w); return; }
   if(tool==="device"){ addDeviceAt(w); return; }
   if(tool==="light"){
@@ -3511,7 +3695,7 @@ vp.addEventListener("pointerdown", e=>{
   }
   const swg=e.target.closest? e.target.closest(".switchm") : null;
   if(swg){
-    selSwitch=swg.dataset.sw; selLights=[]; selDevice=null;
+    selSwitch=swg.dataset.sw; selLights=[]; selDevice=null; selTrack=null;
     const sw=(F().switches||[]).find(s=>s.id===selSwitch);
     drag={mode:"switch", start:w, moved:false, preSnap:snapshot(), ox:sw.x, oy:sw.y};
     renderAll(); return;
@@ -3526,9 +3710,16 @@ vp.addEventListener("pointerdown", e=>{
       selDevice = stack[(i+1)%stack.length].id;
       showHint(`Vị trí này có ${stack.length} thiết bị chồng cao độ — bấm tiếp để chọn cái kế`);
     } else selDevice=dvg.dataset.dev;
-    selLights=[]; selSwitch=null;
+    selLights=[]; selSwitch=null; selTrack=null;
     const d=deviceById(selDevice);
     drag={mode:"device", start:w, moved:false, preSnap:snapshot(), ox:d.x, oy:d.y};
+    renderAll(); return;
+  }
+  const trg=e.target.closest? e.target.closest(".trackm") : null;
+  if(trg){
+    selTrack=trg.dataset.trk; selLights=[]; selSwitch=null; selDevice=null;
+    const tr=trackById(selTrack);
+    drag={mode:"track", start:w, moved:false, preSnap:snapshot(), ox:tr.x, oy:tr.y};
     renderAll(); return;
   }
   // Alt+click: xuyên chọn đèn bị đè bên dưới (mỗi lần click xuống 1 lớp, xoay vòng)
@@ -3541,13 +3732,14 @@ vp.addEventListener("pointerdown", e=>{
       const next= idx>=0? stack[(idx-1+stack.length)%stack.length] : stack[stack.length-1];
       selLights=[next]; F().selectedZone=next.zid;
       drag={mode:"lights", start:w, moved:false, preSnap:snapshot(),
-        orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+        orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y,
+        trk0:z.lights[s.li].trk||null}; })};
       renderAll(); return;
     }
   }
   const hit=hitLight(e.target);
   if(hit){
-    selSwitch=null; selDevice=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
+    selSwitch=null; selDevice=null; selTrack=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
     const already=selLights.some(s=>s.zid===hit.zid&&s.li===hit.li);
     if(e.shiftKey){
       if(already){ drag={mode:"shift-toggle-off", hit, start:w}; return; }
@@ -3557,7 +3749,8 @@ vp.addEventListener("pointerdown", e=>{
     }
     F().selectedZone=hit.zid;
     drag={mode:"lights", start:w, moved:false, preSnap:snapshot(),
-      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y,
+        trk0:z.lights[s.li].trk||null}; })};
     renderAll(); return;
   }
   const zp=e.target.closest? e.target.closest(".zonepoly") : null;
@@ -3596,10 +3789,19 @@ window.addEventListener("pointermove", e=>{
   // shift+kéo bắt đầu trên đèn đã chọn → chuyển thành kéo cả nhóm (không phải toggle)
   if(drag.mode==="shift-toggle-off" && Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>4/view.scale){
     drag={mode:"lights", start:drag.start, moved:false, preSnap:snapshot(),
-      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y}; })};
+      orig:selLights.map(s=>{ const z=getZone(s.zid); return {...s, x:z.lights[s.li].x, y:z.lights[s.li].y,
+        trk0:z.lights[s.li].trk||null}; })};
   }
   if(drag.mode==="rect"&&draft){ draft.pts[1]=w; render(); return; }
   if(drag.mode==="strip"&&draft){ draft.pts[1]=w; render(); return; }
+  if(drag.mode==="trackdraw"&&draft){ draft.pts[1]=orthoSnap(w, draft.pts[0], e.shiftKey); render(); return; }
+  if(drag.mode==="track"){          // DỜI cả thanh ray — đèn trên ray đi theo
+    const tr=trackById(selTrack);
+    if(tr){ tr.x=drag.ox+(w.x-drag.start.x); tr.y=drag.oy+(w.y-drag.start.y);
+      if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
+      syncTrackLights(tr); render(); }
+    return;
+  }
   if(drag.mode==="label"){
     // lưu bằng ĐƠN VỊ MÀN HÌNH (×view.scale) chứ không phải đơn vị thế giới — có vậy nhãn mới nằm
     // đúng chỗ đó ở mọi mức zoom và trên file xuất, thay vì giãn ra khi thu nhỏ
@@ -3642,8 +3844,29 @@ window.addEventListener("pointermove", e=>{
       if(bestX!==null){ dx=bestX-o.x; drag.guides.push({type:"v",x:bestX}); }
       if(bestY!==null){ dy=bestY-o.y; drag.guides.push({type:"h",y:bestY}); }
     }
-    drag.orig.forEach(o=>{ const z=getZone(o.zid); if(z&&z.lights[o.li]){
-      z.lights[o.li].x=o.x+dx; z.lights[o.li].y=o.y+dy; } });
+    drag.orig.forEach(o=>{ const z=getZone(o.zid); if(!z||!z.lights[o.li]) return;
+      const l=z.lights[o.li];
+      const p={x:o.x+dx, y:o.y+dy};
+      let tr = l.trk? trackById(l.trk) : null;
+      // Kéo một đèn TỰ DO thả trúng thanh ray → gắn lên ray. Đối xứng với thao tác gỡ bên dưới:
+      // gỡ ra được mà không gắn vào được thì lỡ tay một cái là mất luôn đường quay lại.
+      if(!tr && !o.trk0 && drag.orig.length===1){
+        const lamp=lightById(l.lightId);
+        if(!lamp || lamp.type!=="strip"){
+          const cand=trackNear(p, 0.25);
+          if(cand){ tr=cand; l.trk=cand.id; if(cand.mh!=null) l.mh=cand.mh; }
+        }
+      }
+      if(tr){
+        // Ngưỡng RỜI ray khác nhau có chủ ý:
+        //  · đèn VỐN ở trên ray → phải kéo ra hơn 0,6 m mới rời (trượt dọc ray phải "dính")
+        //  · đèn vừa dính vào trong chính cú kéo này → chỉ 0,25 m là nhả, bằng đúng ngưỡng dính,
+        //    nếu không thì kéo ngang qua ray sẽ mắc kẹt trong dải 25–60 cm không sao gỡ ra.
+        const lim=(o.trk0? 0.6 : 0.25)*ppm();
+        if(trackDist(tr, p) > lim){ delete l.trk; delete l.t; l.x=p.x; l.y=p.y; }
+        else { l.t=trackT(tr, p); const q=trackPos(tr, l.t); l.x=q.x; l.y=q.y; l.rot=tr.rot||0; }
+      } else { l.x=p.x; l.y=p.y; }
+    });
     if(Math.hypot(dx,dy)>2/view.scale) drag.moved=true;
     render(); return;
   }
@@ -3678,6 +3901,25 @@ function handlePointerUp(e){
     }
     render(); return;
   }
+  if(d.mode==="trackdraw"&&draft&&draft.type==="track"){
+    const [a,b]=draft.pts; draft=null;
+    const fl=F(), distM=Math.hypot(b.x-a.x,b.y-a.y)/ppm();
+    if(distM<0.25){ render(); return; }     // rê quá ngắn: coi như lỡ tay, không tạo ray
+    const rotD=Math.round((Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI+360)%360);
+    mutate(()=>{
+      fl.tracks=fl.tracks||[];
+      const tr={ id:"tr"+(fl.seq++), code:nextCode("RAY", allTracks()),
+        x:(a.x+b.x)/2, y:(a.y+b.y)/2, rot:rotD, len:+distM.toFixed(2), mh:null };
+      fl.tracks.push(tr); selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selTrack=tr.id;
+    });
+    setTool("select");
+    showHint(`Đã đặt ray ${fmtPlan(distM)} m — bấm L rồi click LÊN RAY để gắn đèn, đèn sẽ trượt dọc ray`);
+    return;
+  }
+  if(d.mode==="track"){
+    if(d.moved){ pushHist(d.preSnap); save(); }
+    renderAll(); return;
+  }
   if(d.mode==="shift-toggle-off"){
     selLights=selLights.filter(s=>!(s.zid===d.hit.zid&&s.li===d.hit.li));
     render(); return;
@@ -3702,7 +3944,7 @@ function handlePointerUp(e){
     F().zones.forEach(z=>z.lights.forEach((l,li)=>{
       if(l.x>=r.x0&&l.x<=r.x1&&l.y>=r.y0&&l.y<=r.y1) found.push({zid:z.id,li});
     }));
-    if(!d.shift){ selSwitch=null; selDevice=null; }   // quét chọn đèn → bỏ các loại khác
+    if(!d.shift){ selSwitch=null; selDevice=null; selTrack=null; }   // quét chọn đèn → bỏ các loại khác
     selLights = d.shift? selLights.concat(found.filter(f=>!selLights.some(s=>s.zid===f.zid&&s.li===f.li))) : found;
     if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
     renderAll(); return;
@@ -3715,7 +3957,7 @@ function handlePointerUp(e){
     const z=zoneAtClick(d.start);
     const zid=z? z.id : null;
     if(F().selectedZone!==zid || selLights.length || selSwitch || selDevice){
-      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null;
+      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null; selTrack=null;
       renderAll();
     }
     return;
@@ -3793,6 +4035,7 @@ window.addEventListener("keydown", e=>{
     case "r": setTool("rect"); break;
     case "p": setTool("poly"); break;
     case "l": setTool("light"); break;
+    case "y": setTool("track"); break;
     case "w": setTool("switch"); break;
     case "o": setTool("device"); break;
     case "g": $("#chkGlow").checked=!state.showGlow; state.showGlow=!state.showGlow; save(); render(); break;
@@ -3813,6 +4056,7 @@ window.addEventListener("keydown", e=>{
       else if(tool!=="select"){ setTool("select"); }
       else if(selSwitch){ selSwitch=null; renderAll(); }
       else if(selDevice){ selDevice=null; renderAll(); }
+      else if(selTrack){ selTrack=null; renderAll(); }
       else if(selLights.length){ selLights=[]; render(); }
       else if(F().selectedZone){ F().selectedZone=null; renderAll(); }
       break;
@@ -3823,6 +4067,13 @@ window.addEventListener("keydown", e=>{
       e.preventDefault();
       if(selSwitch) deleteSwitch(selSwitch);
       else if(selDevice){ mutate(()=>deleteDevice(selDevice)); toast("Đã xoá thiết bị — Ctrl+Z để hoàn tác"); }
+      else if(selTrack){
+        const n=trackLights(selTrack).length;
+        if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`)){
+          mutate(()=>deleteTrack(selTrack));
+          toast(n? `Đã xoá ray và ${n} đèn — Ctrl+Z để hoàn tác` : "Đã xoá ray — Ctrl+Z để hoàn tác");
+        }
+      }
       else if(selLights.length) deleteSelected();
       else if(F().selectedZone){ deleteZone(F().selectedZone); toast("Đã xoá khu vực — Ctrl+Z để hoàn tác"); }
       break;
@@ -3862,13 +4113,25 @@ function duplicateSelected(){
     const copies=[];
     selLights.forEach(s=>{
       const z=getZone(s.zid); const l=z.lights[s.li];
-      z.lights.push({...l, x:l.x+off, y:l.y+off});
+      const tr=l.trk? trackById(l.trk) : null;
+      if(tr){
+        // Đèn trên ray nhân bản thì DỜI DỌC RAY 0,3 m, không dời chéo — dời chéo là x/y một đằng,
+        // t một nẻo, bản sao vẽ ra ngoài ray cho tới khi anh kéo nó một cái.
+        let t=(l.t||0)+0.3; if(t>(tr.len||1)) t=Math.max(0,(l.t||0)-0.3);
+        const p=trackPos(tr, t);
+        z.lights.push({...l, t, x:p.x, y:p.y, rot:tr.rot||0});
+      } else z.lights.push({...l, x:l.x+off, y:l.y+off});
       copies.push({zid:s.zid, li:z.lights.length-1});
     });
     selLights=copies;
   });
 }
 function rotateSelected(deg){
+  if(selTrack && !selLights.length){
+    const tr=trackById(selTrack);
+    if(tr) mutate(()=>{ tr.rot=((tr.rot||0)+deg+360)%360; syncTrackLights(tr); });
+    return;
+  }
   if(selDevice && !selLights.length){
     const d=deviceById(selDevice); if(d) mutate(()=>{ d.rot=((d.rot||0)+deg+360)%360; });
     return;
@@ -3998,6 +4261,17 @@ function wallSnap(w, poly){
 function newPlacedLight(z, w){
   const lamp=lightById(z.placeLightId);
   const o={x:w.x, y:w.y, lightId:z.placeLightId};
+  // Click TRÚNG một thanh ray → đèn gắn lên ray: nó không còn tự do, chỉ trượt dọc ray.
+  // Bắt trong 0,25 m quanh trục ray — đủ rộng để không phải nhắm chính xác, đủ hẹp để
+  // đặt đèn cạnh ray vẫn ra đèn thường.
+  const tr = trackNear(w, 0.25);
+  if(tr && lamp.type!=="strip"){
+    o.trk=tr.id; o.t=trackT(tr, w);
+    const p=trackPos(tr, o.t);
+    o.x=p.x; o.y=p.y; o.rot=tr.rot||0;
+    if(tr.mh!=null) o.mh=tr.mh;
+    return o;
+  }
   if(lamp.mount==="wall"){
     o.mnt="wall";
     if(lamp.defMh!=null) o.mh=lamp.defMh;
@@ -4029,7 +4303,7 @@ function addDeviceAt(w){
   let stacked=false;
   if(near.length){ const t=near[0]; dev.x=t.x; dev.y=t.y; dev.rot=t.rot; stacked=true; }
   mutate(()=>{ fl.devices.push(dev); });
-  selDevice=dev.id; selLights=[]; selSwitch=null;
+  selDevice=dev.id; selLights=[]; selSwitch=null; selTrack=null;
   showHint(stacked
     ? `Đã chồng thêm ${spec.label} tại vị trí này — đặt cao độ khác nhau, bản vẽ ghi cả hai`
     : `Đã đặt ${spec.label} · click tiếp để thêm, phím 1–9 đổi loại, Esc để xong`);
@@ -4263,13 +4537,113 @@ function refreshDevicePanel(){
   p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.classList.toggle("primary", +b.dataset.mh===d.mh));
   const ns=p.querySelector("#dvNote"); if(ns) ns.querySelectorAll("[data-nt]").forEach(b=> b.classList.toggle("on", b.dataset.nt===d.note));
 }
+/* Panel RAY NAM CHÂM — cùng khuôn #devPanel: dựng lại chỉ khi đổi ray, còn lại chỉ cập nhật giá trị
+   với guard activeElement. Đây là chỗ anh KIỂM SOÁT BẰNG SỐ: dài ray, góc, cao độ, và quan trọng
+   nhất — vị trí trượt của từng đèn tính từ đầu A (mét). */
+function refreshTrackPanel(){
+  const p=$("#trkPanel"), tr=trackById(selTrack);
+  p.classList.toggle("hidden", !tr);
+  if(!tr){ p.dataset.trk=""; return; }
+  const fl=F(), lights=trackLights(tr.id, fl);
+  if(p.dataset.trk!==tr.id){
+    p.dataset.trk=tr.id;
+    p.innerHTML=`<p class="eyebrow">${escapeHtml(tr.code||"RAY")} · ray nam châm</p>
+      <div class="inline" style="gap:8px">
+        <div style="flex:1">
+          <label>Dài ray (m)</label>
+          <input type="number" id="trLen" step="0.1" min="0.2">
+        </div>
+        <div style="flex:1">
+          <label>Góc xoay (°)</label>
+          <input type="number" id="trRot" step="15" min="0" max="359">
+        </div>
+        <button class="btn sm danger" id="trDel" title="Xoá ray (đèn trên ray xoá theo)"
+                style="align-self:flex-end;margin-bottom:2px">✕</button>
+      </div>
+      <div class="inline" style="gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="btn sm" id="trH">Nằm ngang</button>
+        <button type="button" class="btn sm" id="trV">Thẳng đứng</button>
+      </div>
+      <label style="margin-top:10px">Cao độ đáy ray (m, từ sàn)</label>
+      <div class="inline" style="gap:6px;flex-wrap:wrap" id="trMhChips">
+        <button type="button" class="btn sm" data-mh="">Sát trần</button>
+        ${[2.4,2.6,2.8].map(v=>`<button type="button" class="btn sm" data-mh="${v}">+${fmtPlan(v,2)}</button>`).join("")}
+        <input type="number" id="trMh" step="0.05" style="width:66px" placeholder="khác">
+      </div>
+      <label style="margin-top:10px">Đèn trên ray — vị trí trượt tính từ đầu A</label>
+      <div id="trLights"></div>
+      <p class="pr-hint" style="margin:8px 0 0">Bấm <b>L</b> rồi click <b>lên thanh ray</b> để gắn đèn ·
+        kéo đèn để trượt dọc ray · kéo ra xa hơn 0,6 m để gỡ khỏi ray · <b>Q/E</b> xoay ray.</p>`;
+    p.querySelector("#trDel").onclick=()=>{
+      const n=trackLights(tr.id).length;
+      if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`))
+        mutate(()=>deleteTrack(tr.id));
+    };
+    p.querySelector("#trLen").oninput=e=>{ const v=parseNum(e.target.value);
+      if(!(v>0.1)) return; mutate(()=>{ tr.len=v; syncTrackLights(tr, fl); }); };
+    p.querySelector("#trRot").oninput=e=>{ const v=parseNum(e.target.value);
+      if(v==null||isNaN(v)) return; mutate(()=>{ tr.rot=((v%360)+360)%360; syncTrackLights(tr, fl); }); };
+    p.querySelector("#trH").onclick=()=>mutate(()=>{ tr.rot=0;  syncTrackLights(tr, fl); });
+    p.querySelector("#trV").onclick=()=>mutate(()=>{ tr.rot=90; syncTrackLights(tr, fl); });
+    p.querySelectorAll("#trMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{
+      tr.mh = b.dataset.mh===""? null : +b.dataset.mh; syncTrackLights(tr, fl); }));
+    p.querySelector("#trMh").oninput=e=>{ const v=e.target.value.trim();
+      mutate(()=>{ tr.mh = v===""? null : parseNum(v); syncTrackLights(tr, fl); }); };
+  }
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  setV("#trLen", Math.round((tr.len||1)*100)/100);
+  setV("#trRot", Math.round(tr.rot||0));
+  setV("#trMh", tr.mh!=null && ![2.4,2.6,2.8].includes(tr.mh)? tr.mh : "");
+  p.querySelectorAll("#trMhChips [data-mh]").forEach(b=>
+    b.classList.toggle("primary", b.dataset.mh===""? tr.mh==null : +b.dataset.mh===tr.mh));
+  // Danh sách đèn trên ray — mỗi dòng một ô SỐ để đặt chính xác vị trí trượt (m).
+  const box=p.querySelector("#trLights"); if(!box) return;
+  const sig=lights.map(o=>o.l.lightId+":"+(o.l.t||0).toFixed(3)).join("|")+"#"+lights.length;
+  if(box.dataset.sig!==sig || !box.childElementCount){
+    if(document.activeElement && box.contains(document.activeElement)){
+      // đang gõ trong danh sách → chỉ ghi lại chữ ký, đừng dựng lại kẻo mất focus
+      box.dataset.sig=sig;
+    } else {
+      box.dataset.sig=sig; box.innerHTML="";
+      if(!lights.length) box.innerHTML='<p class="empty" style="padding:6px">Chưa có đèn — nhấn L rồi click lên thanh ray.</p>';
+      lights.slice().sort((a,b)=>(a.l.t||0)-(b.l.t||0)).forEach(({z,l,li})=>{
+        const lamp=lightById(l.lightId);
+        const row=document.createElement("div"); row.className="grp";
+        if(lamp){ const ic=symbolIconSVG(lamp.type, null, lamp.mount); ic.style.color="var(--ink-2)"; row.appendChild(ic); }
+        const dd=document.createElement("div"); dd.className="d"; dd.style.cursor="pointer";
+        dd.title="Click: chọn đèn này trên bản vẽ";
+        dd.innerHTML=`<b>${escapeHtml((lamp&&lamp.name)||"Đèn")}</b><small>${escapeHtml(z.name||"")}</small>`;
+        dd.onclick=()=>{ selLights=[{zid:z.id, li}]; selTrack=null; F().selectedZone=z.id; renderAll(); };
+        row.appendChild(dd);
+        const inp=document.createElement("input");
+        inp.type="number"; inp.className="tin"; inp.step="0.05"; inp.min="0";
+        inp.max=String(tr.len||1); inp.value=String(Math.round((l.t||0)*100)/100);
+        inp.style.width="62px"; inp.title="Vị trí trượt tính từ đầu A của ray (m)";
+        inp.oninput=e=>{ const v=parseNum(e.target.value);
+          mutate(()=>{ l.t=clamp(v,0,tr.len||1); const q=trackPos(tr,l.t); l.x=q.x; l.y=q.y; l.rot=tr.rot||0; }); };
+        row.appendChild(inp);
+        const u=document.createElement("small"); u.textContent="m"; u.style.color="var(--ink-3)";
+        row.appendChild(u);
+        const x=document.createElement("button"); x.className="btn sm"; x.textContent="⤫";
+        x.title="Gỡ đèn khỏi ray (đèn vẫn còn, thành đèn thường)";
+        x.onclick=()=>mutate(()=>{ delete l.trk; delete l.t; });
+        row.appendChild(x);
+        box.appendChild(row);
+      });
+    }
+  } else {
+    // cùng chữ ký → chỉ đồng bộ giá trị (giới hạn max đổi khi anh sửa chiều dài ray)
+    box.querySelectorAll(".tin").forEach(el=>{ el.max=tr.len||1; });
+  }
+}
 function refreshRight(){
   refreshSwitchPanel();
   refreshDevicePanel();
+  refreshTrackPanel();
   refreshSelPanel();
   syncRightScroll();
   const z=selZone();
-  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || selLights.length>0);
+  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || !!selTrack || selLights.length>0);
   $("#zoneProps").classList.toggle("hidden", !z);
   if(!z) return;
   // không ghi đè ô user đang gõ (đang focus) — tránh nuốt ký tự kiểu "0.5" → "0.75"
@@ -4329,7 +4703,7 @@ function refreshRight(){
     el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ (đổi loại-sắp-đặt ở bảng “Đèn đang đặt” khi bấm L)";
     el.onclick=()=>{ // CHỈ chọn nhóm để xem/sửa — KHÔNG đổi loại-sắp-đặt (việc đó ở flyout khi bấm L)
       selLights=z.lights.map((l,li)=> l.lightId===g.lid? {zid:z.id,li} : null).filter(Boolean);
-      selSwitch=null; selDevice=null;
+      selSwitch=null; selDevice=null; selTrack=null;
       renderAll();
     };
     gl.appendChild(el);
@@ -5172,6 +5546,17 @@ $("#btnCsv").onclick=()=>{
   });
   lines.push(["TỔNG","",""," ",fq(units),"bộ","",tot.w,"",tot.area.toFixed(2),"","",""].join(","));
   if(meters) lines.push(["TỔNG LED dây","",""," ",fq(meters),"m","","","","","","",""].join(","));
+  // ---- Ray nam châm — vật tư tính bằng MÉT, không phải "bộ", nên đứng riêng ----
+  const trs=allTracks();
+  if(trs.length){
+    lines.push([""],["RAY NAM CHÂM (thanh gắn trần — đèn trượt trên ray)"].join(","));
+    lines.push(["Tầng","Mã ray","Chiều dài (m)","Cao độ đáy ray (m)","Số đèn trên ray"].join(","));
+    state.floors.forEach(f=>(f.tracks||[]).forEach(t=>{
+      lines.push([csvCell(f.name), csvCell(t.code||""), fq(t.len||0),
+        t.mh!=null? fq(t.mh) : "sát trần", trackLights(t.id, f).length].join(","));
+    }));
+    lines.push(["TỔNG RAY","",fq(trs.reduce((s,t)=>s+(t.len||0),0)),"",""].join(","));
+  }
   // ---- Thiết bị (ổ cắm / mạng / TV / wifi / nguồn chờ) — bảng riêng cuối file ----
   const anyDev=state.floors.some(f=>(f.devices||[]).length);
   if(anyDev){
@@ -5238,7 +5623,7 @@ async function buildPrintDoc(){
   // tạm chuyển tầng + tắt kịch bản đang xem, xong trả nguyên trạng
   const cur0=state.cur, sel0=selLights, sw0=selSwitch, dev0=selDevice;
   const live0=state.floors.map(f=>f.liveOff||[]);
-  selLights=[]; selSwitch=null; selDevice=null;
+  selLights=[]; selSwitch=null; selDevice=null; selTrack=null;
   state.floors.forEach(f=>f.liveOff=[]);
   // 2 ảnh mỗi tầng: tờ CHIẾU SÁNG (đèn+điều khiển, không ổ cắm) và tờ THI CÔNG (ổ cắm, không quầng
   // sáng/lux) — chỉ dựng tờ thi công khi tầng có thiết bị.
@@ -5307,6 +5692,31 @@ async function buildPrintDoc(){
     <tr class="tot"><td></td><td colspan="2">${multi? "CỘNG "+escapeHtml(fl.name).toUpperCase() : "TỔNG CỘNG"} — ${fmt(flArea,1)} m² sàn</td>
       <td colspan="2">${qty(flUnits,flMeters)}</td><td></td><td class="num">${fmt(flW)} W</td><td></td></tr>
     </tbody></table>`;
+  // ---- Bảng RAY NAM CHÂM — vật tư tính bằng MÉT nên không nhét được vào bảng đèn (cột SL/ĐVT/W
+  // của bảng đèn nói về "bộ đèn"). Đèn gắn trên ray vẫn nằm ở bảng đèn như mọi đèn khác. ----
+  let trkHtml="";
+  if((fl.tracks||[]).length){
+    const rows=(fl.tracks||[]).map(t=>{ const z=deviceZone(t, fl); return {t, zn: z? z.name : "Ngoài khu vực"}; });
+    const zOrder=fl.zones.map(z=>z.name);
+    rows.sort((a,b)=>{ const ia=zOrder.indexOf(a.zn), ib=zOrder.indexOf(b.zn);
+      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || String(a.t.code).localeCompare(String(b.t.code),"vi"); });
+    const totM=rows.reduce((s,r)=>s+(r.t.len||0),0);
+    trkHtml=`<h2>Ray nam châm${multi? " — "+escapeHtml(fl.name):""}</h2>
+      <table class="pr"><thead><tr><th style="width:52px">Mã ray</th><th>Khu vực</th>
+      <th class="num" style="width:60px">Dài (m)</th><th class="num" style="width:66px">Cao độ (m)</th>
+      <th class="num" style="width:56px">Số đèn</th></tr></thead><tbody>`
+      + rows.map(({t,zn})=>`<tr><td><span class="pr-code">${escapeHtml(t.code||"RAY")}</span></td>
+        <td>${escapeHtml(zn)}</td>
+        <td class="num">${fmtPlan(t.len||0)}</td>
+        <td class="num">${t.mh!=null? "+"+fmtPlan(t.mh,2) : "sát trần"}</td>
+        <td class="num">${trackLights(t.id, fl).length}</td></tr>`).join("")
+      + `<tr class="tot"><td colspan="2">Tổng chiều dài ray${multi? " — "+escapeHtml(fl.name):""}</td>
+         <td class="num">${fmtPlan(totM)}</td><td></td>
+         <td class="num">${rows.reduce((s,r)=>s+trackLights(r.t.id, fl).length,0)}</td></tr>
+        </tbody></table>
+      <p class="pr-hint">Ray đặt hàng theo MÉT, cắt tại công trường. Đèn gắn trên ray liệt ở bảng đèn phía trên;
+      vị trí trượt của từng đèn xem trên mặt bằng.</p>`;
+  }
   // Bảng công tắc + kịch bản của tầng
   let ctlHtml="";
   if((fl.switches||[]).length){
@@ -5434,7 +5844,7 @@ async function buildPrintDoc(){
   return `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
       <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>
     <section class="pr-floor">
-      <h2>Bảng thống kê đèn${suffix}</h2>${table}${ctlHtml}</section>${devSheet}`;
+      <h2>Bảng thống kê đèn${suffix}</h2>${table}${trkHtml}${ctlHtml}</section>${devSheet}`;
   }).join("");
   // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
   // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
