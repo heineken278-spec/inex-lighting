@@ -733,6 +733,10 @@
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13a8 8 0 0 1 16 0z"/><path d="M4 13h16"/><path d="M9.5 9.5v2M14.5 9.5v2"/></svg>
           <span class="kbd">O</span>
         </button>
+        <button class="tool" data-tool="dim" title="Kích thước — click 2 mốc, click tiếp để nối chuỗi (D)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 16h18M5 13.5v5M19 13.5v5M11 13.5v5"/><path d="M6 7l3-3M6 7l3 3M18 7l-3-3M18 7l-3 3M6 7h12"/></svg>
+          <span class="kbd">D</span>
+        </button>
       </div>
       <div class="railsep"></div>
       <button class="railbtn" id="btnLibrary" title="Thư viện đèn">
@@ -751,7 +755,13 @@
       <label class="check"><input type="checkbox" id="chkGlow" checked> Hiện vùng rọi sáng</label>
       <label class="check"><input type="checkbox" id="chkWiring"> Hiện tất cả đường công tắc → đèn</label>
       <label class="check"><input type="checkbox" id="chkLegend" checked> Hiện bảng chú giải cụm</label>
-      <label class="check"><input type="checkbox" id="chkDims" checked> Hiện kích thước định vị đèn</label>
+      <label class="check"><input type="checkbox" id="chkDims" checked> Hiện kích thước định vị</label>
+      <div class="inline" style="gap:6px">
+        <button class="btn ghost sm" id="btnGenDims" style="flex:1"
+          title="Sinh sẵn chuỗi kích thước từ tường tới đèn cho mọi khu vực — sinh xong sửa/xoá/ép số bình thường">Tự rải kích thước</button>
+        <button class="btn ghost sm" id="btnClrDims"
+          title="Xoá mọi kích thước của tầng đang xem">Xoá hết</button>
+      </div>
       <label>Mã đèn trên bản vẽ</label>
       <div class="seg" id="lblSeg">
         <button data-lm="all" title="Ghi mã cạnh mọi đèn">Tất cả</button>
@@ -853,6 +863,7 @@
       <div id="swPanel" class="panel-sec ctxsec hidden"></div>
       <div id="devPanel" class="panel-sec ctxsec hidden"></div>
       <div id="trkPanel" class="panel-sec ctxsec hidden"></div>
+      <div id="dimPanel" class="panel-sec ctxsec hidden"></div>
       <div id="wallInfo" class="panel-sec ctxsec hidden"></div>
       <div id="noZone" class="panel-sec">
         <p class="eyebrow">Thông số & kết quả</p>
@@ -1052,6 +1063,8 @@ let selLights = [];         // [{zid, li}]
 let selSwitch = null;       // id công tắc đang chọn
 let selDevice = null;       // id thiết bị đang chọn
 let selTrack  = null;       // id ray nam châm đang chọn
+let selDim    = null;       // id kích thước đang chọn
+let dimSnap   = null;       // mốc bắt điểm dưới con trỏ khi đang dùng công cụ Dim
 let visOpen = false;        // bảng kiểm tra vệt chiếu (nổi trên canvas) đang mở?
 let visTab = "side";        // "side" = mặt bên (dùng thường xuyên) · "face" = mặt đứng chính diện
 let hoverLight = null;      // {zid, li}
@@ -1137,6 +1150,7 @@ function deleteTrack(id, fl){
   trackLights(id, fl).forEach(({z,l})=>{ const i=z.lights.indexOf(l); if(i>=0) z.lights.splice(i,1); });
   fl.tracks=(fl.tracks||[]).filter(t=>t.id!==id);
   if(selTrack===id) selTrack=null;
+  return pruneDims(fl);
 }
 const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
@@ -1277,6 +1291,13 @@ function migrate(s){
     // tham chiếu chết: panel không hiện được, mà kéo thì code vẫn thử chiếu lên ray không có.
     { const ids=new Set(f.tracks.map(t=>t.id));
       f.zones.forEach(z=>z.lights.forEach(l=>{ if(l.trk && !ids.has(l.trk)){ delete l.trk; delete l.t; } })); }
+    // uid đèn phải DUY NHẤT trong tầng — hai đèn cùng uid làm mốc dim trỏ nhập nhằng, và cái sai
+    // đó im lặng. Gặp trùng thì bỏ uid của cái sau, nó sẽ được cấp lại khi cần.
+    { const seen=new Set();
+      f.zones.forEach(z=>z.lights.forEach(l=>{
+        if(!l.uid) return;
+        if(seen.has(l.uid)) delete l.uid; else seen.add(l.uid);
+      })); }
   });
   if(s.showLegend===undefined) s.showLegend=true;
   if(!TEXT_SCALES[s.textScale]) s.textScale="vua";
@@ -1600,10 +1621,16 @@ function addSwitchAt(w){
   showHint("Đã đặt công tắc — chọn cụm nó điều khiển ở bảng bên phải · Esc để xong");
 }
 function deleteSwitch(id){
-  const fl=F();
+  const fl=F(); let np=0;
   mutate(()=>{ fl.switches=(fl.switches||[]).filter(s=>s.id!==id);
-    if(selSwitch===id) selSwitch=null; });
-  toast("Đã xoá công tắc — Ctrl+Z để hoàn tác");
+    if(selSwitch===id) selSwitch=null; np=pruneDims(fl); });
+  toast(dimNote("Đã xoá công tắc", np));
+}
+/* Vật bị xoá thì kích thước neo vào nó cũng đi theo — và phải NÓI RA. Im lặng xoá thì anh in bản
+   vẽ ra mới phát hiện thiếu số; mà giữ lại một con số neo vào hư không còn tệ hơn. */
+function dimNote(msg, n){
+  return n? `${msg} — kèm ${n} kích thước neo vào nó · Ctrl+Z để hoàn tác`
+          : `${msg} — Ctrl+Z để hoàn tác`;
 }
 /* Bấm công tắc: bật/tắt các mạch nó điều khiển (đúng như bấm ngoài đời) */
 function pressSwitch(id){
@@ -2126,13 +2153,164 @@ function deviceIconSVG(kind, cls){
   });
   el.appendChild(g); return el;
 }
-/* ===== KÍCH THƯỚC ĐỊNH VỊ TỰ ĐỘNG =====
-   Thợ cần đúng 2 thứ để định vị đèn: (1) từ TƯỜNG tới đèn đầu tiên, (2) khoảng cách giữa các đèn.
-   KHÔNG ghi tiếp tới tường đối diện — số đó suy ra được, ghi thêm là dim thừa (và dễ vênh khi thi công).
-   Đèn thẳng hàng gộp thành MỘT chuỗi "n×a" thay vì ghi từng khoảng, đúng quy ước bản vẽ.
-   Toạ độ suy ra hoàn toàn từ vị trí đèn nên tự cập nhật khi kéo đèn — không lưu gì, không lệch. */
+/* ========================= KÍCH THƯỚC (DIM) =========================
+   Kích thước là do ANH VẼ, không phải app tự suy — anh chọn đo từ đâu tới đâu.
+   Độ chính xác kiểu CAD đến từ BẮT ĐIỂM, không phải từ click cẩn thận: mốc dim neo vào ĐỐI TƯỢNG
+   (tâm đèn / thiết bị / công tắc / đầu ray / đỉnh khu vực), mà toạ độ những thứ đó app đang giữ
+   chính xác tuyệt đối → dim đèn–đèn đọc ra ĐÚNG con số trong bộ nhớ, sai số bằng 0. Kéo đèn thì
+   số tự cập nhật vì dim lưu THAM CHIẾU chứ không lưu toạ độ.
+
+     fl.dims = [{ id, pts:[anchor,…], axis:"h"|"v"|"a", off, text, sheet }]
+
+   `pts` từ 2 mốc trở lên — trên 2 là CHUỖI nằm trên cùng một đường ghi.
+   `off` là khoảng đẩy đường ghi ra, tính bằng MÉT (không phải px màn hình) để đường ghi nằm y một
+   chỗ ở mọi mức zoom và trên file xuất — đúng bài học đã rút ở nhãn tự động.                       */
 const DIM_ALIGN_TOL = 0.10;   // m — đèn lệch dưới mức này coi như THẲNG HÀNG
 const DIM_EQ_TOL    = 0.02;   // m — khoảng cách chênh dưới mức này coi như ĐỀU NHAU
+const DIM_OFF_DEF   = 0.35;   // m — đẩy đường ghi ra khỏi vật, mặc định lúc vẽ
+const DIM_SNAP_PX   = 12;     // px màn hình — bán kính bắt điểm
+
+/* uid đèn cấp LƯỜI: chỉ sinh khi đèn đó lần đầu được dùng làm mốc dim. Nhờ vậy 6 đường tạo đèn
+   (đặt tay, LED dây, tự rải, nhân bản, dữ liệu mẫu, mở file) KHÔNG phải sửa gì — càng ít chỗ đụng
+   càng ít chỗ quên. Đèn chưa từng được dim thì vĩnh viễn không có uid, và không sao cả. */
+function uidOf(l, fl){
+  fl=fl||F();
+  if(!l.uid) l.uid="lp"+(fl.seq++);
+  return l.uid;
+}
+function lightByUid(uid, fl){
+  fl=fl||F();
+  for(const z of fl.zones){
+    const li=z.lights.findIndex(l=>l.uid===uid);
+    if(li>=0) return {z, l:z.lights[li], li};
+  }
+  return null;
+}
+/* Toạ độ THẬT của một mốc, tính lại mỗi lần vẽ. null = mất neo (vật đã bị xoá) → bỏ qua, không ném lỗi. */
+function anchorPos(a, fl){
+  if(!a) return null;
+  fl=fl||F();
+  switch(a.k){
+    case "P": return {x:a.x, y:a.y};
+    case "L": { const h=lightByUid(a.uid, fl); return h? {x:h.l.x, y:h.l.y} : null; }
+    case "D": { const d=(fl.devices||[]).find(x=>x.id===a.id); return d? {x:d.x, y:d.y} : null; }
+    case "W": { const s=(fl.switches||[]).find(x=>x.id===a.id); return s? {x:s.x, y:s.y} : null; }
+    case "T": { const t=trackById(a.id, fl); return t? trackPos(t, (a.e||0)*(t.len||1)) : null; }
+    case "Z": { const z=(fl.zones||[]).find(x=>x.id===a.zid); const p=z&&z.poly[a.i];
+                return p? {x:p.x, y:p.y} : null; }
+    case "E": { const z=(fl.zones||[]).find(x=>x.id===a.zid); if(!z||!z.poly[a.i]) return null;
+                const p=z.poly[a.i], q=z.poly[(a.i+1)%z.poly.length], t=a.t||0;
+                return {x:p.x+(q.x-p.x)*t, y:p.y+(q.y-p.y)*t}; }
+  }
+  return null;
+}
+/* Mốc này có DỜI được không — quyết định ép số dời đầu nào (tường và toạ độ chết thì không dời). */
+function anchorMovable(a){ return a && (a.k==="L" || a.k==="D" || a.k==="W"); }
+/* ===== ÉP KHOẢNG CÁCH — đây mới là "chính xác như CAD" =====
+   Trong CAD anh không kéo tới khi vừa mắt, anh GÕ SỐ. Ở đây gõ số vào một đoạn thì app DỜI VẬT
+   cho khoảng cách đúng bằng con số đó — nên bản vẽ luôn khớp với số in ra, thay vì số chỉ là kết
+   quả đo lại nét vẽ tay.
+   Dời theo ĐÚNG TRỤC ĐO: dim ngang chỉ đổi x, dim dọc chỉ đổi y — ép một dim ngang không được
+   phá hàng ngang của đèn. Trả chuỗi lỗi, hoặc null nếu làm được. */
+function forceDimSpan(dm, i, targetMm, fl){
+  fl=fl||F(); const ppm=fl.pxPerMeter;
+  if(!ppm) return "Chưa cân tỉ lệ";
+  const pts=dimPoints(dm, fl); if(!pts) return "Kích thước đã mất mốc";
+  const fr=dimFrame(dm.axis||"h", pts, dm.off||0, ppm);
+  // đoạn thứ i tính trên thứ tự ĐÃ SẮP dọc đường ghi, đúng như lúc vẽ
+  const idx=pts.map((p,k)=>k).sort((a,b)=>fr.along(pts[a])-fr.along(pts[b]));
+  const ia=idx[i], ib=idx[i+1];
+  if(ia==null || ib==null) return "Không có đoạn này";
+  const aA=dm.pts[ia], aB=dm.pts[ib];
+  // dời đầu B (mốc phía sau) nếu được, không thì dời đầu A — mốc tường/toạ độ chết thì đứng yên
+  let mv=ib, fx=ia;
+  if(!anchorMovable(aB)){ if(!anchorMovable(aA)) return "Đoạn này neo vào hai điểm cố định (tường / toạ độ) — không ép được";
+    mv=ia; fx=ib; }
+  if(dm.swap && anchorMovable(dm.pts[fx])){ const t=mv; mv=fx; fx=t; }
+  const pF=pts[fx], want=targetMm/1000*ppm;
+  const cur=fr.along(pts[mv])-fr.along(pF);
+  const sgn=Math.sign(cur)||1;
+  const delta=(sgn*want)-cur;                       // dịch dọc TRỤC ĐO, giữ nguyên phương kia
+  const d={x:fr.u.x*delta, y:fr.u.y*delta};
+  return moveAnchorBy(dm.pts[mv], d, fl);
+}
+/* Dời vật mà một mốc đang neo vào, đi một véc-tơ. Đèn trên ray thì KHÔNG dời x/y mà đổi `t` —
+   nó chỉ trượt được dọc ray, ép ngang là vô nghĩa và phải nói ra thay vì lặng lẽ bẻ nó khỏi ray. */
+function moveAnchorBy(a, d, fl){
+  fl=fl||F();
+  if(a.k==="D"){ const o=(fl.devices||[]).find(x=>x.id===a.id); if(!o) return "Mất thiết bị";
+    o.x+=d.x; o.y+=d.y; return null; }
+  if(a.k==="W"){ const o=(fl.switches||[]).find(x=>x.id===a.id); if(!o) return "Mất công tắc";
+    o.x+=d.x; o.y+=d.y; return null; }
+  if(a.k==="L"){
+    const h=lightByUid(a.uid, fl); if(!h) return "Mất đèn";
+    const l=h.l, tr=l.trk? trackById(l.trk, fl) : null;
+    if(tr){
+      const g=trackGeom(tr);
+      const along=d.x*g.ux + d.y*g.uy;               // thành phần dọc ray
+      const perp =Math.hypot(d.x-g.ux*along, d.y-g.uy*along);
+      if(perp > 0.01*g.P) return "Đèn này trượt trên ray — chỉ ép được kích thước DỌC THEO ray";
+      l.t=clamp((l.t||0)+along/g.P, 0, tr.len||1);
+      const p=trackPos(tr, l.t); l.x=p.x; l.y=p.y;
+      return null;
+    }
+    l.x+=d.x; l.y+=d.y;
+    return null;
+  }
+  return "Mốc này không dời được";
+}
+function dimById(id, fl){ return ((fl||F()).dims||[]).find(d=>d.id===id)||null; }
+/* Mọi mốc còn neo được → toạ độ. Trả null nếu còn dưới 2 mốc sống (dim không vẽ được nữa). */
+function dimPoints(dm, fl){
+  const ps=(dm.pts||[]).map(a=>anchorPos(a, fl));
+  return ps.every(Boolean) && ps.length>=2 ? ps : null;
+}
+/* ===== BẮT ĐIỂM (OSNAP) =====
+   Đây là thứ tạo ra độ chính xác, không phải tay anh. Quét trong 12 px MÀN HÌNH (nên zoom vào là
+   vùng bắt hẹp lại theo mét thật → bắt được hai đèn sát nhau). Ưu tiên: vật có toạ độ chính xác
+   trước, hình học suy ra sau, cuối cùng mới tới toạ độ chết. */
+function snapAt(w, inv, fl){
+  fl=fl||F();
+  const R=DIM_SNAP_PX*inv;
+  let best=null;
+  const take=(pos, anchor, label, pri)=>{
+    const d=Math.hypot(pos.x-w.x, pos.y-w.y);
+    if(d>R) return;
+    if(!best || pri<best.pri || (pri===best.pri && d<best.d)) best={pos, anchor, label, pri, d};
+  };
+  fl.zones.forEach(z=>z.lights.forEach(l=>{
+    const lamp=lightById(l.lightId);
+    take({x:l.x,y:l.y}, {k:"L", uid:uidOf(l, fl)},
+      "tâm "+((lamp&&(lamp.code||lamp.name))||"đèn"), 1);
+  }));
+  (fl.devices||[]).forEach(d=> take({x:d.x,y:d.y}, {k:"D", id:d.id},
+    "tâm "+((DEVICE_SPEC[d.kind]||{}).label||"thiết bị"), 2));
+  (fl.switches||[]).forEach(s=> take({x:s.x,y:s.y}, {k:"W", id:s.id},
+    "tâm "+(s.code||"công tắc"), 2));
+  (fl.tracks||[]).forEach(t=> [[0,"đầu ray"],[0.5,"giữa ray"],[1,"cuối ray"]].forEach(([e,nm])=>
+    take(trackPos(t, e*(t.len||1)), {k:"T", id:t.id, e}, nm+" "+(t.code||""), 3)));
+  fl.zones.forEach(z=>{
+    z.poly.forEach((p,i)=> take({x:p.x,y:p.y}, {k:"Z", zid:z.id, i}, "góc "+(z.name||"khu vực"), 4));
+    // chân vuông góc lên cạnh — đây chính là "khoảng cách tới tường" mà panel vẫn báo
+    for(let i=0;i<z.poly.length;i++){
+      const a=z.poly[i], b=z.poly[(i+1)%z.poly.length];
+      const r=distToSeg(w, a, b);
+      const L=Math.hypot(b.x-a.x, b.y-a.y)||1;
+      const t=Math.hypot(r.fx-a.x, r.fy-a.y)/L;
+      take({x:r.fx, y:r.fy}, {k:"E", zid:z.id, i, t}, "⊥ tường "+(z.name||""), 5);
+    }
+  });
+  return best || {pos:{...w}, anchor:{k:"P", x:w.x, y:w.y}, label:"toạ độ tự do", pri:9, d:0};
+}
+/* Xoá mọi dim có mốc trỏ tới một vật vừa bị xoá. KHÔNG "đóng băng thành toạ độ": một con số đứng
+   yên trong khi vật đã đi mất là đúng loại lỗi cả hồ sơ này đang tránh. Trả số dim đã xoá để báo. */
+function pruneDims(fl){
+  fl=fl||F();
+  const before=(fl.dims||[]).length;
+  fl.dims=(fl.dims||[]).filter(d=>dimPoints(d, fl));
+  if(selDim && !dimById(selDim, fl)) selDim=null;
+  return before-fl.dims.length;
+}
 /* Gom các toạ độ gần nhau thành một "hàng"/"cột", trả về tâm mỗi nhóm (đã sắp xếp) */
 function clusterCoords(vals, tol){
   const s=[...vals].sort((a,b)=>a-b), out=[];
@@ -2143,11 +2321,27 @@ function clusterCoords(vals, tol){
   });
   return out.map(g=>g.sum/g.n);
 }
-/* Chia chuỗi trạm thành các đoạn ghi kích thước, gộp các khoảng ĐỀU NHAU thành "n×a" */
-function dimSegments(stations, ppm){
+/* Chia chuỗi trạm thành các đoạn ghi kích thước, gộp các khoảng ĐỀU NHAU thành "n×a".
+   splitFirst=true (bộ sinh tự động): đoạn TƯỜNG → đèn đầu luôn ghi riêng, đó là mốc thợ đặt máy.
+   splitFirst=false (dim anh vẽ tay): không tách gì cả — 4 trạm cách đều phải ra "3×800=2400",
+   tách đoạn đầu sẽ thành "800" + "2×800=1600", đọc ra như hai chuỗi khác nhau. */
+function dimSegments(stations, ppm, splitFirst){
   const segs=[];
   if(stations.length<2) return segs;
-  // đoạn đầu: TƯỜNG → đèn đầu tiên (luôn ghi riêng, đây là mốc thợ đặt máy)
+  if(splitFirst===false){
+    const pts=stations, eq=DIM_EQ_TOL*ppm;
+    let i=0;
+    while(i<pts.length-1){
+      const g0=pts[i+1]-pts[i];
+      let j=i+1;
+      while(j<pts.length-1 && Math.abs((pts[j+1]-pts[j])-g0)<=eq) j++;
+      const n=j-i;
+      if(n>=2) segs.push({a:pts[i], b:pts[j], n, step:g0, ticks:pts.slice(i+1,j+1)});
+      else segs.push({a:pts[i], b:pts[i+1], n:1});
+      i=j;
+    }
+    return segs;
+  }
   segs.push({a:stations[0], b:stations[1], n:1});
   // gộp theo ĐOẠN LIÊN TIẾP đều nhau (không đòi cả dãy phải đều) — phòng thật hay có kiểu
   // "lệch một nhịp rồi mới đều", gộp được đoạn đều là bớt hẳn số phải ghi
@@ -2164,43 +2358,94 @@ function dimSegments(stations, ppm){
   }
   return segs;
 }
-/* Vẽ một chuỗi kích thước. isH=true: chuỗi NGANG đặt ở tung độ `line`; ngược lại chuỗi DỌC ở hoành độ `line` */
-function drawDimChain(ov, inv, segs, line, isH, ppm, froms){
+/* Hệ trục của một đường ghi: gốc `o` nằm TRÊN đường ghi, `u` chạy dọc nó, `n` vuông góc.
+   Mọi vị trí trong chuỗi quy về một số vô hướng đo dọc `u` từ `o` — nhờ vậy dim ngang, dọc và
+   XIÊN dùng chung đúng một bộ máy vẽ, thay vì ba nhánh if. */
+function dimFrame(axis, pts, off, ppm){
+  const c={x:pts.reduce((s,p)=>s+p.x,0)/pts.length, y:pts.reduce((s,p)=>s+p.y,0)/pts.length};
+  let u;
+  if(axis==="h") u={x:1,y:0};
+  else if(axis==="v") u={x:0,y:1};
+  else { const a=pts[0], b=pts[pts.length-1];
+    const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; u={x:dx/L, y:dy/L}; }
+  const n={x:-u.y, y:u.x};
+  const o={x:c.x+n.x*(off||0)*ppm, y:c.y+n.y*(off||0)*ppm};
+  return {o, u, n,
+    along:p=>(p.x-o.x)*u.x+(p.y-o.y)*u.y,     // toạ độ dọc đường ghi
+    cross:p=>(p.x-o.x)*n.x+(p.y-o.y)*n.y,     // lệch vuông góc (dấu = phía nào)
+    at:(v,c2)=>({x:o.x+u.x*v+n.x*(c2||0), y:o.y+u.y*v+n.y*(c2||0)})};
+}
+/* Vẽ một chuỗi kích thước theo hệ trục `fr`. `segs` dùng toạ độ vô hướng dọc `fr.u`;
+   `froms` = [{v, s}] với s là độ lệch vuông góc của VẬT so với đường ghi (để biết gióng về phía nào). */
+function drawDimChain(ov, inv, segs, fr, ppm, froms, col){
   if(!segs.length) return;
-  const col="#6E665A", tick=4.5*inv, ext=3*inv, stub=7*inv;
-  const P=(v,cross)=> isH? {x:v, y:cross} : {x:cross, y:v};
+  col=col||"#6E665A";
+  const tick=6.4*inv, ext=3*inv, stub=7*inv;
   // ĐƯỜNG GIÓNG NGẮN: chỉ một đoạn cụt bắc qua đường ghi, KHÔNG kéo tới tận đèn.
   // Kéo tới đèn thì mỗi khu vực thêm cả chục nét cắt ngang mặt bằng → rối mắt, mà cũng
   // không thêm thông tin gì: vạch xiên trên đường ghi đã chỉ đúng trạm rồi.
-  froms.forEach(f=>{
-    const dir=Math.sign(line-f.from)||1;      // hướng từ đèn về đường ghi
-    const p1=P(f.v, line-stub*dir), p2=P(f.v, line+ext*dir);
+  (froms||[]).forEach(f=>{
+    const dir=-Math.sign(f.s)||1;             // hướng từ vật về đường ghi
+    const p1=fr.at(f.v, -stub*dir), p2=fr.at(f.v, ext*dir);
     ov.appendChild(svg("line",{x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
       stroke:col, "stroke-width":0.7*inv, opacity:".6"}));
   });
+  // vạch xiên 45° SO VỚI ĐƯỜNG GHI (chuẩn bản vẽ xây dựng — không dùng mũi tên)
+  const R=Math.SQRT1_2, d45={x:(fr.u.x-fr.u.y)*R, y:(fr.u.x+fr.u.y)*R};
+  const slash=(p,k)=>ov.appendChild(svg("line",{
+    x1:p.x-d45.x*tick*k, y1:p.y-d45.y*tick*k, x2:p.x+d45.x*tick*k, y2:p.y+d45.y*tick*k,
+    stroke:col, "stroke-width":1.1*inv}));
+  // chữ luôn đọc được: xoay theo đường ghi rồi ép góc về khoảng [-90°, 90°) — dim dọc đọc từ
+  // dưới lên như bản vẽ xây dựng, không bao giờ lộn ngược
+  let ang=Math.atan2(fr.u.y, fr.u.x)*180/Math.PI;
+  if(ang>=90) ang-=180; if(ang<-90) ang+=180;
+  const ar=ang*Math.PI/180, ud={x:Math.cos(ar), y:Math.sin(ar)};
   segs.forEach(sg=>{
-    const A=P(sg.a,line), B=P(sg.b,line);
+    const A=fr.at(sg.a), B=fr.at(sg.b);
     ov.appendChild(svg("line",{x1:A.x,y1:A.y,x2:B.x,y2:B.y, stroke:col, "stroke-width":0.9*inv}));
-    // vạch xiên 45° hai đầu (chuẩn bản vẽ xây dựng — không dùng mũi tên)
-    [A,B].forEach(p=> ov.appendChild(svg("line",{
-      x1:p.x-tick, y1:p.y-tick, x2:p.x+tick, y2:p.y+tick, stroke:col, "stroke-width":1.1*inv})));
-    // vạch phụ tại các trạm bên trong chuỗi "n×a"
-    (sg.ticks||[]).slice(0,-1).forEach(t=>{ const p=P(t,line);
-      ov.appendChild(svg("line",{x1:p.x-tick*0.7,y1:p.y-tick*0.7,x2:p.x+tick*0.7,y2:p.y+tick*0.7,
-        stroke:col,"stroke-width":0.9*inv, opacity:".8"})); });
+    [A,B].forEach(p=>slash(p,1));
+    (sg.ticks||[]).slice(0,-1).forEach(t=>slash(fr.at(t), 0.7));
     const len=Math.abs(sg.b-sg.a);
-    const txt = sg.n>1
-      ? `${sg.n}×${fmt(Math.round(sg.step/ppm*1000))}=${fmt(Math.round(len/ppm*1000))}`
+    const txt = sg.txt!=null ? sg.txt
+      : sg.n>1 ? `${sg.n}×${fmt(Math.round(sg.step/ppm*1000))}=${fmt(Math.round(len/ppm*1000))}`
       : fmt(Math.round(len/ppm*1000));
-    const M=P((sg.a+sg.b)/2, line);
-    const t=svg("text",{x:M.x, y:isH? M.y-4*inv : M.y,
-      "text-anchor":"middle",
-      transform: isH? "" : `rotate(-90 ${M.x} ${M.y})`,
+    const M=fr.at((sg.a+sg.b)/2);
+    const tx=M.x+ud.y*4*inv, ty=M.y-ud.x*4*inv;   // nhích lên phía trên chữ (theo hệ đã xoay)
+    const t=svg("text",{x:tx, y:ty, "text-anchor":"middle",
+      transform: ang? `rotate(${ang.toFixed(2)} ${tx} ${ty})` : "",
       "font-family":"'JetBrains Mono',monospace", "font-size":8.5*inv*textScale(),
       fill:col, stroke:C_WHITE, "stroke-width":2.2*inv, "paint-order":"stroke",
       style:"pointer-events:none"});
     t.textContent=txt;
     ov.appendChild(t);
+  });
+}
+/* Vẽ MỌI kích thước anh đã vẽ của tầng đang xem */
+function drawManualDims(ov0, inv, P){
+  const fl=F(), ppm=fl.pxPerMeter; if(!ppm) return;
+  // Tờ hiện hành, tính giống nhau cho cả lúc XEM lẫn lúc XUẤT — không thì file xuất ra khác
+  // hẳn cái đang nhìn, đúng lỗi anh Khoa đã bắt được một lần.
+  const cs=curSheet();
+  const sh = cs===SHEET_LIGHT? "light" : cs===SHEET_DEVICE? "device" : "all";
+  const g0=svg("g",{}); ov0.appendChild(g0);
+  (fl.dims||[]).forEach(dm=>{
+    if(dm.sheet && sh!=="all" && dm.sheet!==sh) return;
+    const pts=dimPoints(dm, fl); if(!pts) return;     // mất neo → im lặng bỏ qua, không ném lỗi
+    const sel = exportInv==null && selDim===dm.id;
+    const col = sel? C_ACCENT_D : "#6E665A";
+    const fr=dimFrame(dm.axis||"h", pts, dm.off||0, ppm);
+    const vs=pts.map(p=>fr.along(p));
+    const order=vs.map((v,i)=>i).sort((a,b)=>vs[a]-vs[b]);
+    const sorted=order.map(i=>vs[i]);
+    const segs=dimSegments(sorted, ppm, false);
+    if(dm.text && segs.length===1) segs[0].txt=dm.text;
+    const g=svg("g",{"data-dim":dm.id, class:"dimm"});
+    drawDimChain(g, inv, segs, fr, ppm, pts.map(p=>({v:fr.along(p), s:fr.cross(p)})), col);
+    // vùng bắt chuột chạy hết đường ghi — kích thước phải bấm được để chọn/kéo/sửa
+    const A=fr.at(sorted[0]), B=fr.at(sorted[sorted.length-1]);
+    g.appendChild(svg("line",{x1:A.x,y1:A.y,x2:B.x,y2:B.y, stroke:"transparent",
+      "stroke-width":14*inv, style: exportInv==null? "cursor:move" : "pointer-events:none"}));
+    g0.appendChild(g);
   });
 }
 /* Giao điểm của polygon với ĐÚNG đường ghi (ngang y=c → trả các x; dọc x=c → trả các y).
@@ -2219,34 +2464,58 @@ function polyCross(poly, c, isH){
   }
   return out.sort((p,q)=>p-q);
 }
-/* Sinh + vẽ kích thước định vị cho MỌI khu vực có đèn của tầng đang xem */
-function drawDims(ov0, inv, P){
-  const fl=F(); const ppm=fl.pxPerMeter; if(!ppm) return;
-  // gom vào một nhóm không bắt chuột: kích thước là chú thích, không phải đối tượng để click
-  const ov=svg("g",{style:"pointer-events:none"}); ov0.appendChild(ov);
+/* Mốc BÁM CẠNH cho một điểm nằm trên chu vi khu vực — để mốc "mặt tường" cũng sống động
+   như mốc đèn: sửa polygon thì kích thước tự đổi theo. */
+function edgeAnchorAt(z, pt){
+  let bi=0, bt=0, bd=Infinity;
+  for(let i=0;i<z.poly.length;i++){
+    const a=z.poly[i], b=z.poly[(i+1)%z.poly.length];
+    const r=distToSeg(pt, a, b);
+    if(r.d<bd){ bd=r.d; bi=i;
+      const L=Math.hypot(b.x-a.x, b.y-a.y)||1;
+      bt=Math.hypot(r.fx-a.x, r.fy-a.y)/L; }
+  }
+  return {k:"E", zid:z.id, i:bi, t:bt};
+}
+/* "TỰ RẢI KÍCH THƯỚC" — chạy MỘT LẦN cho một khu vực, sinh ra các dim TAY SỬA ĐƯỢC.
+   Đây là bộ sinh cũ (gom đèn thành hàng/cột, mốc là mặt tường thật trên đúng đường ghi), nhưng
+   kết quả giờ là đối tượng anh nắm được: kéo đường ghi, ép số, xoá từng cái — thay vì một lớp
+   vẽ tự động không đụng vào được.
+   Thợ cần đúng 2 thứ để định vị đèn: (1) từ TƯỜNG tới đèn đầu tiên, (2) khoảng cách giữa các đèn.
+   KHÔNG ghi tiếp tới tường đối diện — số đó suy ra được, ghi thêm là dim thừa (và dễ vênh khi thi công). */
+function genZoneDims(z, fl){
+  fl=fl||F(); const ppm=fl.pxPerMeter; if(!ppm) return [];
   const tol=DIM_ALIGN_TOL*ppm;
-  fl.zones.forEach(z=>{
-    // ĐÈN TƯỜNG không vào chuỗi kích thước (anh Khoa): nó đã bám sát tường rồi, ghi thêm một con số
-    // vài chục mm chỉ làm rối và trông như sai số. Đèn KHÔNG được vẽ trên tờ này (LED dây ở tờ
-    // chiếu sáng) cũng không ghi — ghi kích thước tới một vật vô hình thì đọc không ra.
-    const pts=z.lights.filter(l=>!isWall(l) && lampOnSheet(lightById(l.lightId)));
-    if(!pts.length) return;
-    const bb=bbox(z.poly);
-    const xs=clusterCoords(pts.map(l=>l.x), tol);
-    const ys=clusterCoords(pts.map(l=>l.y), tol);
-    // đường ghi nằm TRONG khu vực, sát mép — nhiều phòng liền nhau nên đặt ngoài sẽ đè phòng bên
-    const offH=Math.min(0.34*ppm, bb.h*0.14), offV=Math.min(0.34*ppm, bb.w*0.14);
-    const lineH=bb.y1-offH, lineV=bb.x0+offV;
-    // mốc = MẶT TƯỜNG THẬT tại đúng đường ghi (không phải mép bbox)
-    const cH=polyCross(z.poly, lineH, true),  x0=cH.length? cH[0] : bb.x0;
-    const cV=polyCross(z.poly, lineV, false), y0=cV.length? cV[0] : bb.y0;
-    // chuỗi NGANG: mốc = tường trái → các cột đèn
-    drawDimChain(ov, inv, dimSegments([x0, ...xs], ppm), lineH, true, ppm,
-      [{v:x0, from:bb.y1}, ...xs.map(x=>({v:x, from:(pts.find(l=>Math.abs(l.x-x)<=tol)||{}).y ?? bb.y1}))]);
-    // chuỗi DỌC: mốc = tường trên → các hàng đèn
-    drawDimChain(ov, inv, dimSegments([y0, ...ys], ppm), lineV, false, ppm,
-      [{v:y0, from:bb.x0}, ...ys.map(y=>({v:y, from:(pts.find(l=>Math.abs(l.y-y)<=tol)||{}).x ?? bb.x0}))]);
-  });
+  // ĐÈN TƯỜNG không vào chuỗi kích thước (anh Khoa): nó đã bám sát tường rồi, ghi thêm một con số
+  // vài chục mm chỉ làm rối và trông như sai số.
+  const pts=z.lights.filter(l=>!isWall(l));
+  if(!pts.length) return [];
+  const bb=bbox(z.poly);
+  const xs=clusterCoords(pts.map(l=>l.x), tol);
+  const ys=clusterCoords(pts.map(l=>l.y), tol);
+  // đường ghi nằm TRONG khu vực, sát mép — nhiều phòng liền nhau nên đặt ngoài sẽ đè phòng bên
+  const offH=Math.min(0.34*ppm, bb.h*0.14), offV=Math.min(0.34*ppm, bb.w*0.14);
+  const lineH=bb.y1-offH, lineV=bb.x0+offV;
+  // mốc = MẶT TƯỜNG THẬT tại đúng đường ghi (không phải mép bbox): phòng chữ L hay phòng xoay
+  // thì bbox là một cạnh không có thật, con số ghi ra sẽ lệch với "khoảng cách tới tường" ở panel
+  const cH=polyCross(z.poly, lineH, true),  x0=cH.length? cH[0] : bb.x0;
+  const cV=polyCross(z.poly, lineV, false), y0=cV.length? cV[0] : bb.y0;
+  const rep=(v,isH)=>{ const l=pts.find(o=>Math.abs((isH? o.x : o.y)-v)<=tol);
+    return l? {k:"L", uid:uidOf(l, fl)} : {k:"P", x:isH? v:lineV, y:isH? lineH:v}; };
+  const out=[];
+  const mk=(axis, anchors, line)=>{
+    if(anchors.length<2) return;
+    const ps=anchors.map(a=>anchorPos(a, fl));
+    if(!ps.every(Boolean)) return;
+    const c=axis==="h"? ps.reduce((s,p)=>s+p.y,0)/ps.length : ps.reduce((s,p)=>s+p.x,0)/ps.length;
+    // off suy ngược từ đường ghi đã tính: n=(0,1) cho ngang, n=(-1,0) cho dọc
+    const off=(axis==="h"? (line-c) : (c-line))/ppm;
+    // chuỗi này định vị ĐÈN → thuộc tờ chiếu sáng; tờ ổ cắm có dim riêng của nó
+    out.push({id:"dm"+(fl.seq++), pts:anchors, axis, off:+off.toFixed(3), text:null, sheet:"light"});
+  };
+  mk("h", [edgeAnchorAt(z, {x:x0, y:lineH}), ...xs.map(x=>rep(x,true))],  lineH);
+  mk("v", [edgeAnchorAt(z, {x:lineV, y:y0}), ...ys.map(y=>rep(y,false))], lineV);
+  return out;
 }
 /* Mã thiết bị duy nhất theo TOÀN DỰ ÁN (không theo tầng): bảng thống kê gộp mọi tầng, mã trùng
    giữa các tầng sẽ liệt 2 thiết bị khác nhau dưới một mã. */
@@ -2340,7 +2609,9 @@ const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","
                        devKinds:new Set(["prov"]), hideStrips:true };
 /* KHÔNG override độ mờ ảnh nền: tờ nào cũng dùng đúng độ mờ anh đang chỉnh ở thanh "Mặt bằng nền".
    Trước đây tờ ổ cắm bị ép 0,9 nên ảnh trace in ra đậm khác hẳn cái đang xem — đọc như bị lỗi. */
-const SHEET_DEVICE = { layers:new Set(["devices"]), ghostLights:true };
+/* "dims" CÓ trên tờ ổ cắm: kích thước định vị ổ cắm là thứ thợ điện cần nhất trên đúng tờ đó.
+   Lọc tinh bằng `dim.sheet` của từng kích thước — dim định vị đèn thì để ở tờ chiếu sáng. */
+const SHEET_DEVICE = { layers:new Set(["devices","dims"]), ghostLights:true };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
 const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
@@ -2476,9 +2747,6 @@ function drawOverlay(){
       if(z && z.lights[li]) doDim(z, z.lights[li], li);
     }
   }
-
-  // ---- lớp 3b: KÍCH THƯỚC ĐỊNH VỊ (công cụ Dim) — cố định trên bản vẽ, vào cả PNG/PDF ----
-  if(state.showDims!==false && sheetHas("dims")) drawDims(ov, inv, P);
 
   // ---- lớp 4: ký hiệu đèn (kích thước thật) ----
   // Trên TỜ Ổ CẮM đèn chỉ còn bóng mờ tham chiếu: không mã, không bắt chuột (click xuyên qua để
@@ -2741,6 +3009,12 @@ function drawOverlay(){
     drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv);
   });
 
+  // ---- lớp 5a: KÍCH THƯỚC ĐỊNH VỊ (công cụ Dim) — cố định trên bản vẽ, vào cả PNG/PDF ----
+  // Vẽ SAU đèn/thiết bị, không phải trước: (1) đúng quy ước bản vẽ, đường ghi nằm trên ký hiệu;
+  // (2) quan trọng hơn — quầng sáng phủ kín mặt sàn, vẽ trước thì vùng bắt chuột của đường ghi
+  // nằm dưới quầng và anh KHÔNG BAO GIỜ click trúng để chọn/kéo được kích thước.
+  if(state.showDims!==false && sheetHas("dims")) drawManualDims(ov, inv, P);
+
   // ---- lớp 5b: BẢNG CHÚ GIẢI CỤM — góc bản vẽ, vào cả PNG/PDF ----
   drawLegend(ov, inv, P);
 
@@ -2803,6 +3077,35 @@ function drawOverlay(){
           "Ray "+fmtPlan(Math.hypot(b.x-a.x,b.y-a.y)/ppm())+" m", 10.5*inv, C_ACCENT_D, inv);
       }
     }
+    if(draft.type==="dim" && draft.pts.length){
+      // xem trước chuỗi đang vẽ: các mốc đã chốt + số CHẠY THEO CON TRỎ.
+      // Số chạy theo con trỏ này chính là THƯỚC ĐO — click mốc 1, đọc, Esc là xong, không lưu gì.
+      const ps=draft.pts.map(a=>anchorPos(a)).filter(Boolean);
+      const cur=draft.cur? draft.cur.pos : null;
+      ps.forEach(p=>ov.appendChild(svg("rect",{x:p.x-4*inv, y:p.y-4*inv, width:8*inv, height:8*inv,
+        fill:"none", stroke:C_ACCENT_D, "stroke-width":1.4*inv})));
+      if(cur && ps.length){
+        const a=ps[ps.length-1];
+        ov.appendChild(svg("line",{x1:a.x,y1:a.y,x2:cur.x,y2:cur.y, stroke:C_ACCENT,
+          "stroke-width":1.2*inv, "stroke-dasharray":`${5*inv},${4*inv}`}));
+        if(F().pxPerMeter){
+          const ax=draft.axis||"a";
+          const d = ax==="h"? Math.abs(cur.x-a.x) : ax==="v"? Math.abs(cur.y-a.y)
+                  : Math.hypot(cur.x-a.x, cur.y-a.y);
+          addLabel(ov,(a.x+cur.x)/2,(a.y+cur.y)/2-11*inv,
+            fmt(Math.round(d/ppm()*1000))+" mm", 10.5*inv, C_ACCENT_D, inv);
+        }
+      }
+    }
+  }
+  // MỐC BẮT ĐIỂM dưới con trỏ — thứ tạo ra độ chính xác, nên phải NHÌN THẤY trước khi click
+  if(exportInv==null && tool==="dim" && dimSnap){
+    const p=dimSnap.pos, r=5*inv;
+    ov.appendChild(svg("rect",{x:p.x-r, y:p.y-r, width:r*2, height:r*2, fill:"none",
+      stroke:C_ACCENT_D, "stroke-width":1.6*inv}));
+    ov.appendChild(svg("line",{x1:p.x-r*1.9,y1:p.y,x2:p.x+r*1.9,y2:p.y, stroke:C_ACCENT_D,"stroke-width":0.8*inv,opacity:".7"}));
+    ov.appendChild(svg("line",{x1:p.x,y1:p.y-r*1.9,x2:p.x,y2:p.y+r*1.9, stroke:C_ACCENT_D,"stroke-width":0.8*inv,opacity:".7"}));
+    if(dimSnap.pri<9) addLabel(ov, p.x, p.y-12*inv, dimSnap.label, 8.5*inv, C_ACCENT_D, inv);
   }
   if(drag && drag.mode==="marquee"){
     const {x0,y0,x1,y1}=marqueeRect(drag);
@@ -3245,8 +3548,17 @@ function addLabel(parent, x, y, txt, size, color, inv, anchor){
 }
 function renderScaleTag(){
   const el=$("#scaleTxt"), tag=$("#scaleTag");
-  if(F().pxPerMeter){ el.textContent=`1 m = ${F().pxPerMeter.toFixed(1)} px`; tag.classList.remove("warn"); }
-  else { el.textContent="chưa cân — nhấn C để cân tỉ lệ"; tag.classList.add("warn"); }
+  // Ghi kèm mm/px: đó là SÀN ĐỘ CHÍNH XÁC của mọi con số trên bản vẽ. "1 m = 133 px" không nói
+  // được điều anh cần biết khi quyết định có tin một kích thước hay không; "1 px ≈ 7,5 mm" thì có.
+  if(F().pxPerMeter){
+    const mmpx=1000/F().pxPerMeter;
+    el.textContent=`1 m = ${F().pxPerMeter.toFixed(0)} px · 1 px ≈ ${fmtPlan(mmpx,1)} mm`;
+    tag.classList.remove("warn");
+    tag.title=`Ảnh nền có độ phân giải giới hạn: một pixel ứng với ${fmtPlan(mmpx,1)} mm ngoài thực tế.`
+      + ` Zoom vào thì click chính xác hơn thật (toạ độ là số thực), nên nút thắt là LẦN CÂN TỈ LỆ`
+      + ` và nét vẽ khu vực, không phải tay anh click.`;
+  }
+  else { el.textContent="chưa cân — nhấn C để cân tỉ lệ"; tag.classList.add("warn"); tag.title=""; }
 }
 function updateSelChip(){
   const chip=$("#selChip");
@@ -3476,6 +3788,7 @@ function setTool(t){
   if(t==="device" && !sheetHas("devices")) setSheet("all", true);
   else if((t==="light"||t==="switch"||t==="track") && (curSheet()||{}).ghostLights) setSheet("all", true);
   tool=t; draft=null;
+  if(t!=="dim") dimSnap=null;   // đổi công cụ mà chưa rê chuột thì ô bắt điểm còn treo lại trên bản vẽ
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
   popOpen=true;            // đổi công cụ thì mở lại bảng chọn mẫu
   syncPops();
@@ -3487,6 +3800,9 @@ function setTool(t){
     poly:"Click từng đỉnh · giữ Shift để canh thẳng 0/45/90° · double-click hoặc Enter để đóng",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
     track:"Kéo để vẽ thanh ray nam châm trên trần · giữ Shift để canh thẳng · Esc để huỷ",
+    dim: F().pxPerMeter
+      ? "Click mốc đầu · con trỏ hiện ô vuông là đã BẮT trúng tâm đèn/góc tường · click mốc 2 để chốt, click tiếp để nối chuỗi · Esc để xong (chỉ đo thì Esc luôn)"
+      : "Cần cân tỉ lệ (C) trước — chưa có tỉ lệ thì con số ghi ra vô nghĩa",
     device:`Click để đặt ${(DEVICE_SPEC[deviceKind]||DEVICE_SPEC.socket).label} · phím 1–9 đổi loại · Esc để xong`,
     light: z? (lightById(z.placeLightId).type==="strip"
               ? "Kéo để vẽ dây theo chiều dài thật · click 1 lần = 1 m · Esc để xong"
@@ -3671,6 +3987,7 @@ vp.addEventListener("pointerdown", e=>{
   if(tool==="track"){   // kéo để vẽ thanh ray — giống LED dây, giữ Shift để canh thẳng
     drag={mode:"trackdraw"}; draft={type:"track", pts:[w,{...w}]}; render(); return;
   }
+  if(tool==="dim"){ addDimPoint(w, e.shiftKey); return; }
   if(tool==="switch"){ addSwitchAt(w); return; }
   if(tool==="device"){ addDeviceAt(w); return; }
   if(tool==="light"){
@@ -3717,9 +4034,16 @@ vp.addEventListener("pointerdown", e=>{
   }
   const trg=e.target.closest? e.target.closest(".trackm") : null;
   if(trg){
-    selTrack=trg.dataset.trk; selLights=[]; selSwitch=null; selDevice=null;
+    selTrack=trg.dataset.trk; selLights=[]; selSwitch=null; selDevice=null; selDim=null;
     const tr=trackById(selTrack);
     drag={mode:"track", start:w, moved:false, preSnap:snapshot(), ox:tr.x, oy:tr.y};
+    renderAll(); return;
+  }
+  const dmg=e.target.closest? e.target.closest(".dimm") : null;
+  if(dmg){
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=dmg.dataset.dim;
+    const dm=dimById(selDim);
+    drag={mode:"dim", start:w, moved:false, preSnap:snapshot(), off0:dm? (dm.off||0) : 0};
     renderAll(); return;
   }
   // Alt+click: xuyên chọn đèn bị đè bên dưới (mỗi lần click xuống 1 lớp, xoay vòng)
@@ -3739,7 +4063,7 @@ vp.addEventListener("pointerdown", e=>{
   }
   const hit=hitLight(e.target);
   if(hit){
-    selSwitch=null; selDevice=null; selTrack=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
+    selSwitch=null; selDevice=null; selTrack=null; selDim=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
     const already=selLights.some(s=>s.zid===hit.zid&&s.li===hit.li);
     if(e.shiftKey){
       if(already){ drag={mode:"shift-toggle-off", hit, start:w}; return; }
@@ -3772,6 +4096,19 @@ window.addEventListener("pointermove", e=>{
     }
     hoverLight=hit;
   }
+  // Công cụ Dim: bắt điểm phải NHÌN THẤY trước khi click, nếu không thì snap là thao tác mù và
+  // anh không bao giờ biết con số vừa ghi neo vào cái gì.
+  if(!drag && tool==="dim"){
+    const w0=screenToWorld(e.clientX,e.clientY), inv=1/view.scale;
+    const sn=snapAt(w0, inv);
+    const moved = !dimSnap || Math.abs(dimSnap.pos.x-sn.pos.x)>0.2 || Math.abs(dimSnap.pos.y-sn.pos.y)>0.2
+                  || dimSnap.label!==sn.label;
+    dimSnap=sn;
+    if(draft && draft.type==="dim") draft.cur=sn;
+    if(moved) render();
+    return;
+  }
+  if(dimSnap && tool!=="dim"){ dimSnap=null; render(); }
   // xem trước cạnh đang vẽ đa giác (kể cả khi giữ Shift) — không có nó thì Shift là thao tác mù
   if(!drag && tool==="poly" && draft && draft.type==="poly" && draft.pts.length){
     const from=draft.pts[draft.pts.length-1];
@@ -3822,6 +4159,20 @@ window.addEventListener("pointermove", e=>{
     if(d){ d.x=drag.ox+(w.x-drag.start.x); d.y=drag.oy+(w.y-drag.start.y);
       if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
       render(); }
+    return;
+  }
+  if(drag.mode==="dim"){          // kéo để ĐẨY ĐƯỜNG GHI ra/vào, chiếu chuyển động lên pháp tuyến
+    const dm=dimById(selDim);
+    if(dm){
+      const ps=dimPoints(dm);
+      if(ps){
+        const fr=dimFrame(dm.axis||"h", ps, drag.off0, F().pxPerMeter);
+        const d=(w.x-drag.start.x)*fr.n.x + (w.y-drag.start.y)*fr.n.y;
+        dm.off = +(drag.off0 + d/F().pxPerMeter).toFixed(3);
+        if(Math.abs(d)>2/view.scale) drag.moved=true;
+        render();
+      }
+    }
     return;
   }
   if(drag.mode==="maybe-marquee"){
@@ -3910,13 +4261,13 @@ function handlePointerUp(e){
       fl.tracks=fl.tracks||[];
       const tr={ id:"tr"+(fl.seq++), code:nextCode("RAY", allTracks()),
         x:(a.x+b.x)/2, y:(a.y+b.y)/2, rot:rotD, len:+distM.toFixed(2), mh:null };
-      fl.tracks.push(tr); selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selTrack=tr.id;
+      fl.tracks.push(tr); selLights=[]; selSwitch=null; selDevice=null; selDim=null; selTrack=tr.id;
     });
     setTool("select");
     showHint(`Đã đặt ray ${fmtPlan(distM)} m — bấm L rồi click LÊN RAY để gắn đèn, đèn sẽ trượt dọc ray`);
     return;
   }
-  if(d.mode==="track"){
+  if(d.mode==="track" || d.mode==="dim"){
     if(d.moved){ pushHist(d.preSnap); save(); }
     renderAll(); return;
   }
@@ -3944,7 +4295,7 @@ function handlePointerUp(e){
     F().zones.forEach(z=>z.lights.forEach((l,li)=>{
       if(l.x>=r.x0&&l.x<=r.x1&&l.y>=r.y0&&l.y<=r.y1) found.push({zid:z.id,li});
     }));
-    if(!d.shift){ selSwitch=null; selDevice=null; selTrack=null; }   // quét chọn đèn → bỏ các loại khác
+    if(!d.shift){ selSwitch=null; selDevice=null; selTrack=null; selDim=null; }   // quét chọn đèn → bỏ các loại khác
     selLights = d.shift? selLights.concat(found.filter(f=>!selLights.some(s=>s.zid===f.zid&&s.li===f.li))) : found;
     if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
     renderAll(); return;
@@ -3957,7 +4308,7 @@ function handlePointerUp(e){
     const z=zoneAtClick(d.start);
     const zid=z? z.id : null;
     if(F().selectedZone!==zid || selLights.length || selSwitch || selDevice){
-      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null; selTrack=null;
+      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null;
       renderAll();
     }
     return;
@@ -4036,6 +4387,7 @@ window.addEventListener("keydown", e=>{
     case "p": setTool("poly"); break;
     case "l": setTool("light"); break;
     case "y": setTool("track"); break;
+    case "d": setTool("dim"); break;
     case "w": setTool("switch"); break;
     case "o": setTool("device"); break;
     case "g": $("#chkGlow").checked=!state.showGlow; state.showGlow=!state.showGlow; save(); render(); break;
@@ -4049,6 +4401,9 @@ window.addEventListener("keydown", e=>{
       break;
     case "escape":
       if(!$("#bgPop").classList.contains("hidden")){ $("#bgPop").classList.add("hidden"); }
+      // Esc khi đang vẽ dim: chỉ KẾT THÚC CHUỖI, VẪN ở công cụ để đo/vẽ tiếp. Đây cũng là đường
+      // thoát của thao tác "chỉ đo": click 1 mốc, đọc số chạy theo con trỏ, Esc — không lưu gì.
+      else if(draft && draft.type==="dim"){ endDimDraft(); }
       else if(draft){ draft=null; setTool("select"); }
       // Esc lần 1 khi đang mở bảng chọn mẫu: chỉ ẨN BẢNG, VẪN ở công cụ để đặt tiếp.
       // Esc lần 2 mới thoát về công cụ chọn (trước đây Esc là nhảy thẳng sang select).
@@ -4057,23 +4412,29 @@ window.addEventListener("keydown", e=>{
       else if(selSwitch){ selSwitch=null; renderAll(); }
       else if(selDevice){ selDevice=null; renderAll(); }
       else if(selTrack){ selTrack=null; renderAll(); }
+      else if(selDim){ selDim=null; renderAll(); }
       else if(selLights.length){ selLights=[]; render(); }
       else if(F().selectedZone){ F().selectedZone=null; renderAll(); }
       break;
     case "enter":
       if(tool==="poly"&&draft&&draft.pts.length>=3) closePoly();
+      else if(draft&&draft.type==="dim") endDimDraft();
       break;
     case "delete": case "backspace":
       e.preventDefault();
       if(selSwitch) deleteSwitch(selSwitch);
-      else if(selDevice){ mutate(()=>deleteDevice(selDevice)); toast("Đã xoá thiết bị — Ctrl+Z để hoàn tác"); }
+      else if(selDevice){ let np=0; mutate(()=>{ np=deleteDevice(selDevice); });
+        toast(dimNote("Đã xoá thiết bị", np)); }
       else if(selTrack){
         const n=trackLights(selTrack).length;
         if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`)){
-          mutate(()=>deleteTrack(selTrack));
-          toast(n? `Đã xoá ray và ${n} đèn — Ctrl+Z để hoàn tác` : "Đã xoá ray — Ctrl+Z để hoàn tác");
+          let np=0; mutate(()=>{ np=deleteTrack(selTrack); });
+          toast(dimNote(n? `Đã xoá ray và ${n} đèn` : "Đã xoá ray", np));
         }
       }
+      else if(selDim){ const id=selDim;
+        mutate(()=>{ const fl=F(); fl.dims=(fl.dims||[]).filter(d=>d.id!==id); selDim=null; });
+        toast("Đã xoá kích thước — Ctrl+Z để hoàn tác"); }
       else if(selLights.length) deleteSelected();
       else if(F().selectedZone){ deleteZone(F().selectedZone); toast("Đã xoá khu vực — Ctrl+Z để hoàn tác"); }
       break;
@@ -4095,6 +4456,7 @@ window.addEventListener("keyup", e=>{
 
 function deleteSelected(){
   if(!selLights.length) return;
+  let np=0;
   mutate(()=>{
     const byZone={};
     selLights.forEach(s=>{ (byZone[s.zid]=byZone[s.zid]||[]).push(s.li); });
@@ -4103,8 +4465,9 @@ function deleteSelected(){
       byZone[zid].sort((a,b)=>b-a).forEach(i=>z.lights.splice(i,1));
     }
     selLights=[];
+    np=pruneDims();
   });
-  toast("Đã xoá — Ctrl+Z để hoàn tác");
+  toast(dimNote("Đã xoá đèn", np));
 }
 function duplicateSelected(){
   if(!selLights.length) return;
@@ -4121,6 +4484,9 @@ function duplicateSelected(){
         const p=trackPos(tr, t);
         z.lights.push({...l, t, x:p.x, y:p.y, rot:tr.rot||0});
       } else z.lights.push({...l, x:l.x+off, y:l.y+off});
+      // Bản sao KHÔNG được thừa hưởng uid — hai đèn cùng uid làm mọi kích thước neo vào nó trỏ
+      // nhập nhằng. Bỏ đi, nó sẽ được cấp uid mới nếu sau này anh dim tới nó.
+      delete z.lights[z.lights.length-1].uid;
       copies.push({zid:s.zid, li:z.lights.length-1});
     });
     selLights=copies;
@@ -4161,6 +4527,7 @@ function openCalibrateModal(){
       <div class="inline" style="gap:6px; margin-top:10px">
         ${[0.8,1,1.2,2,3,4,5].map(v=>`<button class="btn sm cal-p" data-v="${v}">${v}</button>`).join("")}
       </div>
+      <p class="pr-hint" id="calWarn" style="margin:10px 0 0"></p>
     </div>
     <div class="foot"><span style="flex:1"></span>
       <button class="btn" id="calCancel">Huỷ</button>
@@ -4172,16 +4539,30 @@ function openCalibrateModal(){
   let downOnBg=false;
   m.addEventListener("pointerdown", e=>{ downOnBg=(e.target===m); });
   m.addEventListener("click", e=>{ if(e.target===m && downOnBg) done(); });
-  m.querySelectorAll(".cal-p").forEach(b=>b.onclick=()=>{ m.querySelector("#calVal").value=b.dataset.v; });
+  // CẢNH BÁO CHẤT LƯỢNG CÂN — mọi kích thước trên bản vẽ đứng trên đúng hai cú click này. Sai số
+  // click (~2 px) chia cho chiều dài đoạn tham chiếu chính là sai số TỈ LỆ PHẦN TRĂM của cả tầng:
+  // cân trên đoạn 1 m thì sai gấp 5 lần cân trên đoạn 5 m. Đây là thứ không ai tự nghĩ ra được.
+  const warn=m.querySelector("#calWarn");
+  const syncWarn=()=>{
+    const mv=parseNum(m.querySelector("#calVal").value);
+    if(!(mv>0)){ warn.textContent=""; return; }
+    const err=2/distPx;                         // ±2 px click, quy ra phần trăm
+    warn.innerHTML = `1 px ≈ <b>${fmtPlan(mv/distPx*1000,1)} mm</b> · lệch 2 px khi cân là sai `
+      + `<b>${fmtPlan(err*100,2)}%</b> — trên một kích thước 4 m là ±${fmt(Math.round(err*4000))} mm.`
+      + (mv<2 ? ` <b style="color:#B4553C">Đoạn tham chiếu ngắn</b> — nên cân trên cạnh DÀI NHẤT mà anh biết chắc số.` : "");
+  };
+  m.querySelectorAll(".cal-p").forEach(b=>b.onclick=()=>{ m.querySelector("#calVal").value=b.dataset.v; syncWarn(); });
   m.querySelector("#calCancel").onclick=done;
   const apply=()=>{
     const mv=parseNum(m.querySelector("#calVal").value);
     if(mv>0){ mutate(()=>{ F().pxPerMeter=distPx/mv; });
-      toast("Đã cân tỉ lệ: 1 m = "+F().pxPerMeter.toFixed(1)+" px"); }
+      toast(`Đã cân tỉ lệ: 1 m = ${F().pxPerMeter.toFixed(0)} px · 1 px ≈ ${fmtPlan(1000/F().pxPerMeter,1)} mm`); }
     done();
   };
   m.querySelector("#calOk").onclick=apply;
+  m.querySelector("#calVal").addEventListener("input", syncWarn);
   m.querySelector("#calVal").addEventListener("keydown",e=>{ if(e.key==="Enter") apply(); });
+  syncWarn();
   m.querySelector("#calVal").focus(); m.querySelector("#calVal").select();
 }
 
@@ -4204,6 +4585,7 @@ function deleteZone(id){
     F().zones=F().zones.filter(z=>z.id!==id);
     selLights=selLights.filter(s=>s.zid!==id);
     if(F().selectedZone===id) F().selectedZone=null;
+    pruneDims();
   });
 }
 function selectZone(id){
@@ -4226,6 +4608,54 @@ function renderZoneList(){
 /* Giữ SHIFT khi vẽ: ép điểm mới thẳng hàng với điểm trước theo 0 / 45 / 90°.
    Trên trục ngang-dọc thì CHIẾU vuông góc (giữ đúng vị trí con trỏ theo trục đó) — vẽ tay không
    bao giờ ra được góc 90° chuẩn, mà tường thì gần như luôn vuông. */
+/* ===== CÔNG CỤ KÍCH THƯỚC =====
+   Click mốc 1 → số chạy theo con trỏ (đó cũng là THƯỚC ĐO: đọc rồi Esc, không lưu gì).
+   Click mốc 2 → chốt. Click tiếp → nối chuỗi trên cùng đường ghi. Esc/Enter kết thúc. */
+function addDimPoint(w, shift){
+  const fl=F();
+  if(!fl.pxPerMeter){ toast("Cần cân tỉ lệ (C) trước — chưa có tỉ lệ thì con số ghi ra vô nghĩa"); return; }
+  const inv=1/view.scale;
+  const sn=snapAt(w, inv, fl);
+  if(!draft || draft.type!=="dim"){ draft={type:"dim", pts:[sn.anchor], axis:null, cur:null};
+    showHint("Click mốc thứ hai · giữ Shift để khoá ngang/dọc · Esc để huỷ (chỉ đo, không lưu)");
+    render(); return; }
+  // Trục đo do HAI MỐC ĐẦU quyết định, các mốc sau chỉ nối dài chuỗi trên đúng trục đó.
+  const prev=anchorPos(draft.pts[draft.pts.length-1], fl), cur=sn.pos;
+  if(draft.axis==null){
+    const dx=Math.abs(cur.x-prev.x), dy=Math.abs(cur.y-prev.y);
+    // Shift = ép về trục trội hẳn; không Shift mà lệch dưới 15° so với trục thì cũng coi là trục đó
+    // (đèn đặt tay không bao giờ thẳng tuyệt đối, ép "xiên" ở đây là ra một con số chéo vô dụng)
+    draft.axis = (dx>dy? (dy<=dx*0.27||shift? "h":"a") : (dx<=dy*0.27||shift? "v":"a"));
+  }
+  if(draft.pts.length && Math.hypot(cur.x-prev.x, cur.y-prev.y) < 4*inv) return;  // click trùng mốc
+  draft.pts.push(sn.anchor);
+  if(draft.pts.length===2) commitDim();
+  else { const dm=dimById(selDim, fl); if(dm){ mutate(()=>{ dm.pts.push(sn.anchor); }); } }
+  showHint("Click tiếp để NỐI CHUỖI · Esc hoặc Enter để xong");
+  render();
+}
+function commitDim(){
+  const fl=F();
+  const ps=draft.pts.map(a=>anchorPos(a, fl));
+  if(!ps.every(Boolean) || ps.length<2){ draft=null; return; }
+  // đẩy đường ghi về phía TRỐNG: xa tâm khu vực chứa mốc đầu, nếu không thì nó nằm đè lên đồ đạc
+  const z=zoneAtPoint(ps[0]) || zoneAtPoint(ps[1]);
+  let sgn=1;
+  if(z){ const c={x:z.poly.reduce((s,p)=>s+p.x,0)/z.poly.length, y:z.poly.reduce((s,p)=>s+p.y,0)/z.poly.length};
+    const fr=dimFrame(draft.axis||"h", ps, 0, fl.pxPerMeter);
+    sgn = -Math.sign(fr.cross(c)) || 1; }
+  const dm={ id:"dm"+(fl.seq++), pts:draft.pts.slice(), axis:draft.axis||"h",
+             off:+(DIM_OFF_DEF*sgn).toFixed(3), text:null,
+             sheet: (state.sheet && state.sheet!=="all")? state.sheet : null };
+  mutate(()=>{ fl.dims=fl.dims||[]; fl.dims.push(dm);
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=dm.id; });
+}
+function endDimDraft(){
+  const had = draft && draft.type==="dim";
+  draft=null;
+  if(had){ showHint("Click mốc đầu tiên của kích thước tiếp theo · Esc lần nữa để thoát công cụ"); render(); }
+  return had;
+}
 function orthoSnap(p, from, shift){
   if(!shift || !from) return p;
   const dx=p.x-from.x, dy=p.y-from.y;
@@ -4281,7 +4711,8 @@ function newPlacedLight(z, w){
   return o;
 }
 function deviceById(id, fl){ return ((fl||F()).devices||[]).find(d=>d.id===id)||null; }
-function deleteDevice(id, fl){ fl=fl||F(); fl.devices=(fl.devices||[]).filter(d=>d.id!==id); if(selDevice===id) selDevice=null; }
+function deleteDevice(id, fl){ fl=fl||F(); fl.devices=(fl.devices||[]).filter(d=>d.id!==id);
+  if(selDevice===id) selDevice=null; return pruneDims(fl); }
 function addDeviceAt(w){
   const fl=F(); fl.devices=fl.devices||[];
   const kind=deviceKind, spec=DEVICE_SPEC[kind];
@@ -4636,14 +5067,112 @@ function refreshTrackPanel(){
     box.querySelectorAll(".tin").forEach(el=>{ el.max=tr.len||1; });
   }
 }
+/* Panel KÍCH THƯỚC — cùng khuôn #trkPanel: dựng lại chỉ khi đổi dim, còn lại chỉ cập nhật giá trị
+   với guard activeElement. Danh sách đoạn với ô SỐ (mm) chính là chỗ ÉP KHOẢNG CÁCH. */
+function refreshDimPanel(){
+  const p=$("#dimPanel"), fl=F(), dm=dimById(selDim, fl);
+  p.classList.toggle("hidden", !dm);
+  if(!dm){ p.dataset.dim=""; return; }
+  const pts=dimPoints(dm, fl), ppm=fl.pxPerMeter;
+  if(p.dataset.dim!==dm.id){
+    p.dataset.dim=dm.id;
+    p.innerHTML=`<p class="eyebrow">Kích thước · ${dm.pts.length} mốc</p>
+      <div class="inline" style="gap:8px">
+        <div class="seg" id="dmAxis" style="flex:1">
+          <button type="button" data-ax="h" title="Chỉ đo theo phương ngang">Ngang</button>
+          <button type="button" data-ax="v" title="Chỉ đo theo phương dọc">Dọc</button>
+          <button type="button" data-ax="a" title="Đo thẳng theo phương hai mốc — tường chéo">Xiên</button>
+        </div>
+        <button class="btn sm danger" id="dmDel" title="Xoá kích thước">✕</button>
+      </div>
+      <label style="margin-top:10px">Đẩy đường ghi (m) — hoặc kéo thẳng trên bản vẽ</label>
+      <div class="inline" style="gap:6px">
+        <input type="number" id="dmOff" step="0.05" style="width:80px">
+        <button class="btn sm" id="dmFlip" title="Lật đường ghi sang phía đối diện">Lật phía</button>
+      </div>
+      <label style="margin-top:10px">Hiện trên tờ</label>
+      <div class="seg" id="dmSheet">
+        <button type="button" data-sh="">Mọi tờ</button>
+        <button type="button" data-sh="light">Chiếu sáng</button>
+        <button type="button" data-sh="device">Ổ cắm</button>
+      </div>
+      <label style="margin-top:10px">Các đoạn — gõ số để ÉP khoảng cách (mm)</label>
+      <div id="dmSegs"></div>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="dmSwap">
+        Ép số thì dời mốc ĐẦU thay vì mốc SAU</label>
+      <p class="pr-hint" style="margin:8px 0 0">Gõ số vào ô trên là app <b>dời vật</b> cho đúng con số đó,
+        chỉ dời theo phương đang đo. Mốc là tường / toạ độ tự do thì đứng yên.</p>`;
+    p.querySelector("#dmDel").onclick=()=>mutate(()=>{
+      fl.dims=(fl.dims||[]).filter(d=>d.id!==dm.id); selDim=null; });
+    p.querySelectorAll("#dmAxis [data-ax]").forEach(b=> b.onclick=()=>mutate(()=>{ dm.axis=b.dataset.ax; }));
+    p.querySelectorAll("#dmSheet [data-sh]").forEach(b=> b.onclick=()=>mutate(()=>{ dm.sheet=b.dataset.sh||null; }));
+    p.querySelector("#dmOff").oninput=e=>{ const v=parseNum(e.target.value); mutate(()=>{ dm.off=v; }); };
+    p.querySelector("#dmFlip").onclick=()=>mutate(()=>{ dm.off=-(dm.off||0); });
+    p.querySelector("#dmSwap").onchange=e=>mutate(()=>{ dm.swap=e.target.checked||undefined; });
+  }
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  setV("#dmOff", Math.round((dm.off||0)*1000)/1000);
+  p.querySelectorAll("#dmAxis [data-ax]").forEach(b=> b.classList.toggle("on", b.dataset.ax===(dm.axis||"h")));
+  p.querySelectorAll("#dmSheet [data-sh]").forEach(b=> b.classList.toggle("on", (b.dataset.sh||null)===(dm.sheet||null)));
+  const sw=p.querySelector("#dmSwap"); if(sw) sw.checked=!!dm.swap;
+  const box=p.querySelector("#dmSegs"); if(!box || !pts || !ppm) return;
+  const fr=dimFrame(dm.axis||"h", pts, dm.off||0, ppm);
+  const vs=pts.map(q=>fr.along(q)).sort((a,b)=>a-b);
+  const mm=[]; for(let i=0;i<vs.length-1;i++) mm.push(Math.round((vs[i+1]-vs[i])/ppm*1000));
+  const sig=(dm.axis||"h")+"|"+mm.join(",");
+  if(box.dataset.sig===sig && box.childElementCount===mm.length) return;   // không dựng lại khi đang gõ
+  if(document.activeElement && box.contains(document.activeElement)){ box.dataset.sig=sig;
+    // chỉ đồng bộ các ô KHÔNG có con trỏ, để con số vừa gõ không bị ghi đè giữa chừng
+    box.querySelectorAll("input").forEach((el,i)=>{ if(document.activeElement!==el) el.value=mm[i]; });
+    return; }
+  box.dataset.sig=sig; box.innerHTML="";
+  mm.forEach((v,i)=>{
+    const row=document.createElement("div"); row.className="grp";
+    const lb=document.createElement("div"); lb.className="d";
+    lb.innerHTML=`<b>Đoạn ${i+1}</b><small>${escapeHtml(anchorName(dm.pts, pts, fr, i))}</small>`;
+    row.appendChild(lb);
+    const inp=document.createElement("input");
+    inp.type="number"; inp.step="1"; inp.min="1"; inp.value=String(v); inp.style.width="72px";
+    inp.title="Gõ số mm rồi Enter — app dời vật cho khớp";
+    inp.onchange=e=>{
+      const t=parseNum(e.target.value);
+      if(!(t>0)){ e.target.value=v; return; }
+      let err=null;
+      mutate(()=>{ err=forceDimSpan(dm, i, t, fl); });
+      if(err){ toast(err); e.target.value=v; } else toast(`Đã ép đoạn ${i+1} về ${fmt(t)} mm`);
+    };
+    row.appendChild(inp);
+    const u=document.createElement("small"); u.textContent="mm"; u.style.color="var(--ink-3)";
+    row.appendChild(u);
+    box.appendChild(row);
+  });
+}
+/* Tên hai mốc của một đoạn — để anh biết con số đang đo TỪ ĐÂU TỚI ĐÂU trước khi ép nó */
+function anchorName(anchors, pts, fr, i){
+  const idx=pts.map((p,k)=>k).sort((a,b)=>fr.along(pts[a])-fr.along(pts[b]));
+  const nm=a=>{
+    if(!a) return "?";
+    if(a.k==="L"){ const h=lightByUid(a.uid); const lp=h&&lightById(h.l.lightId);
+      return lp? (lp.code||lp.name) : "đèn"; }
+    if(a.k==="D"){ const d=(F().devices||[]).find(x=>x.id===a.id);
+      return d? ((DEVICE_SPEC[d.kind]||{}).label||"thiết bị") : "thiết bị"; }
+    if(a.k==="W"){ const s=(F().switches||[]).find(x=>x.id===a.id); return s? (s.code||"công tắc") : "công tắc"; }
+    if(a.k==="T"){ const t=trackById(a.id); return (t? (t.code||"ray") : "ray")+(a.e===0?" đầu":a.e===1?" cuối":" giữa"); }
+    if(a.k==="Z") return "góc tường";
+    if(a.k==="E") return "mặt tường";
+    return "điểm tự do";
+  };
+  return nm(anchors[idx[i]])+" → "+nm(anchors[idx[i+1]]);
+}
 function refreshRight(){
   refreshSwitchPanel();
   refreshDevicePanel();
   refreshTrackPanel();
+  refreshDimPanel();
   refreshSelPanel();
   syncRightScroll();
   const z=selZone();
-  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || !!selTrack || selLights.length>0);
+  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || !!selTrack || !!selDim || selLights.length>0);
   $("#zoneProps").classList.toggle("hidden", !z);
   if(!z) return;
   // không ghi đè ô user đang gõ (đang focus) — tránh nuốt ký tự kiểu "0.5" → "0.75"
@@ -4703,7 +5232,7 @@ function refreshRight(){
     el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ (đổi loại-sắp-đặt ở bảng “Đèn đang đặt” khi bấm L)";
     el.onclick=()=>{ // CHỈ chọn nhóm để xem/sửa — KHÔNG đổi loại-sắp-đặt (việc đó ở flyout khi bấm L)
       selLights=z.lights.map((l,li)=> l.lightId===g.lid? {zid:z.id,li} : null).filter(Boolean);
-      selSwitch=null; selDevice=null; selTrack=null;
+      selSwitch=null; selDevice=null; selTrack=null; selDim=null;
       renderAll();
     };
     gl.appendChild(el);
@@ -5361,6 +5890,29 @@ $("#chkGlow").addEventListener("change", e=>{ state.showGlow=e.target.checked; s
 $("#chkWiring").addEventListener("change", e=>{ state.showWiring=e.target.checked; save(); render(); });
 $("#chkLegend").addEventListener("change", e=>{ state.showLegend=e.target.checked; save(); render(); });
 $("#chkDims").addEventListener("change", e=>{ state.showDims=e.target.checked; save(); render(); });
+$("#btnGenDims").onclick=()=>{
+  const fl=F();
+  if(!fl.pxPerMeter){ toast("Cần cân tỉ lệ (C) trước"); return; }
+  const zs=fl.zones.filter(z=>z.lights.some(l=>!isWall(l)));
+  if(!zs.length){ toast("Chưa có đèn nào để rải kích thước"); return; }
+  let n=0;
+  mutate(()=>{
+    fl.dims=fl.dims||[];
+    // Rải LẠI thì thay chuỗi cũ do chính nút này sinh ra (`gen:true`), giữ nguyên dim anh vẽ tay —
+    // nếu không thì bấm hai lần là hai chuỗi chồng khít lên nhau, chữ đè chữ.
+    fl.dims=fl.dims.filter(d=>!d.gen);
+    zs.forEach(z=>genZoneDims(z, fl).forEach(d=>{ d.gen=true; fl.dims.push(d); n++; }));
+    selDim=null;
+  });
+  toast(`Đã rải ${n} chuỗi kích thước cho ${zs.length} khu vực — sửa, kéo hay ép số như dim vẽ tay`);
+};
+$("#btnClrDims").onclick=()=>{
+  const fl=F(), n=(fl.dims||[]).length;
+  if(!n){ toast("Tầng này chưa có kích thước nào"); return; }
+  if(!confirm(`Xoá hết ${n} kích thước của ${fl.name}?`)) return;
+  mutate(()=>{ fl.dims=[]; selDim=null; });
+  toast(`Đã xoá ${n} kích thước — Ctrl+Z để hoàn tác`);
+};
 $$("#lblSeg button").forEach(b=> b.onclick=()=>{
   state.labelMode=b.dataset.lm; save(); render(); syncLblSeg();
 });
@@ -5623,7 +6175,7 @@ async function buildPrintDoc(){
   // tạm chuyển tầng + tắt kịch bản đang xem, xong trả nguyên trạng
   const cur0=state.cur, sel0=selLights, sw0=selSwitch, dev0=selDevice;
   const live0=state.floors.map(f=>f.liveOff||[]);
-  selLights=[]; selSwitch=null; selDevice=null; selTrack=null;
+  selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null;
   state.floors.forEach(f=>f.liveOff=[]);
   // 2 ảnh mỗi tầng: tờ CHIẾU SÁNG (đèn+điều khiển, không ổ cắm) và tờ THI CÔNG (ổ cắm, không quầng
   // sáng/lux) — chỉ dựng tờ thi công khi tầng có thiết bị.
