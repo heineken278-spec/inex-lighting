@@ -4627,10 +4627,13 @@ function addDimPoint(w, shift){
     // (đèn đặt tay không bao giờ thẳng tuyệt đối, ép "xiên" ở đây là ra một con số chéo vô dụng)
     draft.axis = (dx>dy? (dy<=dx*0.27||shift? "h":"a") : (dx<=dy*0.27||shift? "v":"a"));
   }
-  if(draft.pts.length && Math.hypot(cur.x-prev.x, cur.y-prev.y) < 4*inv) return;  // click trùng mốc
+  // Hai mốc trùng nhau thì KHÔNG im lặng bỏ qua — im lặng ở đây đọc ra y hệt "công cụ hỏng".
+  if(draft.pts.length && Math.hypot(cur.x-prev.x, cur.y-prev.y) < 4*inv){
+    toast("Hai mốc quá sát nhau — click cách mốc trước ra một chút"); return; }
   draft.pts.push(sn.anchor);
-  if(draft.pts.length===2) commitDim();
-  else { const dm=dimById(selDim, fl); if(dm){ mutate(()=>{ dm.pts.push(sn.anchor); }); } }
+  if(draft.pts.length===2){ commitDim(); render(); return; }   // commitDim tự đặt hint kèm số đo
+  const dm=dimById(selDim, fl);
+  if(dm) mutate(()=>{ dm.pts.push(sn.anchor); });
   showHint("Click tiếp để NỐI CHUỖI · Esc hoặc Enter để xong");
   render();
 }
@@ -4647,8 +4650,20 @@ function commitDim(){
   const dm={ id:"dm"+(fl.seq++), pts:draft.pts.slice(), axis:draft.axis||"h",
              off:+(DIM_OFF_DEF*sgn).toFixed(3), text:null,
              sheet: (state.sheet && state.sheet!=="all")? state.sheet : null };
+  // Ô "Hiện kích thước định vị" đang TẮT thì bật lại. Trước đây ô này điều khiển dim TỰ ĐỘNG (thứ
+  // gây rối nên hay bị tắt) và cờ đó nằm luôn trong file dự án — giữ nguyên thì anh vẽ dim xong
+  // KHÔNG THẤY GÌ và không có cách nào đoán ra tại sao. Vẽ tay là ý định rõ ràng, phải hiện ra.
+  const wasOff = state.showDims===false;
   mutate(()=>{ fl.dims=fl.dims||[]; fl.dims.push(dm);
+    if(wasOff){ state.showDims=true; const c=$("#chkDims"); if(c) c.checked=true; }
     selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=dm.id; });
+  const ps2=dimPoints(dm, fl);
+  if(ps2){
+    const fr=dimFrame(dm.axis, ps2, dm.off, fl.pxPerMeter);
+    const d=Math.abs(fr.along(ps2[1])-fr.along(ps2[0]));
+    showHint(`Đã ghi ${fmt(Math.round(d/fl.pxPerMeter*1000))} mm · click tiếp để NỐI CHUỖI · Esc để xong`);
+  }
+  if(wasOff) toast('Đã bật lại lớp "Hiện kích thước định vị" — nó đang tắt nên kích thước không hiện ra');
 }
 function endDimDraft(){
   const had = draft && draft.type==="dim";
@@ -5896,15 +5911,18 @@ $("#btnGenDims").onclick=()=>{
   const zs=fl.zones.filter(z=>z.lights.some(l=>!isWall(l)));
   if(!zs.length){ toast("Chưa có đèn nào để rải kích thước"); return; }
   let n=0;
+  const wasOff = state.showDims===false;   // xem ghi chú trong commitDim
   mutate(()=>{
     fl.dims=fl.dims||[];
     // Rải LẠI thì thay chuỗi cũ do chính nút này sinh ra (`gen:true`), giữ nguyên dim anh vẽ tay —
     // nếu không thì bấm hai lần là hai chuỗi chồng khít lên nhau, chữ đè chữ.
     fl.dims=fl.dims.filter(d=>!d.gen);
     zs.forEach(z=>genZoneDims(z, fl).forEach(d=>{ d.gen=true; fl.dims.push(d); n++; }));
+    if(wasOff){ state.showDims=true; $("#chkDims").checked=true; }
     selDim=null;
   });
-  toast(`Đã rải ${n} chuỗi kích thước cho ${zs.length} khu vực — sửa, kéo hay ép số như dim vẽ tay`);
+  toast(`Đã rải ${n} chuỗi kích thước cho ${zs.length} khu vực — sửa, kéo hay ép số như dim vẽ tay`
+    + (wasOff? ' (đã bật lại lớp "Hiện kích thước định vị")' : ""));
 };
 $("#btnClrDims").onclick=()=>{
   const fl=F(), n=(fl.dims||[]).length;
