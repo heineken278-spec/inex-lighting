@@ -1176,7 +1176,8 @@ function deleteTrack(id, fl){
    thư viện ngay tâm quạt (bắt điểm tâm quạt sẵn có) — lux, bóc tách, cụm điều khiển chạy nguyên. */
 const FAN_DIA   = [1.06, 1.22, 1.32, 1.42, 1.52];   // m — cỡ phổ thông (42"/48"/52"/56"/60")
 const FAN_MIN_MH = 2.3;    // m — cao độ cánh tối thiểu, an toàn đầu người
-const FAN_WALL   = 0.5;    // m — hở tối thiểu từ ĐẦU CÁNH tới tường (đủ gió, không va)
+// (bỏ ngưỡng "đầu cánh cách tường": quạt hay nằm ở RANH giữa hai khu vực, cạnh polygon ở đó là
+//  ranh vẽ tay chứ không phải tường thật — cảnh báo ra sai gần như luôn, xem fanIssues)
 function allFans(){ const r=[]; state.floors.forEach(f=>(f.fans||[]).forEach(x=>r.push(x))); return r; }
 function fanById(id, fl){ return ((fl||F()).fans||[]).find(f=>f.id===id)||null; }
 function fanR(fan){ return (fan.dia||1.32)/2; }                 // bán kính sải cánh (m)
@@ -1198,39 +1199,43 @@ function deleteFan(id, fl){
      · NẶNG   — tâm đèn nằm trong vòng sải cánh: chắc chắn chớp, không cách nào chữa ngoài dời.
      · CẢNH BÁO — hai vòng chồng mép: chỉ rìa chùm bị cắt, chớp nhẹ ở mép vùng sáng.
    Đèn NẰM DƯỚI mặt phẳng cánh (đèn thả, đèn tường) thì không dính — cánh không nằm giữa nó và sàn. */
-function fanClashes(fan, fl){
+/* Bán kính chùm của MỘT đèn tại đúng mặt phẳng cánh (world px). null = đèn không liên quan
+   (LED dây, đèn tường, hoặc đèn nằm ngang/thấp hơn cánh — cánh không chắn giữa nó và sàn). */
+function beamAtBlade(l, z, Hb, fl){
+  fl=fl||F(); const P=fl.pxPerMeter; if(!P) return null;
+  const lamp=lightById(l.lightId);
+  if(!lamp || lamp.type==="strip" || isWall(l, lamp)) return null;
+  const Hl=(l.mh!=null? l.mh : (z.ceilH||2.8));
+  const drop=Hl-Hb;
+  if(drop<=0.02) return null;
+  return Math.tan(clamp(lamp.beam||60,5,170)/2*Math.PI/180)*drop*P;
+}
+/* Mọi đèn quanh quạt kèm KHOẢNG HỞ — trả cả đèn sạch, vì "hở 46 cm" mới là con số anh canh theo.
+   `ho` < 0 nghĩa là hai vòng đã chồng nhau. */
+function fanGaps(fan, fl){
   fl=fl||F();
   const P=fl.pxPerMeter; if(!P) return [];
   const R=fanR(fan)*P, Hb=fanMh(fan, fl), out=[];
   fl.zones.forEach(z=>z.lights.forEach((l,li)=>{
-    const lamp=lightById(l.lightId);
-    if(!lamp || lamp.type==="strip" || isWall(l, lamp)) return;   // LED dây / đèn tường: không chiếu xuyên đĩa quạt
-    const Hl=(l.mh!=null? l.mh : (z.ceilH||2.8));
-    const drop=Hl-Hb;
-    if(drop<=0.02) return;                                        // đèn ngang hoặc thấp hơn cánh
-    const beam=clamp(lamp.beam||60, 5, 170);
-    const r=Math.tan(beam/2*Math.PI/180)*drop*P;
+    const r=beamAtBlade(l, z, Hb, fl); if(r==null) return;
     const d=Math.hypot(l.x-fan.x, l.y-fan.y);
-    if(d >= R+r) return;
-    out.push({z, l, li, lamp, d:d/P, muc:(d<R? "nang":"nhe"),
-      // phần bề rộng chùm bị đĩa quạt ăn mất, quy ra % — cho anh so nặng nhẹ giữa các đèn
-      lan:+Math.min(1,(R+r-d)/Math.max(2*r,1e-6)).toFixed(2)});
+    out.push({z, l, li, lamp:lightById(l.lightId), r, d:d/P, ho:(d-R-r)/P,
+      muc: d<R? "nang" : (d<R+r? "nhe" : "sach"),
+      lan:+Math.min(1,Math.max(0,(R+r-d)/Math.max(2*r,1e-6))).toFixed(2)});
   }));
-  return out.sort((a,b)=>(a.muc===b.muc? a.d-b.d : (a.muc==="nang"?-1:1)));
+  const rank={nang:0, nhe:1, sach:2};
+  return out.sort((a,b)=>(rank[a.muc]-rank[b.muc]) || (a.ho-b.ho));
 }
+function fanClashes(fan, fl){ return fanGaps(fan, fl).filter(g=>g.muc!=="sach"); }
 /* Các cảnh báo LẮP ĐẶT của một quạt (khác với chuyện chém chùm sáng) */
 function fanIssues(fan, fl){
   fl=fl||F(); const P=fl.pxPerMeter, out=[];
   const z=deviceZone(fan, fl), mh=fanMh(fan, fl);
   if(mh < FAN_MIN_MH) out.push({muc:"nang", txt:`Cánh chỉ cao ${fmtPlan(mh)} m — dưới ${fmtPlan(FAN_MIN_MH)} m là chạm đầu người`});
   if(z && z.ceilH && mh > z.ceilH-0.05) out.push({muc:"nhe", txt:"Cánh sát trần — gió yếu, nên hạ xuống 0,3–0,5 m dưới trần"});
-  if(P && z){
-    const nw=nearestWall({x:fan.x,y:fan.y}, z.poly);
-    if(nw){ const ho=(nw.d/P)-fanR(fan);
-      if(ho < FAN_WALL) out.push({muc: ho<0? "nang":"nhe",
-        txt: ho<0? `Đầu cánh ĐÂM vào tường ${fmtPlan(-ho)} m`
-                 : `Đầu cánh chỉ cách tường ${fmtPlan(ho)} m — nên để tối thiểu ${fmtPlan(FAN_WALL)} m`}); }
-  }
+  // KHÔNG kiểm "đầu cánh cách tường" nữa (anh Khoa): quạt hay đặt ở RANH giữa hai khu vực, mà
+  // cạnh polygon ở đó chỉ là ranh vẽ tay chứ không phải tường thật — cảnh báo ra sai gần như luôn.
+  // Cảnh báo sai còn tệ hơn không cảnh báo: nó dạy người dùng bỏ qua mọi cảnh báo khác.
   (fl.fans||[]).forEach(o=>{ if(o.id===fan.id || !P) return;
     const ho=Math.hypot(o.x-fan.x, o.y-fan.y)/P - fanR(fan) - fanR(o);
     if(ho<0.3) out.push({muc: ho<0? "nang":"nhe",
@@ -2925,6 +2930,29 @@ function drawOverlay(){
       "stroke-width":Math.max(0.012*P,1.2*inv)})));
     if(sel) gg.appendChild(svg("circle",{cx:fan.x, cy:fan.y, r:R, fill:C_ACCENT,
       "fill-opacity":".07", stroke:C_ACCENT, "stroke-width":3*inv, opacity:".5"}));
+    // CANH BẰNG MẮT: chọn quạt → vẽ vòng CHÙM SÁNG TẠI MẶT PHẲNG CÁNH của từng đèn quanh nó.
+    // Đây mới là hai hình cần so; chạm nhau là chém. Không vẽ ra thì phép kiểm vô hình, và im
+    // lặng-vì-sạch đọc y hệt im lặng-vì-hỏng.
+    if(sel){
+      const gaps=fanGaps(fan).filter(g=>g.ho<=0.8);
+      // GHI SỐ ở chỗ cần: mọi đèn bị chém, cộng ĐÚNG MỘT đèn sạch gần nhất. Bốn cái "hở 47 cm"
+      // giống hệt nhau quanh một cái quạt không cho thêm thông tin nào, chỉ làm rối.
+      const nearest=gaps.find(g=>g.muc==="sach");
+      gaps.forEach(g=>{
+        const c = g.muc==="nang"? "#B4553C" : g.muc==="nhe"? "#C9922E" : "#7C9A8E";
+        gg.appendChild(svg("circle",{cx:g.l.x, cy:g.l.y, r:g.r, fill:"none", stroke:c,
+          "stroke-width":1.1*inv, "stroke-dasharray":`${4*inv},${3*inv}`,
+          opacity: g.muc==="sach"? ".5" : ".85"}));
+        if(g.muc==="sach" && g!==nearest) return;
+        const ux=(g.l.x-fan.x), uy=(g.l.y-fan.y), L=Math.hypot(ux,uy)||1;
+        const a={x:fan.x+ux/L*R, y:fan.y+uy/L*R}, b={x:g.l.x-ux/L*g.r, y:g.l.y-uy/L*g.r};
+        gg.appendChild(svg("line",{x1:a.x,y1:a.y,x2:b.x,y2:b.y, stroke:c,
+          "stroke-width":0.9*inv, opacity:".7"}));
+        addLabel(gg, (a.x+b.x)/2, (a.y+b.y)/2-4*inv,
+          g.ho>=0? "hở "+fmt(Math.round(g.ho*100))+" cm" : "CHÉM "+fmt(Math.round(-g.ho*100))+" cm",
+          8*inv, c, inv);
+      });
+    }
     gg.appendChild(svg("circle",{cx:fan.x, cy:fan.y, r:Math.max(hub*1.7, 13*inv),
       fill:"transparent", class:"hit"}));
     ov.appendChild(gg);
@@ -5343,8 +5371,11 @@ function refreshFanPanel(){
         <input type="number" id="fnMh" step="0.05" style="width:66px" placeholder="khác">
       </div>
       <div id="fnIssues"></div>
-      <label style="margin-top:10px">Đèn bị cánh quạt chém <span class="n" id="fnClashN">0</span></label>
+      <div id="fnVerdict"></div>
+      <label style="margin-top:10px">Đèn quanh quạt <span class="n" id="fnClashN">0</span></label>
       <div id="fnClash"></div>
+      <button class="btn ghost sm" id="fnPush" style="margin-top:6px;width:100%"
+        title="Dời từng đèn bị chém ra ngoài vùng quét, theo hướng xuyên tâm quạt">Đẩy đèn bị chém ra ngoài</button>
       <p class="pr-hint" style="margin:8px 0 0">Cánh quạt nằm THẤP HƠN đèn trần nên nó cắt ngang chùm sáng ở
         lưng chừng — quạt quay là bóng cánh quét qua sàn, nhìn thấy rõ nhất trên mặt bàn và sàn sáng màu.
         Cách chữa duy nhất là <b>dời đèn ra ngoài vòng quét</b> hoặc <b>đổi sang sải cánh nhỏ hơn</b>.</p>`;
@@ -5360,6 +5391,7 @@ function refreshFanPanel(){
       fan.mh = b.dataset.mh===""? null : +b.dataset.mh; }));
     p.querySelector("#fnMh").oninput=e=>{ const v=e.target.value.trim();
       mutate(()=>{ fan.mh = v===""? null : parseNum(v); }); };
+    p.querySelector("#fnPush").onclick=()=>pushLightsOutOfFan(fan);
   }
   const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
   setV("#fnDia", Math.round((fan.dia||1.32)*100)/100);
@@ -5376,26 +5408,67 @@ function refreshFanPanel(){
       `<p class="pr-hint" style="margin:8px 0 0;color:${o.muc==="nang"?"#B4553C":"#8A6D3B"}">
         ${o.muc==="nang"?"⚠":"·"} ${escapeHtml(o.txt)}</p>`).join("") : "";
   }
-  // đèn bị chém
-  const box=p.querySelector("#fnClash"), cls=fanClashes(fan, fl);
-  p.querySelector("#fnClashN").textContent=cls.length;
-  const sig=cls.map(c=>c.z.id+":"+c.li+":"+c.muc+":"+c.lan).join("|");
+  // KẾT LUẬN — phải nói ra CẢ KHI SẠCH. Im lặng vì sạch đọc y hệt im lặng vì hỏng: anh Khoa
+  // đã hỏi đúng câu đó ("canh quạt né góc chiếu có chưa? sao anh không thấy?").
+  const gaps=fanGaps(fan, fl);
+  const near=gaps.filter(g=>g.muc==="sach")[0];
+  const cls=gaps.filter(g=>g.muc!=="sach");
+  const nang=cls.filter(c=>c.muc==="nang").length;
+  const vb=p.querySelector("#fnVerdict");
+  const vtxt = !fl.pxPerMeter ? ["#8A6D3B","Chưa cân tỉ lệ (C) — chưa kiểm được va chạm"]
+    : nang ? ["#B4553C", `⚠ ${nang} đèn BỊ CÁNH CHÉM — quạt quay sẽ có bóng quét trên sàn`]
+    : cls.length ? ["#8A6D3B", `${cls.length} đèn chạm mép chùm — chớp nhẹ ở rìa vùng sáng`]
+    : gaps.length ? ["#5E7A6B", `✓ Không đèn nào bị chém · đèn gần nhất còn hở ${near? fmt(Math.round(near.ho*100)) : "–"} cm`]
+    : ["#8A8175", "Chưa có đèn nào trong tầm để kiểm"];
+  if(vb.dataset.sig!==vtxt[1]){ vb.dataset.sig=vtxt[1];
+    vb.innerHTML=`<p class="pr-hint" style="margin:10px 0 0;color:${vtxt[0]}">${escapeHtml(vtxt[1])}</p>`; }
+  const pb=p.querySelector("#fnPush"); if(pb) pb.style.display = cls.length? "" : "none";
+  // danh sách: đèn bị chém trước, rồi vài đèn sạch gần nhất kèm KHOẢNG HỞ (số để canh theo)
+  const box=p.querySelector("#fnClash");
+  const show=cls.concat(gaps.filter(g=>g.muc==="sach").slice(0,4));
+  p.querySelector("#fnClashN").textContent=cls.length? cls.length+" bị chém" : "sạch";
+  const sig=show.map(c=>c.z.id+":"+c.li+":"+c.muc+":"+c.ho.toFixed(3)).join("|");
   if(box.dataset.sig===sig) return;
   box.dataset.sig=sig; box.innerHTML="";
-  if(!cls.length){ box.innerHTML='<p class="empty" style="padding:6px">Không đèn nào bị cánh chém — bố trí đang sạch.</p>'; return; }
-  cls.forEach(c=>{
+  if(!show.length){ box.innerHTML='<p class="empty" style="padding:6px">Chưa có đèn trần nào quanh quạt.</p>'; return; }
+  show.forEach(c=>{
     const row=document.createElement("div"); row.className="grp";
+    const col = c.muc==="nang"? "#B4553C" : c.muc==="nhe"? "#8A6D3B" : "#5E7A6B";
     const ic=symbolIconSVG(c.lamp.type, null, c.lamp.mount);
-    ic.style.color = c.muc==="nang"? "#B4553C" : "#8A6D3B"; row.appendChild(ic);
+    ic.style.color=col; row.appendChild(ic);
     const dd=document.createElement("div"); dd.className="d"; dd.style.cursor="pointer";
-    dd.title="Click: chọn đèn này trên bản vẽ để dời ra";
-    dd.innerHTML=`<b>${escapeHtml(c.lamp.code||c.lamp.name)}</b><small>${
-      c.muc==="nang"? "CHÉM THẲNG — đèn nằm trong vòng quét" : "chạm mép chùm"
+    dd.title="Click: chọn đèn này trên bản vẽ";
+    dd.innerHTML=`<b>${escapeHtml(c.lamp.code||c.lamp.name)}</b><small style="color:${col}">${
+        c.muc==="nang"? `CHÉM THẲNG ${fmt(Math.round(-c.ho*100))} cm`
+      : c.muc==="nhe"? `chạm mép ${fmt(Math.round(-c.ho*100))} cm`
+      : `hở ${fmt(Math.round(c.ho*100))} cm`
       } · cách tâm ${fmtPlan(c.d)} m · ${escapeHtml(c.z.name||"")}</small>`;
     dd.onclick=()=>{ selLights=[{zid:c.z.id, li:c.li}]; selFan=null; F().selectedZone=c.z.id; renderAll(); };
     row.appendChild(dd);
     box.appendChild(row);
   });
+}
+/* Đẩy các đèn bị chém ra khỏi vùng quét, theo hướng XUYÊN TÂM quạt (hướng ngắn nhất để thoát,
+   và giữ nguyên thế bố trí nhất). Đèn trên ray thì bỏ qua — nó chỉ trượt dọc ray được, dời ngang
+   là bẻ nó khỏi ray, một hành động anh không yêu cầu. */
+function pushLightsOutOfFan(fan){
+  const fl=F(), P=fl.pxPerMeter;
+  if(!P){ toast("Cần cân tỉ lệ (C) trước"); return; }
+  const cls=fanClashes(fan, fl);
+  if(!cls.length){ toast("Không đèn nào bị chém"); return; }
+  let moved=0, onTrack=0;
+  mutate(()=>{
+    const R=fanR(fan)*P;
+    cls.forEach(c=>{
+      if(c.l.trk){ onTrack++; return; }
+      const need=R+c.r+0.05*P;                       // chừa thêm 5 cm cho chắc
+      let ux=c.l.x-fan.x, uy=c.l.y-fan.y, L=Math.hypot(ux,uy);
+      if(L<1e-6){ ux=1; uy=0; L=1; }                 // đèn nằm đúng tâm: đẩy sang ngang
+      c.l.x=fan.x+ux/L*need; c.l.y=fan.y+uy/L*need; moved++;
+    });
+  });
+  toast(`Đã đẩy ${moved} đèn ra ngoài vùng quét`
+    + (onTrack? ` · ${onTrack} đèn nằm trên ray, phải trượt tay dọc ray` : ""));
 }
 /* Panel KÍCH THƯỚC — cùng khuôn #trkPanel: dựng lại chỉ khi đổi dim, còn lại chỉ cập nhật giá trị
    với guard activeElement. Danh sách đoạn với ô SỐ (mm) chính là chỗ ÉP KHOẢNG CÁCH. */
