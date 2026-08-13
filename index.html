@@ -365,7 +365,7 @@
 
   /* light groups in zone */
   /* danh sách dài không đẩy các nút bên dưới ra khỏi màn — cuộn trong khung, nút luôn thấy */
-  #grpList, #devList, #trLights{max-height:230px; overflow-y:auto; margin:-2px -2px 2px; padding:2px}
+  #grpList, #devList, #trLights, #fanList, #fnClash{max-height:230px; overflow-y:auto; margin:-2px -2px 2px; padding:2px}
   /* hàng "cây bút": mẫu đèn sẽ được đặt — khác hẳn danh sách đã đặt bên dưới */
   .brush{display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:9px;
     border:1px dashed var(--accent-soft); background:#FBF7F0}
@@ -733,6 +733,10 @@
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 13a8 8 0 0 1 16 0z"/><path d="M4 13h16"/><path d="M9.5 9.5v2M14.5 9.5v2"/></svg>
           <span class="kbd">O</span>
         </button>
+        <button class="tool" data-tool="fan" title="Quạt trần — click để đặt, vòng nét đứt là sải cánh (F)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="1.7"/><path d="M12 10.3c0-3 .6-5.3 2.4-5.3 1.4 0 1.9 1.6.7 3.1-.9 1.1-2 1.8-3.1 2.2M13.7 12.9c2.1 2.1 3.4 4.1 2.1 5.4-1 1-2.4.1-2.3-1.8.1-1.4.6-2.6 1.2-3.6M10.3 12.9c-2.1 2.1-3.4 4.1-2.1 5.4 1 1 2.4.1 2.3-1.8-.1-1.4-.6-2.6-1.2-3.6M10.3 11.1c-3-.6-5.3-1.6-5-3.4.2-1.4 1.9-1.6 3.2-.2 1 1 1.5 2.2 1.8 3.3"/></svg>
+          <span class="kbd">F</span>
+        </button>
         <button class="tool" data-tool="dim" title="Kích thước — click 2 mốc, click tiếp để nối chuỗi (D)">
           <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 16h18M5 13.5v5M19 13.5v5M11 13.5v5"/><path d="M6 7l3-3M6 7l3 3M18 7l-3-3M18 7l-3 3M6 7h12"/></svg>
           <span class="kbd">D</span>
@@ -863,6 +867,7 @@
       <div id="swPanel" class="panel-sec ctxsec hidden"></div>
       <div id="devPanel" class="panel-sec ctxsec hidden"></div>
       <div id="trkPanel" class="panel-sec ctxsec hidden"></div>
+      <div id="fanPanel" class="panel-sec ctxsec hidden"></div>
       <div id="dimPanel" class="panel-sec ctxsec hidden"></div>
       <div id="wallInfo" class="panel-sec ctxsec hidden"></div>
       <div id="noZone" class="panel-sec">
@@ -933,6 +938,11 @@
       <details class="sec" id="trkSec">
         <summary>Ray nam châm <span class="n" id="trkCount">0</span></summary>
         <div class="secbody"><div id="trkList"></div></div>
+      </details>
+
+      <details class="sec" id="fanSec">
+        <summary>Quạt trần <span class="n" id="fanCount">0</span></summary>
+        <div class="secbody"><div id="fanList"></div></div>
       </details>
 
       <details class="sec" id="secSum">
@@ -1064,6 +1074,7 @@ let selSwitch = null;       // id công tắc đang chọn
 let selDevice = null;       // id thiết bị đang chọn
 let selTrack  = null;       // id ray nam châm đang chọn
 let selDim    = null;       // id kích thước đang chọn
+let selFan    = null;       // id quạt trần đang chọn
 let dimSnap   = null;       // mốc bắt điểm dưới con trỏ khi đang dùng công cụ Dim
 let visOpen = false;        // bảng kiểm tra vệt chiếu (nổi trên canvas) đang mở?
 let visTab = "side";        // "side" = mặt bên (dùng thường xuyên) · "face" = mặt đứng chính diện
@@ -1094,6 +1105,10 @@ function newFloor(name, pxPerMeter){
     tracks:[],
     // kích thước định vị vẽ tay: [{id, x1,y1,x2,y2, off}] — off = đẩy đường ghi ra khỏi vật thể
     dims:[],
+    // QUẠT TRẦN: [{id, code, x, y, dia, mh, blades, note}] — dia = SẢI CÁNH (m), mh = cao độ MẶT
+    // PHẲNG CÁNH tính từ sàn. Hai số đó không phải trang trí: chúng quyết định cánh quạt có cắt
+    // ngang chùm sáng đèn hay không (bóng quét nhấp nháy trên sàn).
+    fans:[],
   };
 }
 /* ========================= RAY NAM CHÂM =========================
@@ -1151,6 +1166,76 @@ function deleteTrack(id, fl){
   fl.tracks=(fl.tracks||[]).filter(t=>t.id!==id);
   if(selTrack===id) selTrack=null;
   return pruneDims(fl);
+}
+/* ========================= QUẠT TRẦN =========================
+   Hai con số quyết định mọi thứ, không phải trang trí:
+     · dia — SẢI CÁNH (m). Vẽ đúng tỉ lệ mét thật thì nhìn phát biết quạt có ăn vào đâu không.
+     · mh  — cao độ MẶT PHẲNG CÁNH tính từ sàn. Cánh nằm THẤP HƠN đèn trần, nên nó cắt ngang chùm
+             sáng ở lưng chừng; đó là chỗ sinh ra bóng quét nhấp nháy trên sàn khi quạt quay.
+   Quạt KHÔNG phát sáng: nó không vào calc()/bảng đèn. Quạt có kèm đèn thì đặt thêm một đèn từ
+   thư viện ngay tâm quạt (bắt điểm tâm quạt sẵn có) — lux, bóc tách, cụm điều khiển chạy nguyên. */
+const FAN_DIA   = [1.06, 1.22, 1.32, 1.42, 1.52];   // m — cỡ phổ thông (42"/48"/52"/56"/60")
+const FAN_MIN_MH = 2.3;    // m — cao độ cánh tối thiểu, an toàn đầu người
+const FAN_WALL   = 0.5;    // m — hở tối thiểu từ ĐẦU CÁNH tới tường (đủ gió, không va)
+function allFans(){ const r=[]; state.floors.forEach(f=>(f.fans||[]).forEach(x=>r.push(x))); return r; }
+function fanById(id, fl){ return ((fl||F()).fans||[]).find(f=>f.id===id)||null; }
+function fanR(fan){ return (fan.dia||1.32)/2; }                 // bán kính sải cánh (m)
+function fanMh(fan, fl){ fl=fl||F();
+  if(fan.mh!=null) return fan.mh;
+  const z=deviceZone(fan, fl);                                   // mặc định: treo 0,35 m dưới trần
+  return Math.max(FAN_MIN_MH, ((z&&z.ceilH)||2.8) - 0.35);
+}
+function deleteFan(id, fl){
+  fl=fl||F();
+  fl.fans=(fl.fans||[]).filter(f=>f.id!==id);
+  if(selFan===id) selFan=null;
+  return pruneDims(fl);
+}
+/* ===== CÁNH QUẠT CÓ CHÉM VÀO CHÙM SÁNG KHÔNG =====
+   Cánh quét thành một cái ĐĨA ở cao độ mh. Chùm của một đèn trần là hình nón mở xuống; tại đúng
+   cao độ đó nó là một hình tròn bán kính  r = tan(beam/2) × (cao đèn − cao cánh).
+   Hai hình tròn giao nhau ⇒ cánh cắt ngang chùm ⇒ khi quạt quay, bóng cánh quét qua sàn.
+     · NẶNG   — tâm đèn nằm trong vòng sải cánh: chắc chắn chớp, không cách nào chữa ngoài dời.
+     · CẢNH BÁO — hai vòng chồng mép: chỉ rìa chùm bị cắt, chớp nhẹ ở mép vùng sáng.
+   Đèn NẰM DƯỚI mặt phẳng cánh (đèn thả, đèn tường) thì không dính — cánh không nằm giữa nó và sàn. */
+function fanClashes(fan, fl){
+  fl=fl||F();
+  const P=fl.pxPerMeter; if(!P) return [];
+  const R=fanR(fan)*P, Hb=fanMh(fan, fl), out=[];
+  fl.zones.forEach(z=>z.lights.forEach((l,li)=>{
+    const lamp=lightById(l.lightId);
+    if(!lamp || lamp.type==="strip" || isWall(l, lamp)) return;   // LED dây / đèn tường: không chiếu xuyên đĩa quạt
+    const Hl=(l.mh!=null? l.mh : (z.ceilH||2.8));
+    const drop=Hl-Hb;
+    if(drop<=0.02) return;                                        // đèn ngang hoặc thấp hơn cánh
+    const beam=clamp(lamp.beam||60, 5, 170);
+    const r=Math.tan(beam/2*Math.PI/180)*drop*P;
+    const d=Math.hypot(l.x-fan.x, l.y-fan.y);
+    if(d >= R+r) return;
+    out.push({z, l, li, lamp, d:d/P, muc:(d<R? "nang":"nhe"),
+      // phần bề rộng chùm bị đĩa quạt ăn mất, quy ra % — cho anh so nặng nhẹ giữa các đèn
+      lan:+Math.min(1,(R+r-d)/Math.max(2*r,1e-6)).toFixed(2)});
+  }));
+  return out.sort((a,b)=>(a.muc===b.muc? a.d-b.d : (a.muc==="nang"?-1:1)));
+}
+/* Các cảnh báo LẮP ĐẶT của một quạt (khác với chuyện chém chùm sáng) */
+function fanIssues(fan, fl){
+  fl=fl||F(); const P=fl.pxPerMeter, out=[];
+  const z=deviceZone(fan, fl), mh=fanMh(fan, fl);
+  if(mh < FAN_MIN_MH) out.push({muc:"nang", txt:`Cánh chỉ cao ${fmtPlan(mh)} m — dưới ${fmtPlan(FAN_MIN_MH)} m là chạm đầu người`});
+  if(z && z.ceilH && mh > z.ceilH-0.05) out.push({muc:"nhe", txt:"Cánh sát trần — gió yếu, nên hạ xuống 0,3–0,5 m dưới trần"});
+  if(P && z){
+    const nw=nearestWall({x:fan.x,y:fan.y}, z.poly);
+    if(nw){ const ho=(nw.d/P)-fanR(fan);
+      if(ho < FAN_WALL) out.push({muc: ho<0? "nang":"nhe",
+        txt: ho<0? `Đầu cánh ĐÂM vào tường ${fmtPlan(-ho)} m`
+                 : `Đầu cánh chỉ cách tường ${fmtPlan(ho)} m — nên để tối thiểu ${fmtPlan(FAN_WALL)} m`}); }
+  }
+  (fl.fans||[]).forEach(o=>{ if(o.id===fan.id || !P) return;
+    const ho=Math.hypot(o.x-fan.x, o.y-fan.y)/P - fanR(fan) - fanR(o);
+    if(ho<0.3) out.push({muc: ho<0? "nang":"nhe",
+      txt: ho<0? `Chồng vùng quét với ${o.code||"quạt khác"}` : `Chỉ cách ${o.code||"quạt khác"} ${fmtPlan(ho)} m`}); });
+  return out;
 }
 const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
@@ -1285,6 +1370,7 @@ function migrate(s){
     if(!f.devices) f.devices=[];
     if(!f.tracks) f.tracks=[];      // ray nam châm
     if(!f.dims) f.dims=[];          // kích thước định vị
+    if(!f.fans) f.fans=[];          // quạt trần
     // bỏ cờ ghim kích thước cũ (đã thay bằng công cụ Dim)
     f.zones.forEach(z=>z.lights.forEach(l=>{ delete l.dim; }));
     // Đèn còn trỏ tới thanh ray KHÔNG CÒN TỒN TẠI → gỡ cờ, thành đèn thường. Bỏ mặc thì nó là một
@@ -2196,6 +2282,11 @@ function anchorPos(a, fl){
     case "D": { const d=(fl.devices||[]).find(x=>x.id===a.id); return d? {x:d.x, y:d.y} : null; }
     case "W": { const s=(fl.switches||[]).find(x=>x.id===a.id); return s? {x:s.x, y:s.y} : null; }
     case "T": { const t=trackById(a.id, fl); return t? trackPos(t, (a.e||0)*(t.len||1)) : null; }
+    case "F": { const f=fanById(a.id, fl); if(!f) return null;
+                if(!a.e) return {x:f.x, y:f.y};
+                // mốc trên VÀNH sải cánh — canh mép quạt với đèn/tường thì phải bắt được mép
+                const r=fanR(f)*(fl.pxPerMeter||50), ang=(a.e-1)*Math.PI/2;
+                return {x:f.x+Math.cos(ang)*r, y:f.y+Math.sin(ang)*r}; }
     case "Z": { const z=(fl.zones||[]).find(x=>x.id===a.zid); const p=z&&z.poly[a.i];
                 return p? {x:p.x, y:p.y} : null; }
     case "E": { const z=(fl.zones||[]).find(x=>x.id===a.zid); if(!z||!z.poly[a.i]) return null;
@@ -2205,7 +2296,7 @@ function anchorPos(a, fl){
   return null;
 }
 /* Mốc này có DỜI được không — quyết định ép số dời đầu nào (tường và toạ độ chết thì không dời). */
-function anchorMovable(a){ return a && (a.k==="L" || a.k==="D" || a.k==="W"); }
+function anchorMovable(a){ return a && (a.k==="L" || a.k==="D" || a.k==="W" || (a.k==="F" && !a.e)); }
 /* ===== ÉP KHOẢNG CÁCH — đây mới là "chính xác như CAD" =====
    Trong CAD anh không kéo tới khi vừa mắt, anh GÕ SỐ. Ở đây gõ số vào một đoạn thì app DỜI VẬT
    cho khoảng cách đúng bằng con số đó — nên bản vẽ luôn khớp với số in ra, thay vì số chỉ là kết
@@ -2241,6 +2332,8 @@ function moveAnchorBy(a, d, fl){
   if(a.k==="D"){ const o=(fl.devices||[]).find(x=>x.id===a.id); if(!o) return "Mất thiết bị";
     o.x+=d.x; o.y+=d.y; return null; }
   if(a.k==="W"){ const o=(fl.switches||[]).find(x=>x.id===a.id); if(!o) return "Mất công tắc";
+    o.x+=d.x; o.y+=d.y; return null; }
+  if(a.k==="F"){ const o=fanById(a.id, fl); if(!o) return "Mất quạt";
     o.x+=d.x; o.y+=d.y; return null; }
   if(a.k==="L"){
     const h=lightByUid(a.uid, fl); if(!h) return "Mất đèn";
@@ -2289,6 +2382,14 @@ function snapAt(w, inv, fl){
     "tâm "+(s.code||"công tắc"), 2));
   (fl.tracks||[]).forEach(t=> [[0,"đầu ray"],[0.5,"giữa ray"],[1,"cuối ray"]].forEach(([e,nm])=>
     take(trackPos(t, e*(t.len||1)), {k:"T", id:t.id, e}, nm+" "+(t.code||""), 3)));
+  (fl.fans||[]).forEach(f=>{
+    take({x:f.x,y:f.y}, {k:"F", id:f.id}, "tâm "+(f.code||"quạt"), 2);
+    // 4 điểm mép vành: canh MÉP CÁNH với tường hay với đèn mới là số thợ cần
+    const r=fanR(f)*(fl.pxPerMeter||50);
+    [[1,"phải"],[2,"dưới"],[3,"trái"],[4,"trên"]].forEach(([e,nm])=>
+      take({x:f.x+Math.cos((e-1)*Math.PI/2)*r, y:f.y+Math.sin((e-1)*Math.PI/2)*r},
+        {k:"F", id:f.id, e}, "mép cánh "+nm, 3));
+  });
   fl.zones.forEach(z=>{
     z.poly.forEach((p,i)=> take({x:p.x,y:p.y}, {k:"Z", zid:z.id, i}, "góc "+(z.name||"khu vực"), 4));
     // chân vuông góc lên cạnh — đây chính là "khoảng cách tới tường" mà panel vẫn báo
@@ -2659,6 +2760,7 @@ function drawOverlay(){
     const r=Math.max(0.13*P, 16*inv); obst(d.x, d.y, r, r, 0); });
   (F().tracks||[]).forEach(t=>            // thân ray là vật cản DÀI — nhãn phải né dọc, không cắt ngang
     obst(t.x, t.y, (t.len||1)*P/2, Math.max(0.03*P, 5*inv), t.rot||0));
+  (F().fans||[]).forEach(f=>{ const r=fanR(f)*P; obst(f.x, f.y, r, r, 0); });
 
   // ---- lớp 1: zone fill/stroke ----
   F().zones.forEach(z=>{
@@ -2789,6 +2891,51 @@ function drawOverlay(){
     }
   });
 
+  // ---- lớp 3d: QUẠT TRẦN — vòng SẢI CÁNH vẽ đúng tỉ lệ mét thật ----
+  // Vẽ TRƯỚC đèn để đèn nằm đè lên: mắt đọc ngay đèn nào rơi vào trong vòng quét cánh.
+  const fanBad = new Map();     // "zid:li" → "nang"|"nhe", lớp đèn phía dưới dùng lại để khoanh cảnh báo
+  (F().fans||[]).forEach(fan=>{
+    const sel = exportInv==null && selFan===fan.id;
+    const R=fanR(fan)*P;
+    const cls=fanClashes(fan);
+    // Khoanh cảnh báo trên đèn: mặc định CHỈ mức nặng (mức nhẹ khoanh hết thì bản vẽ đầy vòng đỏ,
+    // đọc thành nhiễu); chọn quạt nào thì hiện đủ cả nhẹ của riêng quạt đó.
+    cls.forEach(c=>{ const k=c.z.id+":"+c.li;
+      if(c.muc==="nang" || sel) if(fanBad.get(k)!=="nang") fanBad.set(k, c.muc); });
+    const nang=cls.some(c=>c.muc==="nang");
+    const col = sel? C_ACCENT_D : C_INK;
+    const gg=svg("g",{"data-fan":fan.id, class:"fanm",
+      style: ghostL? "pointer-events:none" : "cursor:pointer", opacity: ghostL? .2 : 1});
+    // vòng sải cánh: nét đứt vì nó là VÙNG QUÉT, không phải vật đặc
+    gg.appendChild(svg("circle",{cx:fan.x, cy:fan.y, r:R, fill:"none",
+      stroke: nang&&exportInv==null? "#B4553C" : col, "stroke-width":Math.max(0.012*P, 1*inv),
+      "stroke-dasharray":`${Math.max(0.09*P,6*inv)},${Math.max(0.06*P,4*inv)}`, opacity:".85"}));
+    // cánh + bầu motor, vẽ theo cỡ THẬT
+    const nb=clamp(fan.blades||4, 2, 8), hub=Math.max(0.075*P, 5*inv);
+    for(let i=0;i<nb;i++){
+      const a=(i/nb)*Math.PI*2 - Math.PI/2, c=Math.cos(a), s=Math.sin(a);
+      const w=R*0.16;                       // bề rộng cánh, tỉ lệ theo sải cánh
+      const x1=fan.x+c*hub, y1=fan.y+s*hub, x2=fan.x+c*R*0.94, y2=fan.y+s*R*0.94;
+      gg.appendChild(svg("path",{ fill:"none", stroke:col, "stroke-width":Math.max(0.01*P,0.9*inv),
+        d:`M${x1.toFixed(1)},${y1.toFixed(1)} L${(x2-s*w).toFixed(1)},${(y2+c*w).toFixed(1)}`
+         +` L${(x2+s*w*0.35).toFixed(1)},${(y2-c*w*0.35).toFixed(1)} Z` }));
+    }
+    [[C_WHITE, hub+1.5*inv],[col, hub]].forEach(([c2,r2],i)=>gg.appendChild(svg("circle",{
+      cx:fan.x, cy:fan.y, r:r2, fill:i? "none":C_WHITE, stroke:i? c2:"none",
+      "stroke-width":Math.max(0.012*P,1.2*inv)})));
+    if(sel) gg.appendChild(svg("circle",{cx:fan.x, cy:fan.y, r:R, fill:C_ACCENT,
+      "fill-opacity":".07", stroke:C_ACCENT, "stroke-width":3*inv, opacity:".5"}));
+    gg.appendChild(svg("circle",{cx:fan.x, cy:fan.y, r:Math.max(hub*1.7, 13*inv),
+      fill:"transparent", class:"hit"}));
+    ov.appendChild(gg);
+    if(lblMode!=="off" && !ghostL){
+      // nhãn quạt: mã + SẢI CÁNH — sải cánh là thông số đặt hàng, phải nằm trên bản vẽ
+      autoLabel(ov, "Q", fan.id, fan.x, fan.y, R, R, 0,
+        `${fan.code||"QT"} · Ø${fmtPlan(fan.dia||1.32)}m`, 8*inv,
+        sel? C_ACCENT_D : (nang&&exportInv==null? "#B4553C" : "#6E665A"), inv, fan);
+    }
+  });
+
   F().zones.forEach(z=>{
     const seenCode=new Set(); // chế độ "Gọn": mỗi loại chỉ ghi mã 1 lần / khu vực
     // nếu ≥2 model CÙNG loại (cùng ký hiệu) trong khu vực → mã là thứ duy nhất
@@ -2824,6 +2971,13 @@ function drawOverlay(){
           stroke:C_ACCENT,"stroke-width":1*inv,"stroke-dasharray":`${3*inv},${3*inv}`,
           class:"hovr", display:"none", "pointer-events":"none"}));
       }
+      // CÁNH QUẠT CHÉM CHÙM SÁNG — chỉ báo trên MÀN HÌNH, không nướng vào bản vẽ giao khách:
+      // đây là cảnh báo lúc thiết kế, không phải ký hiệu của hồ sơ.
+      const bad = exportInv==null && fanBad.get(z.id+":"+li);
+      if(bad) g.appendChild(svg("circle",{r:hr*1.45, fill:"none",
+        stroke: bad==="nang"? "#B4553C" : "#C9922E", "stroke-width":1.4*inv,
+        "stroke-dasharray":`${2.5*inv},${2.5*inv}`, opacity: bad==="nang"? .95 : .6,
+        "pointer-events":"none"}));
       // MÀU = cụm điều khiển → KH nhìn phát ra ngay đèn nào cùng một công tắc
       const cir=l.circuit? circuitById(l.circuit) : null;
       // MÀU KHÔNG còn dùng để phân biệt cụm (anh Khoa: không hiệu quả) — danh tính cụm nằm ở
@@ -3210,6 +3364,10 @@ function symbolLegendBox(inv, P){
     const m=(fl.tracks||[]).reduce((s,t)=>s+(t.len||0),0);
     rows.push({trk:true, txt:`Ray nam châm gắn trần — tổng ${fmtPlan(m)} m, đèn trượt trên ray`});
   }
+  if(!ghost && (fl.fans||[]).length){
+    const ds=[...new Set((fl.fans||[]).map(f=>fmtPlan(f.dia||1.32)))].join(" / ");
+    rows.push({fan:true, txt:`Quạt trần — vòng nét đứt là VÙNG QUÉT CÁNH (Ø${ds} m)`});
+  }
   if(sheetHas("switches") && (fl.switches||[]).length)
     rows.push({sw:true, txt:"Công tắc — chữ cạnh nó là cụm điều khiển"});
   if(sheetHas("devices")){
@@ -3241,7 +3399,16 @@ function symbolLegendBox(inv, P){
       const x0=x+col*(colW+gap);
       const cy=y+pad*0.6+hh+row*rh+rh/2, cxi=x0+pad+ic/2;
       const gi=svg("g",{transform:`translate(${cxi},${cy})`});
-      if(r.trk){
+      if(r.fan){
+        const R=ic*0.46;
+        gi.appendChild(svg("circle",{cx:0,cy:0,r:R,fill:"none",stroke:C_INK,
+          "stroke-width":Math.max(0.8*inv,ic*0.045),"stroke-dasharray":`${ic*0.13},${ic*0.09}`}));
+        for(let i=0;i<4;i++){ const a=i*Math.PI/2-Math.PI/2, c=Math.cos(a), s=Math.sin(a), w=R*0.2;
+          gi.appendChild(svg("path",{fill:"none",stroke:C_INK,"stroke-width":Math.max(0.8*inv,ic*0.04),
+            d:`M${(c*R*0.2).toFixed(2)},${(s*R*0.2).toFixed(2)} L${(c*R*0.88-s*w).toFixed(2)},${(s*R*0.88+c*w).toFixed(2)} L${(c*R*0.88+s*w*0.35).toFixed(2)},${(s*R*0.88-c*w*0.35).toFixed(2)} Z`})); }
+        gi.appendChild(svg("circle",{cx:0,cy:0,r:R*0.18,fill:C_INK,stroke:"none"}));
+      }
+      else if(r.trk){
         const hw=ic*0.46, sw2=Math.max(0.9*inv, ic*0.10);
         gi.appendChild(svg("line",{x1:-hw,y1:0,x2:hw,y2:0,stroke:C_INK,"stroke-width":sw2}));
         [-hw,hw].forEach(px=>gi.appendChild(svg("line",{x1:px,y1:-ic*0.2,x2:px,y2:ic*0.2,
@@ -3415,6 +3582,7 @@ function labelObj(kind, ref){
   if(kind==="W") return (F().switches||[]).find(s=>s.id===ref);
   if(kind==="D") return (F().devices||[]).find(d=>d.id===ref);
   if(kind==="T") return trackById(ref);
+  if(kind==="Q") return fanById(ref);
   if(kind==="Z") return getZone(ref);
   if(kind==="LG") return state.floors.find(f=>f.id===ref);  // bảng chú giải: offset trên tầng
   return null;
@@ -3694,7 +3862,7 @@ function renderDeviceList(){
       <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
         ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
     el.appendChild(dd);
-    el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null; selTrack=null;
+    el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null; selTrack=null; selFan=null;
       const vp=$("#viewport").getBoundingClientRect();
       view.tx=vp.width/2 - d.x*view.scale; view.ty=vp.height/2 - d.y*view.scale;
       renderAll(); };
@@ -3732,8 +3900,40 @@ function renderTrackList(){
     box.appendChild(el);
   });
 }
+/* Danh sách QUẠT của tầng — kèm SỐ ĐÈN BỊ CHÉM ngay trên mỗi dòng, để soát cả tầng bằng một cái
+   liếc thay vì phải bấm từng quạt. */
+function renderFanList(){
+  const fl=F(), box=$("#fanList"), sec=$("#fanSec");
+  const fans=fl.fans||[];
+  $("#fanCount").textContent=fans.length;
+  sec.classList.toggle("hidden", !fans.length);
+  box.innerHTML="";
+  fans.forEach(fan=>{
+    const z=deviceZone(fan, fl), cls=fanClashes(fan, fl);
+    const nang=cls.filter(c=>c.muc==="nang").length;
+    const el=document.createElement("div"); el.className="grp"+(fan.id===selFan?" on":"");
+    el.style.cursor="pointer"; el.title="Click: chọn quạt trên bản vẽ";
+    const ic=svg("svg",{viewBox:"0 0 24 24",width:22,height:22,fill:"none",
+      stroke:"currentColor","stroke-width":1.6,"stroke-linecap":"round"});
+    ic.style.color = nang? "#B4553C" : "var(--ink-2)"; ic.style.flex="0 0 auto";
+    ic.appendChild(svg("circle",{cx:12,cy:12,r:1.7}));
+    ic.appendChild(svg("path",{d:"M12 10.3c0-3 .6-5.3 2.4-5.3 1.4 0 1.9 1.6.7 3.1-.9 1.1-2 1.8-3.1 2.2M13.7 12.9c2.1 2.1 3.4 4.1 2.1 5.4-1 1-2.4.1-2.3-1.8.1-1.4.6-2.6 1.2-3.6M10.3 12.9c-2.1 2.1-3.4 4.1-2.1 5.4 1 1 2.4.1 2.3-1.8-.1-1.4-.6-2.6-1.2-3.6M10.3 11.1c-3-.6-5.3-1.6-5-3.4.2-1.4 1.9-1.6 3.2-.2 1 1 1.5 2.2 1.8 3.3"}));
+    el.appendChild(ic);
+    const dd=document.createElement("div"); dd.className="d"; dd.style.minWidth="0";
+    dd.innerHTML=`<b style="font-weight:normal;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(fan.code||"QT")} · Ø${fmtPlan(fan.dia||1.32)} m</b>
+      <small style="font-family:var(--label);font-size:10px;color:${nang?"#B4553C":"var(--ink-3)"}">
+        ${z?escapeHtml(z.name):'ngoài khu vực'} · cánh +${fmtPlan(fanMh(fan,fl))}m${
+        cls.length? ` · ${nang? nang+" đèn BỊ CHÉM" : cls.length+" đèn chạm mép"}` : " · sạch"}</small>`;
+    el.appendChild(dd);
+    el.onclick=()=>{ selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=fan.id;
+      const vp=$("#viewport").getBoundingClientRect();
+      view.tx=vp.width/2 - fan.x*view.scale; view.ty=vp.height/2 - fan.y*view.scale;
+      renderAll(); };
+    box.appendChild(el);
+  });
+}
 function renderAll(){
-  render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); renderTrackList(); refreshRight(); renderSummary(); updateUndoBtns();
+  render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); renderTrackList(); renderFanList(); refreshRight(); renderSummary(); updateUndoBtns();
   if(tool==="light" && !$("#lightPop").classList.contains("hidden")) renderLightPop();
   // đồng bộ các control ngoài right-panel sau undo/redo/nạp dữ liệu
   const pn=$("#projName"); if(document.activeElement!==pn) pn.value=state.projectName;
@@ -3786,7 +3986,7 @@ function setTool(t){
   // đang xem một tờ mà lớp của công cụ bị ẩn thì thoát về "Tất cả" — nếu không, anh đặt ổ cắm
   // trên tờ Chiếu sáng sẽ không thấy gì hiện ra và tưởng app hỏng
   if(t==="device" && !sheetHas("devices")) setSheet("all", true);
-  else if((t==="light"||t==="switch"||t==="track") && (curSheet()||{}).ghostLights) setSheet("all", true);
+  else if((t==="light"||t==="switch"||t==="track"||t==="fan") && (curSheet()||{}).ghostLights) setSheet("all", true);
   tool=t; draft=null;
   if(t!=="dim") dimSnap=null;   // đổi công cụ mà chưa rê chuột thì ô bắt điểm còn treo lại trên bản vẽ
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
@@ -3800,6 +4000,7 @@ function setTool(t){
     poly:"Click từng đỉnh · giữ Shift để canh thẳng 0/45/90° · double-click hoặc Enter để đóng",
     switch:"Click lên vị trí tường để đặt công tắc · Esc để xong",
     track:"Kéo để vẽ thanh ray nam châm trên trần · giữ Shift để canh thẳng · Esc để huỷ",
+    fan:`Click để đặt quạt trần Ø${fmtPlan(lastFanDia)} m · vòng nét đứt là vùng quét cánh · Esc để xong`,
     dim: F().pxPerMeter
       ? "Click mốc đầu · con trỏ hiện ô vuông là đã BẮT trúng tâm đèn/góc tường · click mốc 2 để chốt, click tiếp để nối chuỗi · Esc để xong (chỉ đo thì Esc luôn)"
       : "Cần cân tỉ lệ (C) trước — chưa có tỉ lệ thì con số ghi ra vô nghĩa",
@@ -3988,6 +4189,7 @@ vp.addEventListener("pointerdown", e=>{
     drag={mode:"trackdraw"}; draft={type:"track", pts:[w,{...w}]}; render(); return;
   }
   if(tool==="dim"){ addDimPoint(w, e.shiftKey); return; }
+  if(tool==="fan"){ addFanAt(w); return; }
   if(tool==="switch"){ addSwitchAt(w); return; }
   if(tool==="device"){ addDeviceAt(w); return; }
   if(tool==="light"){
@@ -4027,21 +4229,28 @@ vp.addEventListener("pointerdown", e=>{
       selDevice = stack[(i+1)%stack.length].id;
       showHint(`Vị trí này có ${stack.length} thiết bị chồng cao độ — bấm tiếp để chọn cái kế`);
     } else selDevice=dvg.dataset.dev;
-    selLights=[]; selSwitch=null; selTrack=null;
+    selLights=[]; selSwitch=null; selTrack=null; selFan=null;
     const d=deviceById(selDevice);
     drag={mode:"device", start:w, moved:false, preSnap:snapshot(), ox:d.x, oy:d.y};
     renderAll(); return;
   }
   const trg=e.target.closest? e.target.closest(".trackm") : null;
   if(trg){
-    selTrack=trg.dataset.trk; selLights=[]; selSwitch=null; selDevice=null; selDim=null;
+    selTrack=trg.dataset.trk; selLights=[]; selSwitch=null; selDevice=null; selDim=null; selFan=null;
     const tr=trackById(selTrack);
     drag={mode:"track", start:w, moved:false, preSnap:snapshot(), ox:tr.x, oy:tr.y};
     renderAll(); return;
   }
+  const fng=e.target.closest? e.target.closest(".fanm") : null;
+  if(fng){
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=fng.dataset.fan;
+    const fn=fanById(selFan);
+    drag={mode:"fan", start:w, moved:false, preSnap:snapshot(), ox:fn.x, oy:fn.y};
+    renderAll(); return;
+  }
   const dmg=e.target.closest? e.target.closest(".dimm") : null;
   if(dmg){
-    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=dmg.dataset.dim;
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selFan=null; selDim=dmg.dataset.dim;
     const dm=dimById(selDim);
     drag={mode:"dim", start:w, moved:false, preSnap:snapshot(), off0:dm? (dm.off||0) : 0};
     renderAll(); return;
@@ -4063,7 +4272,7 @@ vp.addEventListener("pointerdown", e=>{
   }
   const hit=hitLight(e.target);
   if(hit){
-    selSwitch=null; selDevice=null; selTrack=null; selDim=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
+    selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null;   // chọn đèn → bỏ các loại khác (1 loại tại 1 thời điểm)
     const already=selLights.some(s=>s.zid===hit.zid&&s.li===hit.li);
     if(e.shiftKey){
       if(already){ drag={mode:"shift-toggle-off", hit, start:w}; return; }
@@ -4157,6 +4366,13 @@ window.addEventListener("pointermove", e=>{
   if(drag.mode==="device"){
     const d=deviceById(selDevice);
     if(d){ d.x=drag.ox+(w.x-drag.start.x); d.y=drag.oy+(w.y-drag.start.y);
+      if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
+      render(); }
+    return;
+  }
+  if(drag.mode==="fan"){
+    const fn=fanById(selFan);
+    if(fn){ fn.x=drag.ox+(w.x-drag.start.x); fn.y=drag.oy+(w.y-drag.start.y);
       if(Math.hypot(w.x-drag.start.x,w.y-drag.start.y)>2/view.scale) drag.moved=true;
       render(); }
     return;
@@ -4261,13 +4477,13 @@ function handlePointerUp(e){
       fl.tracks=fl.tracks||[];
       const tr={ id:"tr"+(fl.seq++), code:nextCode("RAY", allTracks()),
         x:(a.x+b.x)/2, y:(a.y+b.y)/2, rot:rotD, len:+distM.toFixed(2), mh:null };
-      fl.tracks.push(tr); selLights=[]; selSwitch=null; selDevice=null; selDim=null; selTrack=tr.id;
+      fl.tracks.push(tr); selLights=[]; selSwitch=null; selDevice=null; selDim=null; selFan=null; selTrack=tr.id;
     });
     setTool("select");
     showHint(`Đã đặt ray ${fmtPlan(distM)} m — bấm L rồi click LÊN RAY để gắn đèn, đèn sẽ trượt dọc ray`);
     return;
   }
-  if(d.mode==="track" || d.mode==="dim"){
+  if(d.mode==="track" || d.mode==="dim" || d.mode==="fan"){
     if(d.moved){ pushHist(d.preSnap); save(); }
     renderAll(); return;
   }
@@ -4295,7 +4511,7 @@ function handlePointerUp(e){
     F().zones.forEach(z=>z.lights.forEach((l,li)=>{
       if(l.x>=r.x0&&l.x<=r.x1&&l.y>=r.y0&&l.y<=r.y1) found.push({zid:z.id,li});
     }));
-    if(!d.shift){ selSwitch=null; selDevice=null; selTrack=null; selDim=null; }   // quét chọn đèn → bỏ các loại khác
+    if(!d.shift){ selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null; }   // quét chọn đèn → bỏ các loại khác
     selLights = d.shift? selLights.concat(found.filter(f=>!selLights.some(s=>s.zid===f.zid&&s.li===f.li))) : found;
     if(found.length){ const zs=new Set(found.map(f=>f.zid)); if(zs.size===1) F().selectedZone=found[0].zid; }
     renderAll(); return;
@@ -4308,7 +4524,7 @@ function handlePointerUp(e){
     const z=zoneAtClick(d.start);
     const zid=z? z.id : null;
     if(F().selectedZone!==zid || selLights.length || selSwitch || selDevice){
-      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null;
+      F().selectedZone=zid; selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null;
       renderAll();
     }
     return;
@@ -4388,6 +4604,7 @@ window.addEventListener("keydown", e=>{
     case "l": setTool("light"); break;
     case "y": setTool("track"); break;
     case "d": setTool("dim"); break;
+    case "f": setTool("fan"); break;
     case "w": setTool("switch"); break;
     case "o": setTool("device"); break;
     case "g": $("#chkGlow").checked=!state.showGlow; state.showGlow=!state.showGlow; save(); render(); break;
@@ -4413,6 +4630,7 @@ window.addEventListener("keydown", e=>{
       else if(selDevice){ selDevice=null; renderAll(); }
       else if(selTrack){ selTrack=null; renderAll(); }
       else if(selDim){ selDim=null; renderAll(); }
+      else if(selFan){ selFan=null; renderAll(); }
       else if(selLights.length){ selLights=[]; render(); }
       else if(F().selectedZone){ F().selectedZone=null; renderAll(); }
       break;
@@ -4432,6 +4650,8 @@ window.addEventListener("keydown", e=>{
           toast(dimNote(n? `Đã xoá ray và ${n} đèn` : "Đã xoá ray", np));
         }
       }
+      else if(selFan){ let np=0; mutate(()=>{ np=deleteFan(selFan); });
+        toast(dimNote("Đã xoá quạt trần", np)); }
       else if(selDim){ const id=selDim;
         mutate(()=>{ const fl=F(); fl.dims=(fl.dims||[]).filter(d=>d.id!==id); selDim=null; });
         toast("Đã xoá kích thước — Ctrl+Z để hoàn tác"); }
@@ -4611,6 +4831,23 @@ function renderZoneList(){
 /* ===== CÔNG CỤ KÍCH THƯỚC =====
    Click mốc 1 → số chạy theo con trỏ (đó cũng là THƯỚC ĐO: đọc rồi Esc, không lưu gì).
    Click mốc 2 → chốt. Click tiếp → nối chuỗi trên cùng đường ghi. Esc/Enter kết thúc. */
+function addFanAt(w){
+  const fl=F();
+  const z=deviceZone(w, fl);
+  mutate(()=>{
+    fl.fans=fl.fans||[];
+    const fan={ id:"fn"+(fl.seq++), code:nextCode("QT", allFans()),
+      x:w.x, y:w.y, dia:lastFanDia, mh:null, blades:4, note:"" };
+    fl.fans.push(fan);
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=fan.id;
+  });
+  const fan=fanById(selFan, fl);
+  const n=fanClashes(fan, fl).length;
+  showHint(n? `Đã đặt ${fan.code} · ${n} đèn nằm trong vùng quét cánh — xem bảng bên phải`
+            : `Đã đặt ${fan.code} Ø${fmtPlan(fan.dia)} m · click tiếp để thêm quạt, Esc để xong`);
+  if(!fl.pxPerMeter) toast("Chưa cân tỉ lệ (C) — sải cánh chưa vẽ đúng cỡ thật và chưa kiểm được va chạm");
+}
+let lastFanDia = 1.32;    // cỡ vừa đặt lần trước dính lại, khỏi chỉnh mỗi lần
 function addDimPoint(w, shift){
   const fl=F();
   if(!fl.pxPerMeter){ toast("Cần cân tỉ lệ (C) trước — chưa có tỉ lệ thì con số ghi ra vô nghĩa"); return; }
@@ -4656,7 +4893,7 @@ function commitDim(){
   const wasOff = state.showDims===false;
   mutate(()=>{ fl.dims=fl.dims||[]; fl.dims.push(dm);
     if(wasOff){ state.showDims=true; const c=$("#chkDims"); if(c) c.checked=true; }
-    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=dm.id; });
+    selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selFan=null; selDim=dm.id; });
   const ps2=dimPoints(dm, fl);
   if(ps2){
     const fr=dimFrame(dm.axis, ps2, dm.off, fl.pxPerMeter);
@@ -4749,7 +4986,7 @@ function addDeviceAt(w){
   let stacked=false;
   if(near.length){ const t=near[0]; dev.x=t.x; dev.y=t.y; dev.rot=t.rot; stacked=true; }
   mutate(()=>{ fl.devices.push(dev); });
-  selDevice=dev.id; selLights=[]; selSwitch=null; selTrack=null;
+  selDevice=dev.id; selLights=[]; selSwitch=null; selTrack=null; selFan=null;
   showHint(stacked
     ? `Đã chồng thêm ${spec.label} tại vị trí này — đặt cao độ khác nhau, bản vẽ ghi cả hai`
     : `Đã đặt ${spec.label} · click tiếp để thêm, phím 1–9 đổi loại, Esc để xong`);
@@ -5082,6 +5319,84 @@ function refreshTrackPanel(){
     box.querySelectorAll(".tin").forEach(el=>{ el.max=tr.len||1; });
   }
 }
+/* Panel QUẠT TRẦN — cùng khuôn #trkPanel. Phần quan trọng nhất là DANH SÁCH ĐÈN BỊ CÁNH CHÉM:
+   nó biến một câu hỏi mơ hồ ("quạt có ăn vào đèn không?") thành một danh sách tên đèn bấm được. */
+function refreshFanPanel(){
+  const p=$("#fanPanel"), fl=F(), fan=fanById(selFan, fl);
+  p.classList.toggle("hidden", !fan);
+  if(!fan){ p.dataset.fan=""; return; }
+  if(p.dataset.fan!==fan.id){
+    p.dataset.fan=fan.id;
+    p.innerHTML=`<p class="eyebrow">${escapeHtml(fan.code||"QT")} · quạt trần</p>
+      <div class="inline" style="gap:8px">
+        <div style="flex:1"><label>Sải cánh Ø (m)</label><input type="number" id="fnDia" step="0.02" min="0.4"></div>
+        <div style="flex:1"><label>Số cánh</label><input type="number" id="fnBl" step="1" min="2" max="8"></div>
+        <button class="btn sm danger" id="fnDel" title="Xoá quạt" style="align-self:flex-end;margin-bottom:2px">✕</button>
+      </div>
+      <div class="inline" style="gap:6px;flex-wrap:wrap;margin-top:6px" id="fnDiaChips">
+        ${FAN_DIA.map(v=>`<button type="button" class="btn sm" data-d="${v}">${fmtPlan(v)}</button>`).join("")}
+      </div>
+      <label style="margin-top:10px">Cao độ MẶT PHẲNG CÁNH (m, từ sàn)</label>
+      <div class="inline" style="gap:6px;flex-wrap:wrap" id="fnMhChips">
+        <button type="button" class="btn sm" data-mh="">Tự tính</button>
+        ${[2.4,2.6,2.8].map(v=>`<button type="button" class="btn sm" data-mh="${v}">+${fmtPlan(v)}</button>`).join("")}
+        <input type="number" id="fnMh" step="0.05" style="width:66px" placeholder="khác">
+      </div>
+      <div id="fnIssues"></div>
+      <label style="margin-top:10px">Đèn bị cánh quạt chém <span class="n" id="fnClashN">0</span></label>
+      <div id="fnClash"></div>
+      <p class="pr-hint" style="margin:8px 0 0">Cánh quạt nằm THẤP HƠN đèn trần nên nó cắt ngang chùm sáng ở
+        lưng chừng — quạt quay là bóng cánh quét qua sàn, nhìn thấy rõ nhất trên mặt bàn và sàn sáng màu.
+        Cách chữa duy nhất là <b>dời đèn ra ngoài vòng quét</b> hoặc <b>đổi sang sải cánh nhỏ hơn</b>.</p>`;
+    p.querySelector("#fnDel").onclick=()=>{ let np=0; mutate(()=>{ np=deleteFan(fan.id, fl); });
+      toast(dimNote("Đã xoá quạt trần", np)); };
+    p.querySelector("#fnDia").oninput=e=>{ const v=parseNum(e.target.value);
+      if(!(v>0.2)) return; mutate(()=>{ fan.dia=v; lastFanDia=v; }); };
+    p.querySelector("#fnBl").oninput=e=>{ const v=parseNum(e.target.value);
+      mutate(()=>{ fan.blades=clamp(Math.round(v)||4, 2, 8); }); };
+    p.querySelectorAll("#fnDiaChips [data-d]").forEach(b=> b.onclick=()=>mutate(()=>{
+      fan.dia=+b.dataset.d; lastFanDia=fan.dia; }));
+    p.querySelectorAll("#fnMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{
+      fan.mh = b.dataset.mh===""? null : +b.dataset.mh; }));
+    p.querySelector("#fnMh").oninput=e=>{ const v=e.target.value.trim();
+      mutate(()=>{ fan.mh = v===""? null : parseNum(v); }); };
+  }
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  setV("#fnDia", Math.round((fan.dia||1.32)*100)/100);
+  setV("#fnBl", fan.blades||4);
+  setV("#fnMh", fan.mh!=null && ![2.4,2.6,2.8].includes(fan.mh)? fan.mh : "");
+  p.querySelectorAll("#fnDiaChips [data-d]").forEach(b=> b.classList.toggle("primary", +b.dataset.d===(fan.dia||1.32)));
+  p.querySelectorAll("#fnMhChips [data-mh]").forEach(b=>
+    b.classList.toggle("primary", b.dataset.mh===""? fan.mh==null : +b.dataset.mh===fan.mh));
+  // cảnh báo lắp đặt
+  const ib=p.querySelector("#fnIssues"); const iss=fanIssues(fan, fl);
+  const isig=iss.map(o=>o.muc+o.txt).join("|");
+  if(ib.dataset.sig!==isig){ ib.dataset.sig=isig;
+    ib.innerHTML = iss.length? iss.map(o=>
+      `<p class="pr-hint" style="margin:8px 0 0;color:${o.muc==="nang"?"#B4553C":"#8A6D3B"}">
+        ${o.muc==="nang"?"⚠":"·"} ${escapeHtml(o.txt)}</p>`).join("") : "";
+  }
+  // đèn bị chém
+  const box=p.querySelector("#fnClash"), cls=fanClashes(fan, fl);
+  p.querySelector("#fnClashN").textContent=cls.length;
+  const sig=cls.map(c=>c.z.id+":"+c.li+":"+c.muc+":"+c.lan).join("|");
+  if(box.dataset.sig===sig) return;
+  box.dataset.sig=sig; box.innerHTML="";
+  if(!cls.length){ box.innerHTML='<p class="empty" style="padding:6px">Không đèn nào bị cánh chém — bố trí đang sạch.</p>'; return; }
+  cls.forEach(c=>{
+    const row=document.createElement("div"); row.className="grp";
+    const ic=symbolIconSVG(c.lamp.type, null, c.lamp.mount);
+    ic.style.color = c.muc==="nang"? "#B4553C" : "#8A6D3B"; row.appendChild(ic);
+    const dd=document.createElement("div"); dd.className="d"; dd.style.cursor="pointer";
+    dd.title="Click: chọn đèn này trên bản vẽ để dời ra";
+    dd.innerHTML=`<b>${escapeHtml(c.lamp.code||c.lamp.name)}</b><small>${
+      c.muc==="nang"? "CHÉM THẲNG — đèn nằm trong vòng quét" : "chạm mép chùm"
+      } · cách tâm ${fmtPlan(c.d)} m · ${escapeHtml(c.z.name||"")}</small>`;
+    dd.onclick=()=>{ selLights=[{zid:c.z.id, li:c.li}]; selFan=null; F().selectedZone=c.z.id; renderAll(); };
+    row.appendChild(dd);
+    box.appendChild(row);
+  });
+}
 /* Panel KÍCH THƯỚC — cùng khuôn #trkPanel: dựng lại chỉ khi đổi dim, còn lại chỉ cập nhật giá trị
    với guard activeElement. Danh sách đoạn với ô SỐ (mm) chính là chỗ ÉP KHOẢNG CÁCH. */
 function refreshDimPanel(){
@@ -5173,6 +5488,7 @@ function anchorName(anchors, pts, fr, i){
       return d? ((DEVICE_SPEC[d.kind]||{}).label||"thiết bị") : "thiết bị"; }
     if(a.k==="W"){ const s=(F().switches||[]).find(x=>x.id===a.id); return s? (s.code||"công tắc") : "công tắc"; }
     if(a.k==="T"){ const t=trackById(a.id); return (t? (t.code||"ray") : "ray")+(a.e===0?" đầu":a.e===1?" cuối":" giữa"); }
+    if(a.k==="F"){ const f=fanById(a.id); return (f? (f.code||"quạt") : "quạt")+(a.e? " (mép cánh)":" (tâm)"); }
     if(a.k==="Z") return "góc tường";
     if(a.k==="E") return "mặt tường";
     return "điểm tự do";
@@ -5183,11 +5499,12 @@ function refreshRight(){
   refreshSwitchPanel();
   refreshDevicePanel();
   refreshTrackPanel();
+  refreshFanPanel();
   refreshDimPanel();
   refreshSelPanel();
   syncRightScroll();
   const z=selZone();
-  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || !!selTrack || !!selDim || selLights.length>0);
+  $("#noZone").classList.toggle("hidden", !!z || !!selSwitch || !!selDevice || !!selTrack || !!selDim || !!selFan || selLights.length>0);
   $("#zoneProps").classList.toggle("hidden", !z);
   if(!z) return;
   // không ghi đè ô user đang gõ (đang focus) — tránh nuốt ký tự kiểu "0.5" → "0.75"
@@ -5247,7 +5564,7 @@ function refreshRight(){
     el.title="Click: chọn toàn bộ đèn loại này trên bản vẽ (đổi loại-sắp-đặt ở bảng “Đèn đang đặt” khi bấm L)";
     el.onclick=()=>{ // CHỈ chọn nhóm để xem/sửa — KHÔNG đổi loại-sắp-đặt (việc đó ở flyout khi bấm L)
       selLights=z.lights.map((l,li)=> l.lightId===g.lid? {zid:z.id,li} : null).filter(Boolean);
-      selSwitch=null; selDevice=null; selTrack=null; selDim=null;
+      selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null;
       renderAll();
     };
     gl.appendChild(el);
@@ -6127,6 +6444,20 @@ $("#btnCsv").onclick=()=>{
     }));
     lines.push(["TỔNG RAY","",fq(trs.reduce((s,t)=>s+(t.len||0),0)),"",""].join(","));
   }
+  // ---- Quạt trần — sải cánh là thông số đặt hàng ----
+  const fns=allFans();
+  if(fns.length){
+    lines.push([""],["QUẠT TRẦN"].join(","));
+    lines.push(["Tầng","Mã","Khu vực","Sải cánh Ø (m)","Số cánh","Cao độ cánh (m)"].join(","));
+    state.floors.forEach(f=>(f.fans||[]).forEach(x=>{
+      const z=deviceZone(x, f);
+      // fq() làm tròn 1 số lẻ — với SẢI CÁNH thì 1,06 và 1,1 là hai sản phẩm khác nhau, phải giữ 2 số
+      const q2=v=>(+(+v).toFixed(2)).toString();
+      lines.push([csvCell(f.name), csvCell(x.code||""), csvCell(z?z.name:"Ngoài khu vực"),
+        q2(x.dia||1.32), x.blades||4, q2(fanMh(x, f))].join(","));
+    }));
+    lines.push(["TỔNG QUẠT","","",fns.length+" cái","",""].join(","));
+  }
   // ---- Thiết bị (ổ cắm / mạng / TV / wifi / nguồn chờ) — bảng riêng cuối file ----
   const anyDev=state.floors.some(f=>(f.devices||[]).length);
   if(anyDev){
@@ -6193,7 +6524,7 @@ async function buildPrintDoc(){
   // tạm chuyển tầng + tắt kịch bản đang xem, xong trả nguyên trạng
   const cur0=state.cur, sel0=selLights, sw0=selSwitch, dev0=selDevice;
   const live0=state.floors.map(f=>f.liveOff||[]);
-  selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null;
+  selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null;
   state.floors.forEach(f=>f.liveOff=[]);
   // 2 ảnh mỗi tầng: tờ CHIẾU SÁNG (đèn+điều khiển, không ổ cắm) và tờ THI CÔNG (ổ cắm, không quầng
   // sáng/lux) — chỉ dựng tờ thi công khi tầng có thiết bị.
@@ -6286,6 +6617,27 @@ async function buildPrintDoc(){
         </tbody></table>
       <p class="pr-hint">Ray đặt hàng theo MÉT, cắt tại công trường. Đèn gắn trên ray liệt ở bảng đèn phía trên;
       vị trí trượt của từng đèn xem trên mặt bằng.</p>`;
+  }
+  // ---- Bảng QUẠT TRẦN — sải cánh là thông số ĐẶT HÀNG, cao độ cánh là thông số THI CÔNG ----
+  let fanHtml="";
+  if((fl.fans||[]).length){
+    const rows=(fl.fans||[]).map(f=>({f, zn:(deviceZone(f, fl)||{}).name || "Ngoài khu vực"}));
+    const zOrder=fl.zones.map(z=>z.name);
+    rows.sort((a,b)=>{ const ia=zOrder.indexOf(a.zn), ib=zOrder.indexOf(b.zn);
+      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || String(a.f.code).localeCompare(String(b.f.code),"vi"); });
+    fanHtml=`<h2>Quạt trần${multi? " — "+escapeHtml(fl.name):""}</h2>
+      <table class="pr"><thead><tr><th style="width:52px">Mã</th><th>Khu vực</th>
+      <th class="num" style="width:70px">Sải cánh Ø (m)</th><th class="num" style="width:44px">Số cánh</th>
+      <th class="num" style="width:76px">Cao độ cánh (m)</th></tr></thead><tbody>`
+      + rows.map(({f,zn})=>`<tr><td><span class="pr-code">${escapeHtml(f.code||"QT")}</span></td>
+        <td>${escapeHtml(zn)}</td>
+        <td class="num">${fmtPlan(f.dia||1.32)}</td>
+        <td class="num">${f.blades||4}</td>
+        <td class="num">+${fmtPlan(fanMh(f, fl))}</td></tr>`).join("")
+      + `<tr class="tot"><td colspan="2">Tổng${multi? " — "+escapeHtml(fl.name):""}</td>
+         <td class="num">${rows.length} cái</td><td></td><td></td></tr></tbody></table>
+      <p class="pr-hint">Vòng nét đứt quanh quạt trên mặt bằng là VÙNG QUÉT CÁNH, vẽ đúng tỉ lệ —
+      dùng để kiểm tra cánh không cắt ngang chùm đèn (gây bóng quét nhấp nháy) và không chạm tường.</p>`;
   }
   // Bảng công tắc + kịch bản của tầng
   let ctlHtml="";
@@ -6414,7 +6766,7 @@ async function buildPrintDoc(){
   return `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
       <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>
     <section class="pr-floor">
-      <h2>Bảng thống kê đèn${suffix}</h2>${table}${trkHtml}${ctlHtml}</section>${devSheet}`;
+      <h2>Bảng thống kê đèn${suffix}</h2>${table}${trkHtml}${fanHtml}${ctlHtml}</section>${devSheet}`;
   }).join("");
   // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
   // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
