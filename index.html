@@ -817,6 +817,7 @@
         <button class="sh" data-sheet="all" title="Làm việc — thấy hết mọi lớp">Tất cả</button>
         <button class="sh" data-sheet="light" title="Tờ chiếu sáng: đèn + công tắc + kích thước định vị. Không có ổ cắm.">Chiếu sáng</button>
         <button class="sh" data-sheet="device" title="Tờ ổ cắm & thiết bị: ổ cắm / mạng / wifi / nguồn chờ. Đèn chỉ hiện mờ để tham chiếu.">Ổ cắm</button>
+        <button class="sh" data-sheet="dim" title="Tờ kích thước: chỉ ký hiệu + số định vị. Tắt quầng sáng, lux, đường công tắc và mã đèn.">Kích thước</button>
       </div>
       <div id="sceneBar" class="uifloat"></div>
       <div id="scaleTag" class="uifloat">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
@@ -1276,6 +1277,7 @@ function deleteCircuit(id, fl){
   fl=fl||F();
   fl.circuits=(fl.circuits||[]).filter(c=>c.id!==id);
   fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===id) delete l.circuit; }));
+  (fl.fans||[]).forEach(f=>{ if(f.circuit===id) delete f.circuit; });
   (fl.switches||[]).forEach(sw=>{ sw.circuits=(sw.circuits||[]).filter(c=>c!==id); });
   (fl.scenes||[]).forEach(sc=>{ sc.off=(sc.off||[]).filter(c=>c!==id); });
   fl.liveOff=(fl.liveOff||[]).filter(c=>c!==id);
@@ -1283,7 +1285,8 @@ function deleteCircuit(id, fl){
 /* Cụm không còn đèn nào trên tầng — vô hình trên bản vẽ lẫn trong danh sách, chỉ lộ ra ở PDF */
 function emptyCircuits(fl){
   fl=fl||F();
-  return (fl.circuits||[]).filter(c=>!fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
+  return (fl.circuits||[]).filter(c=>
+    !fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)) && !(fl.fans||[]).some(f=>f.circuit===c.id));
 }
 /* Cây khung nhỏ nhất (Prim) — trả DANH SÁCH CẠNH nối các điểm thành một chuỗi ngắn nhất.
    Dùng để nối các đèn CÙNG CỤM với nhau bằng nét đứt (thay vì công tắc nối tới từng đèn).
@@ -1316,6 +1319,13 @@ function lightsOfSwitch(sw, fl){
   fl.zones.forEach(z=> z.lights.forEach((l,li)=>{ if(l.circuit&&set.has(l.circuit)) res.push({z,l,li}); }));
   return res;
 }
+/* Quạt do công tắc này điều khiển. Quạt trần gán cụm được như đèn — cụm là NHÓM BẬT/TẮT (việc của
+   thiết kế), không phải tuyến dây. Quạt dùng remote thì cứ để trống cụm. */
+function fansOfSwitch(sw, fl){
+  fl=fl||F(); const set=new Set(sw.circuits||[]);
+  return (fl.fans||[]).filter(f=>f.circuit && set.has(f.circuit));
+}
+function fansOfCircuit(cid, fl){ return ((fl||F()).fans||[]).filter(f=>f.circuit===cid); }
 function newState(){
   return {
     version:STATE_VERSION, projectName:"Dự án chưa đặt tên",
@@ -2257,7 +2267,6 @@ function deviceIconSVG(kind, cls){
    `off` là khoảng đẩy đường ghi ra, tính bằng MÉT (không phải px màn hình) để đường ghi nằm y một
    chỗ ở mọi mức zoom và trên file xuất — đúng bài học đã rút ở nhãn tự động.                       */
 const DIM_ALIGN_TOL = 0.10;   // m — đèn lệch dưới mức này coi như THẲNG HÀNG
-const DIM_EQ_TOL    = 0.02;   // m — khoảng cách chênh dưới mức này coi như ĐỀU NHAU
 const DIM_OFF_DEF   = 0.35;   // m — đẩy đường ghi ra khỏi vật, mặc định lúc vẽ
 const DIM_SNAP_PX   = 12;     // px màn hình — bán kính bắt điểm
 
@@ -2427,41 +2436,12 @@ function clusterCoords(vals, tol){
   });
   return out.map(g=>g.sum/g.n);
 }
-/* Chia chuỗi trạm thành các đoạn ghi kích thước, gộp các khoảng ĐỀU NHAU thành "n×a".
-   splitFirst=true (bộ sinh tự động): đoạn TƯỜNG → đèn đầu luôn ghi riêng, đó là mốc thợ đặt máy.
-   splitFirst=false (dim anh vẽ tay): không tách gì cả — 4 trạm cách đều phải ra "3×800=2400",
-   tách đoạn đầu sẽ thành "800" + "2×800=1600", đọc ra như hai chuỗi khác nhau. */
-function dimSegments(stations, ppm, splitFirst){
+/* Chia chuỗi trạm thành các đoạn ghi kích thước — MỖI KHOẢNG MỘT SỐ.
+   Trước đây gộp các khoảng đều thành "2×900=1.800" (quy ước bản vẽ xây dựng); anh Khoa bỏ:
+   thợ đi lắp đọc từng khoảng rời thẳng hơn, không phải nhân chia trên giàn giáo. */
+function dimSegments(stations, ppm){
   const segs=[];
-  if(stations.length<2) return segs;
-  if(splitFirst===false){
-    const pts=stations, eq=DIM_EQ_TOL*ppm;
-    let i=0;
-    while(i<pts.length-1){
-      const g0=pts[i+1]-pts[i];
-      let j=i+1;
-      while(j<pts.length-1 && Math.abs((pts[j+1]-pts[j])-g0)<=eq) j++;
-      const n=j-i;
-      if(n>=2) segs.push({a:pts[i], b:pts[j], n, step:g0, ticks:pts.slice(i+1,j+1)});
-      else segs.push({a:pts[i], b:pts[i+1], n:1});
-      i=j;
-    }
-    return segs;
-  }
-  segs.push({a:stations[0], b:stations[1], n:1});
-  // gộp theo ĐOẠN LIÊN TIẾP đều nhau (không đòi cả dãy phải đều) — phòng thật hay có kiểu
-  // "lệch một nhịp rồi mới đều", gộp được đoạn đều là bớt hẳn số phải ghi
-  const pts=stations.slice(1), eq=DIM_EQ_TOL*ppm;
-  let i=0;
-  while(i<pts.length-1){
-    const g0=pts[i+1]-pts[i];
-    let j=i+1;
-    while(j<pts.length-1 && Math.abs((pts[j+1]-pts[j])-g0)<=eq) j++;
-    const n=j-i;
-    if(n>=2) segs.push({a:pts[i], b:pts[j], n, step:g0, ticks:pts.slice(i+1,j+1)});
-    else segs.push({a:pts[i], b:pts[i+1], n:1});
-    i=j;
-  }
+  for(let i=0;i<stations.length-1;i++) segs.push({a:stations[i], b:stations[i+1], n:1});
   return segs;
 }
 /* Hệ trục của một đường ghi: gốc `o` nằm TRÊN đường ghi, `u` chạy dọc nó, `n` vuông góc.
@@ -2510,11 +2490,8 @@ function drawDimChain(ov, inv, segs, fr, ppm, froms, col){
     const A=fr.at(sg.a), B=fr.at(sg.b);
     ov.appendChild(svg("line",{x1:A.x,y1:A.y,x2:B.x,y2:B.y, stroke:col, "stroke-width":0.9*inv}));
     [A,B].forEach(p=>slash(p,1));
-    (sg.ticks||[]).slice(0,-1).forEach(t=>slash(fr.at(t), 0.7));
     const len=Math.abs(sg.b-sg.a);
-    const txt = sg.txt!=null ? sg.txt
-      : sg.n>1 ? `${sg.n}×${fmt(Math.round(sg.step/ppm*1000))}=${fmt(Math.round(len/ppm*1000))}`
-      : fmt(Math.round(len/ppm*1000));
+    const txt = sg.txt!=null ? sg.txt : fmt(Math.round(len/ppm*1000));
     const M=fr.at((sg.a+sg.b)/2);
     const tx=M.x+ud.y*4*inv, ty=M.y-ud.x*4*inv;   // nhích lên phía trên chữ (theo hệ đã xoay)
     const t=svg("text",{x:tx, y:ty, "text-anchor":"middle",
@@ -2532,7 +2509,8 @@ function drawManualDims(ov0, inv, P){
   // Tờ hiện hành, tính giống nhau cho cả lúc XEM lẫn lúc XUẤT — không thì file xuất ra khác
   // hẳn cái đang nhìn, đúng lỗi anh Khoa đã bắt được một lần.
   const cs=curSheet();
-  const sh = cs===SHEET_LIGHT? "light" : cs===SHEET_DEVICE? "device" : "all";
+  const sh = (cs&&cs.allDims)? "all"
+    : cs===SHEET_LIGHT? "light" : cs===SHEET_DEVICE? "device" : "all";
   const g0=svg("g",{}); ov0.appendChild(g0);
   (fl.dims||[]).forEach(dm=>{
     if(dm.sheet && sh!=="all" && dm.sheet!==sh) return;
@@ -2543,7 +2521,7 @@ function drawManualDims(ov0, inv, P){
     const vs=pts.map(p=>fr.along(p));
     const order=vs.map((v,i)=>i).sort((a,b)=>vs[a]-vs[b]);
     const sorted=order.map(i=>vs[i]);
-    const segs=dimSegments(sorted, ppm, false);
+    const segs=dimSegments(sorted, ppm);
     if(dm.text && segs.length===1) segs[0].txt=dm.text;
     const g=svg("g",{"data-dim":dm.id, class:"dimm"});
     drawDimChain(g, inv, segs, fr, ppm, pts.map(p=>({v:fr.along(p), s:fr.cross(p)})), col);
@@ -2718,8 +2696,12 @@ const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","
 /* "dims" CÓ trên tờ ổ cắm: kích thước định vị ổ cắm là thứ thợ điện cần nhất trên đúng tờ đó.
    Lọc tinh bằng `dim.sheet` của từng kích thước — dim định vị đèn thì để ở tờ chiếu sáng. */
 const SHEET_DEVICE = { layers:new Set(["devices","dims"]), ghostLights:true };
+/* Tờ KÍCH THƯỚC (anh Khoa): chỉ để ĐỌC SỐ khi định vị. Ký hiệu vẫn vẽ nét bình thường — phải thấy
+   rõ đang đo tới cái gì — nhưng tắt quầng sáng, lux, đường công tắc và MÃ đèn để mặt bằng chỉ còn
+   ký hiệu + con số. Hiện MỌI kích thước, bỏ qua cờ `sheet` của từng cái. */
+const SHEET_DIM = { layers:new Set(["dims","devices"]), hideCodes:true, allDims:true };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
-const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE };
+const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE, dim:SHEET_DIM };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
 function sheetHas(layer){ const s=curSheet(); return !s || s.layers.has(layer); }
 /* Đèn này có được VẼ trên tờ đang xem không? (chỉ LED dây mới bị ẩn, xem SHEET_LIGHT) */
@@ -2958,8 +2940,10 @@ function drawOverlay(){
     ov.appendChild(gg);
     if(lblMode!=="off" && !ghostL){
       // nhãn quạt: mã + SẢI CÁNH — sải cánh là thông số đặt hàng, phải nằm trên bản vẽ
+      // chữ cái cụm dính liền mã, đúng như đèn ("QT1a") — công trường in đen trắng, chữ mới đọc được
+      const cq=fan.circuit? circuitById(fan.circuit) : null;
       autoLabel(ov, "Q", fan.id, fan.x, fan.y, R, R, 0,
-        `${fan.code||"QT"} · Ø${fmtPlan(fan.dia||1.32)}m`, 8*inv,
+        `${fan.code||"QT"}${cq?cq.key:""} · Ø${fmtPlan(fan.dia||1.32)}m`, 8*inv,
         sel? C_ACCENT_D : (nang&&exportInv==null? "#B4553C" : "#6E665A"), inv, fan);
     }
   });
@@ -3022,7 +3006,7 @@ function drawOverlay(){
       }
       ov.appendChild(g0);
       // mã ký hiệu cạnh đèn (D1, S2…) — theo chế độ nhãn: Tất cả / Gọn (1 mã mỗi loại) / Ẩn
-      let showCode = !ghostL && !!lamp.code && lblMode!=="off";
+      let showCode = !ghostL && !(curSheet()||{}).hideCodes && !!lamp.code && lblMode!=="off";
       if(showCode && lblMode==="compact" && !sel){
         const shared = typeModels[lamp.type] && typeModels[lamp.type].size>1;
         if(!shared){ // loại chỉ có 1 model: 1 mã đại diện là đủ
@@ -3082,6 +3066,7 @@ function drawOverlay(){
     // phòng chính là thứ nói lên "cụm này chạy qua cả hai phòng".
     const allPts=[];
     fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===cid) allPts.push({x:l.x,y:l.y}); }));
+    (fl.fans||[]).forEach(f=>{ if(f.circuit===cid) allPts.push({x:f.x,y:f.y}); });
     if(!allPts.length) return;
     mstEdges(allPts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
     // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất + CHỮ CÁI CỤM ở điểm giữa
@@ -3563,7 +3548,8 @@ function drawLegend(ov, inv, P){
   const fl=F();
   if(state.showLegend===false) return;
   if(!sheetHas("wiring")) return;   // tờ ổ cắm không vẽ cụm → chú giải cụm ở đó là chữ thừa
-  const rows=(fl.circuits||[]).filter(c=> fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id)));
+  const rows=(fl.circuits||[]).filter(c=> fl.zones.some(z=>z.lights.some(l=>l.circuit===c.id))
+    || (fl.fans||[]).some(f=>f.circuit===c.id));
   if(!rows.length) return;
   const rh=15*inv, pad=8*inv, hh=15*inv;
   // Bề rộng phải tính theo CỠ CHỮ đang dùng — trước đây ước lượng bằng hằng số nên chọn "Lớn"
@@ -3571,16 +3557,24 @@ function drawLegend(ov, inv, P){
   const ts=textScale();
   const keyX=pad+9*inv;                                  // chữ cái cụm
   const nameX=pad+22*inv*ts;                             // khu vực cụm chạy qua
-  const nOf=c=>fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+  // Chuỗi đếm dùng CHUNG cho đo bề rộng và cho lúc vẽ — hai chỗ lệch nhau là bảng tràn chữ,
+  // đúng lớp lỗi đã dính ở drawLegend/drawTitleBlock trước đây.
+  const nOf=c=>{
+    const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
+    const nf=fansOfCircuit(c.id, fl).length;
+    return nf? `${n} đèn · ${nf} quạt` : `${n} đèn`;
+  };
   // CỤM KHÔNG CÒN TÊN (anh Khoa) — chỗ đó ghi KHU VỰC cụm chạy qua, thứ suy ra được từ chính bản
   // vẽ và thật sự giúp đọc; tên tự sinh "Cụm b" thì không.
-  const zOf=c=>fl.zones.filter(z=>z.lights.some(l=>l.circuit===c.id)).map(z=>z.name).join(", ");
+  const zOf=c=>{ const zs=fl.zones.filter(z=>z.lights.some(l=>l.circuit===c.id)).map(z=>z.name);
+    fansOfCircuit(c.id, fl).forEach(f=>{ const z=deviceZone(f, fl); if(z && !zs.includes(z.name)) zs.push(z.name); });
+    return zs.join(", "); };
   // ĐO thật bề rộng chữ thay vì đoán theo số ký tự: cỡ chữ đổi theo textScale, font Inter không đều nét.
   const NAME_MAX=30;
   const nameOf=c=>{ const s=zOf(c); return s.length>NAME_MAX? s.slice(0,NAME_MAX-1)+"…" : s; };
   const w=Math.max(150*inv, ...rows.map(c=>
     nameX + measureText(nameOf(c), 9*inv, 500) + 10*inv
-          + measureText(nOf(c)+" đèn", 8.5*inv, 400) + pad));
+          + measureText(nOf(c), 8.5*inv, 400) + pad));
   const h=hh+rows.length*rh+pad;
   const x=worldW()-w-12*inv+(fl.lx||0)*inv, y=12*inv+(fl.ly||0)*inv;   // offset kéo tay (px màn hình)
   const parent=ov;
@@ -3597,8 +3591,7 @@ function drawLegend(ov, inv, P){
     addText(ov, x+keyX, ry, c.key, 9.5*inv, off?"#A9A093":C_INK, "middle", 700);
     addText(ov, x+nameX, ry, nameOf(c)+(off?" (tắt)":""), 9*inv,
       off?"#A9A093":"#3A362F", "start", 500);
-    const n=fl.zones.reduce((s,z)=>s+z.lights.filter(l=>l.circuit===c.id).length,0);
-    addText(ov, x+w-pad, ry, `${n} đèn`, 8.5*inv, "#8A8175", "end", 400);
+    addText(ov, x+w-pad, ry, nOf(c), 8.5*inv, "#8A8175", "end", 400);
   });
   parent.appendChild(g);
 }
@@ -5370,6 +5363,11 @@ function refreshFanPanel(){
         ${[2.4,2.6,2.8].map(v=>`<button type="button" class="btn sm" data-mh="${v}">+${fmtPlan(v)}</button>`).join("")}
         <input type="number" id="fnMh" step="0.05" style="width:66px" placeholder="khác">
       </div>
+      <label style="margin-top:10px">Cụm điều khiển</label>
+      <div class="inline" style="gap:6px">
+        <select id="fnCir" style="flex:1"></select>
+        <button class="btn sm" id="fnCirNew" title="Tách quạt này thành cụm mới">+ cụm</button>
+      </div>
       <div id="fnIssues"></div>
       <div id="fnVerdict"></div>
       <label style="margin-top:10px">Đèn quanh quạt <span class="n" id="fnClashN">0</span></label>
@@ -5392,7 +5390,19 @@ function refreshFanPanel(){
     p.querySelector("#fnMh").oninput=e=>{ const v=e.target.value.trim();
       mutate(()=>{ fan.mh = v===""? null : parseNum(v); }); };
     p.querySelector("#fnPush").onclick=()=>pushLightsOutOfFan(fan);
+    p.querySelector("#fnCir").onchange=e=>mutate(()=>{
+      if(e.target.value) fan.circuit=e.target.value; else delete fan.circuit; });
+    p.querySelector("#fnCirNew").onclick=()=>{ let key="";
+      mutate(()=>{ const c=addCircuit(null, fl); if(c){ key=c.key; fan.circuit=c.id; } });
+      if(key) toast(`Đã tách ${fan.code||"quạt"} thành cụm ${key}`); };
   }
+  // danh sách cụm — dựng lại khi số cụm đổi, giữ nguyên khi chỉ đổi lựa chọn
+  const cs=p.querySelector("#fnCir");
+  const csig=(fl.circuits||[]).map(c=>c.id+c.key).join("|");
+  if(cs.dataset.sig!==csig){ cs.dataset.sig=csig;
+    cs.innerHTML='<option value="">— Không qua công tắc (remote) —</option>'
+      + (fl.circuits||[]).map(c=>`<option value="${c.id}">Cụm ${c.key}</option>`).join(""); }
+  if(document.activeElement!==cs) cs.value=fan.circuit||"";
   const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
   setV("#fnDia", Math.round((fan.dia||1.32)*100)/100);
   setV("#fnBl", fan.blades||4);
@@ -6601,12 +6611,15 @@ async function buildPrintDoc(){
   state.floors.forEach(f=>f.liveOff=[]);
   // 2 ảnh mỗi tầng: tờ CHIẾU SÁNG (đèn+điều khiển, không ổ cắm) và tờ THI CÔNG (ổ cắm, không quầng
   // sáng/lux) — chỉ dựng tờ thi công khi tầng có thiết bị.
-  const imgs=[], imgsDev=[];
+  const imgs=[], imgsDev=[], imgsDim=[];
   for(let i=0;i<state.floors.length;i++){
     state.cur=i;
     exportOpts=SHEET_LIGHT; render(); imgs.push(await composite());
     if((state.floors[i].devices||[]).length){ exportOpts=SHEET_DEVICE; render(); imgsDev.push(await composite()); }
     else imgsDev.push(null);
+    // tờ KÍCH THƯỚC chỉ dựng khi tầng thật sự có kích thước — không thì đó là một trang trống
+    if((state.floors[i].dims||[]).length){ exportOpts=SHEET_DIM; render(); imgsDim.push(await composite()); }
+    else imgsDim.push(null);
   }
   exportOpts=null;
   state.floors.forEach((f,i)=>f.liveOff=live0[i]);
@@ -6617,7 +6630,7 @@ async function buildPrintDoc(){
 
   // ---- Mỗi TẦNG: bản vẽ + bảng thống kê (mỗi khu vực một cụm có hàng tiêu đề riêng) ----
   const multi=state.floors.length>1;
-  let floorBlocks=state.floors.map((fl,fi)=>{
+  const floorPieces=state.floors.map((fl,fi)=>{
   let rowsHtml="";
   let flUnits=0, flMeters=0, flW=0;
   fl.zones.forEach(z=>{
@@ -6732,9 +6745,9 @@ async function buildPrintDoc(){
     ctlHtml+=`<h2>Công tắc & cụm điều khiển${multi? " — "+escapeHtml(fl.name):""}</h2>
       <table class="pr"><thead><tr><th style="width:44px">Công tắc</th><th style="width:40px">Số nút</th>
       <th class="num" style="width:52px">Cao độ (m)</th><th style="width:74px">Vị trí đặt</th>
-      <th>Cụm điều khiển</th><th class="num" style="width:52px">Số đèn</th></tr></thead><tbody>`;
+      <th>Cụm điều khiển</th><th class="num" style="width:66px">Đèn / quạt</th></tr></thead><tbody>`;
     rows.forEach(({sw,room})=>{
-      const ls=lightsOfSwitch(sw, fl);
+      const ls=lightsOfSwitch(sw, fl), fns=fansOfSwitch(sw, fl);
       // ĐÁNH DẤU ĐẢO CHIỀU THEO TỪNG NÚT, không theo cả công tắc: một công tắc 3 nút có thể có
       // 2 nút đảo chiều và 1 nút thường — gắn ↔ vào mã công tắc thì đọc ra là cả 3 nút đảo chiều.
       const keys=(sw.circuits||[]).map(c=>circuitById(c,fl)).filter(Boolean)
@@ -6745,7 +6758,7 @@ async function buildPrintDoc(){
         <td class="num">${switchGang(sw)}</td>
         <td class="num">+${fmtPlan(sw.mh!=null?sw.mh:1.25,2)}</td>
         <td>${escapeHtml(room)}</td><td>${keys}</td>
-        <td class="num">${ls.length}</td></tr>`;
+        <td class="num">${ls.length}${fns.length? " + "+fns.length+" quạt":""}</td></tr>`;
     });
     ctlHtml+=`</tbody></table>`;
     // BỎ bảng tra cụm (anh Khoa): cụm chỉ còn mã chữ, mà chữ cái đó đã có đủ ở cột "Cụm điều khiển"
@@ -6832,15 +6845,23 @@ async function buildPrintDoc(){
   // bằng được in to hết cỡ, thợ đọc được; nhét bảng xuống dưới là ép ảnh nhỏ lại vô ích.
   const suffix = multi? " — "+escapeHtml(fl.name) : "";
   const devSheet = (imgsDev[fi] && devHtml)
-    ? `<section class="pr-floor pr-plan"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${suffix}</h2>
-        <div class="planbox"><img class="plan" src="${imgsDev[fi]}"></div></section>
-       <section class="pr-floor"><h2>Bảng thống kê ổ cắm &amp; thiết bị${suffix}</h2>${devHtml}</section>`
+    ? `<section class="pr-floor"><h2>Bảng thống kê ổ cắm &amp; thiết bị${suffix}</h2>${devHtml}</section>`
     : "";
-  return `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
-      <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>
-    <section class="pr-floor">
+  // BẢN VẼ và BẢNG tách thành HAI TẬP (anh Khoa): mọi trang bản vẽ đi liền nhau trước, rồi mới tới
+  // các bảng thống kê — đúng thông lệ hồ sơ, và người xem không phải lật qua bảng để so hai mặt bằng.
+  const plans =
+    `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
+      <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>`
+    + (imgsDev[fi]? `<section class="pr-floor pr-plan"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${suffix}</h2>
+        <div class="planbox"><img class="plan" src="${imgsDev[fi]}"></div></section>` : "")
+    + (imgsDim[fi]? `<section class="pr-floor pr-plan"><h2>Mặt bằng kích thước định vị${suffix}</h2>
+        <div class="planbox"><img class="plan" src="${imgsDim[fi]}"></div></section>` : "");
+  const tables =
+    `<section class="pr-floor">
       <h2>Bảng thống kê đèn${suffix}</h2>${table}${trkHtml}${fanHtml}${ctlHtml}</section>${devSheet}`;
-  }).join("");
+  return {plans, tables};
+  });
+  let floorBlocks = floorPieces.map(p=>p.plans).join("") + floorPieces.map(p=>p.tables).join("");
   // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
   // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
   // rồi bỏ trống. Nhét vào trong cùng một <section> có break-inside:avoid thì KHÔNG THỂ tách.
