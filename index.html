@@ -3069,14 +3069,17 @@ function drawOverlay(){
     (fl.fans||[]).forEach(f=>{ if(f.circuit===cid) allPts.push({x:f.x,y:f.y}); });
     if(!allPts.length) return;
     mstEdges(allPts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
-    // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất + CHỮ CÁI CỤM ở điểm giữa
-    // (danh tính cụm chỉ có màu, mà công trường in đen trắng → chữ cái là thứ đọc được)
+    // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất, kèm CHỮ CÁI CỤM ở điểm giữa.
+    // KHÔNG ghi chữ khi đang bật "hiện tất cả đường công tắc" (anh Khoa): lúc đó mọi cụm cùng hiện
+    // nên chữ rải khắp mặt bằng, mà danh tính cụm đã đọc được ngay tại NHÃN CÔNG TẮC (a, b, c…) và ở
+    // bảng chú giải. Chữ giữa cung chỉ có giá trị khi đang soi MỘT cụm (chọn công tắc / chọn đèn).
+    const keyOnArc = !state.showWiring;
     (fl.switches||[]).forEach(sw=>{
       if(!(sw.circuits||[]).includes(cid)) return;
       let best=allPts[0], bd=Infinity;
       allPts.forEach(p=>{ const d=Math.hypot(p.x-sw.x,p.y-sw.y); if(d<bd){bd=d;best=p;} });
       drawBow({x:sw.x,y:sw.y}, best, .65, 1.2*inv);
-      addLabel(ov, (sw.x+best.x)/2, (sw.y+best.y)/2-2*inv, c.key, 8*inv, col, inv, "middle");
+      if(keyOnArc) addLabel(ov, (sw.x+best.x)/2, (sw.y+best.y)/2-2*inv, c.key, 8*inv, col, inv, "middle");
     });
   });
   if(sheetHas("switches")) (fl.switches||[]).forEach((sw,si)=>{
