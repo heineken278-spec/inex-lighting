@@ -817,7 +817,7 @@
         <button class="sh" data-sheet="all" title="Làm việc — thấy hết mọi lớp">Tất cả</button>
         <button class="sh" data-sheet="light" title="Tờ chiếu sáng: đèn + công tắc + kích thước định vị. Không có ổ cắm.">Chiếu sáng</button>
         <button class="sh" data-sheet="device" title="Tờ ổ cắm & thiết bị: ổ cắm / mạng / wifi / nguồn chờ. Đèn chỉ hiện mờ để tham chiếu.">Ổ cắm</button>
-        <button class="sh" data-sheet="dim" title="Tờ kích thước: chỉ ký hiệu + số định vị. Tắt quầng sáng, lux, đường công tắc và mã đèn.">Kích thước</button>
+        <button class="sh" data-sheet="dim" title="Tờ kích thước: ký hiệu + mã đèn + số định vị. Tắt quầng sáng, lux và đường công tắc.">Kích thước</button>
       </div>
       <div id="sceneBar" class="uifloat"></div>
       <div id="scaleTag" class="uifloat">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
@@ -2696,10 +2696,10 @@ const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","
 /* "dims" CÓ trên tờ ổ cắm: kích thước định vị ổ cắm là thứ thợ điện cần nhất trên đúng tờ đó.
    Lọc tinh bằng `dim.sheet` của từng kích thước — dim định vị đèn thì để ở tờ chiếu sáng. */
 const SHEET_DEVICE = { layers:new Set(["devices","dims"]), ghostLights:true };
-/* Tờ KÍCH THƯỚC (anh Khoa): chỉ để ĐỌC SỐ khi định vị. Ký hiệu vẫn vẽ nét bình thường — phải thấy
-   rõ đang đo tới cái gì — nhưng tắt quầng sáng, lux, đường công tắc và MÃ đèn để mặt bằng chỉ còn
-   ký hiệu + con số. Hiện MỌI kích thước, bỏ qua cờ `sheet` của từng cái. */
-const SHEET_DIM = { layers:new Set(["dims","devices"]), hideCodes:true, allDims:true };
+/* Tờ KÍCH THƯỚC (anh Khoa): chỉ để ĐỌC SỐ khi định vị. Tắt quầng sáng, lux và đường công tắc, còn
+   ký hiệu VÀ MÃ ĐÈN giữ nguyên — đo tới một ký hiệu mà không biết nó là đèn mã gì thì con số đó
+   không dùng để đặt hàng hay nghiệm thu được. Hiện MỌI kích thước, bỏ qua cờ `sheet` của từng cái. */
+const SHEET_DIM = { layers:new Set(["dims","devices"]), allDims:true };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
 const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE, dim:SHEET_DIM };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
@@ -3006,7 +3006,7 @@ function drawOverlay(){
       }
       ov.appendChild(g0);
       // mã ký hiệu cạnh đèn (D1, S2…) — theo chế độ nhãn: Tất cả / Gọn (1 mã mỗi loại) / Ẩn
-      let showCode = !ghostL && !(curSheet()||{}).hideCodes && !!lamp.code && lblMode!=="off";
+      let showCode = !ghostL && !!lamp.code && lblMode!=="off";
       if(showCode && lblMode==="compact" && !sel){
         const shared = typeModels[lamp.type] && typeModels[lamp.type].size>1;
         if(!shared){ // loại chỉ có 1 model: 1 mã đại diện là đủ
