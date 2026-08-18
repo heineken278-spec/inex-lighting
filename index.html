@@ -1624,6 +1624,27 @@ function updateUndoBtns(){ $("#btnUndo").disabled=!hist.length; $("#btnRedo").di
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const uid=()=> "z"+(F().seq++);
 const parseNum=v=>{ const n=parseFloat(String(v).replace(",",".")); return isNaN(n)? 0 : n; };
+/* Ô nhập SỐ THẬP PHÂN (mét) — thay cho <input type="number">, vì thẻ number của trình duyệt sai
+   ở đúng ba chỗ mà anh Khoa gặp:
+     · gõ "2,6" theo thói quen viết số Việt Nam → trình duyệt VỨT THẲNG thành ô rỗng, dù parseNum
+       vốn đã hiểu dấu phẩy. Đây mới là cái đau: cả app hiển thị "2,6" mà lại không cho gõ "2,6".
+     · "1e5" là hợp lệ với type=number → cao độ lưu thành 100.000 m
+     · "-2" cũng hợp lệ → cao độ âm
+   Cách xử: type="text" + inputmode="decimal" (bàn phím số trên tablet vẫn ra) rồi TỰ LỌC — chỉ giữ
+   chữ số và MỘT dấu thập phân (phẩy hay chấm đều được). Phải gắn TRƯỚC khi gán el.oninput thì bộ
+   lọc mới chạy trước bộ xử lý của panel. */
+function decField(el){
+  if(!el || el.dataset.dec) return el;
+  el.dataset.dec="1";
+  el.type="text"; el.inputMode="decimal"; el.autocomplete="off"; el.spellcheck=false;
+  el.addEventListener("input", ()=>{
+    let v=String(el.value).replace(/[^\d.,]/g,"");
+    const i=v.search(/[.,]/);
+    if(i>=0) v=v.slice(0,i+1)+v.slice(i+1).replace(/[.,]/g,"");
+    if(v!==el.value) el.value=v;
+  });
+  return el;
+}
 function getZone(id){ return F().zones.find(z=>z.id===id); }
 function selZone(){ return getZone(F().selectedZone); }
 function lightById(id){ return state.lights.find(l=>l.id===id) || state.lights[0]; }
@@ -2180,6 +2201,24 @@ const DEVICE_SPEC = {
   prov:         {label:"Nguồn chờ",        prefix:"NC",  mh:null, prov:true},
 };
 const DEVICE_KINDS = Object.keys(DEVICE_SPEC);
+/* Cao độ thiết bị: SỐ, hoặc một dòng CHỮ. Có những thứ không có cao độ thiết kế — "ổ cắm hiện
+   trạng" giữ lại của công trình cũ, "theo hiện trạng", "chờ khảo sát". Ghi một con số bịa vào đó
+   mới là sai, mà bỏ trống thì bảng thống kê đọc ra như thiếu sót.
+   `d.mh` LUÔN là số|null để mọi phép tính an toàn; chữ nằm riêng ở `d.mhTxt` và được ưu tiên khi
+   hiển thị. Một chỗ đọc duy nhất (mhLabel) để nhãn bản vẽ, panel, PDF và CSV không bao giờ lệch nhau. */
+const MH_NOTES = ["Hiện trạng", "Theo hiện trạng", "Chờ khảo sát"];
+function mhLabel(d, pre){
+  if(d.mhTxt) return d.mhTxt;
+  return d.mh!=null? (pre===false? fmtPlan(d.mh,2) : "+"+fmtPlan(d.mh,2)) : "";
+}
+/* Chuỗi anh gõ ở ô cao độ: ra được một số thì là SỐ, còn lại giữ nguyên làm ghi chú. */
+function parseMhInput(v){
+  v=String(v).trim();
+  if(!v) return {mh:undefined, txt:null};                 // rỗng = trả về mặc định của loại
+  const n=v.replace(",", ".");
+  if(/^\d*\.?\d+$/.test(n)) return {mh:+n, txt:null};
+  return {mh:null, txt:v};
+}
 /* Tên thiết bị cho nguồn chờ — CHỌN từ chip (không gõ), vì dữ liệu đo cho thấy anh không điền ô gõ */
 const PROV_NAMES = ["Máy lạnh","Bình nóng lạnh","Rèm tự động","Driver LED","Camera","Chuông cửa","Bếp từ","Máy hút mùi","Khác"];
 /* Ký hiệu thiết bị quanh (0,0), đơn vị world px. Hướng "vào phòng" = -Y (như đèn), tường ở +Y.
@@ -3126,8 +3165,8 @@ function drawOverlay(){
       // Số lượng theo phòng đã có ở bảng thống kê. Riêng NGUỒN CHỜ bắt buộc in TÊN thiết bị: dấu chờ
       // vô danh là lệnh để lại một dây sống vô danh trên giấy mang logo INEX.
       const lines = d.kind==="prov"
-        ? st.all.map(x=>(x.note? "CHỜ: "+x.note : "CHỜ: ?")+(x.mh!=null? " +"+fmtPlan(x.mh):""))
-        : st.all.map(x=> x.mh!=null? "+"+fmtPlan(x.mh) : "").filter(Boolean);
+        ? st.all.map(x=>(x.note? "CHỜ: "+x.note : "CHỜ: ?")+(mhLabel(x)? " "+mhLabel(x):""))
+        : st.all.map(x=>mhLabel(x)).filter(Boolean);
       lines.reverse();                 // cao nhất lên trên, đúng như nhìn vào mặt tường
       // Ổ cắm / mạng / TV / nguồn chờ đều BÁM TƯỜNG (rot do wallSnap đặt, hướng vào phòng) → chữ
       // phải ra phía phòng. Ổ SÀN và WIFI không có lưng nên không ép hướng.
@@ -3884,7 +3923,7 @@ function renderDeviceList(){
     const dd=document.createElement("div"); dd.className="d"; dd.style.minWidth="0";
     dd.innerHTML=`<b style="font-weight:normal;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</b>
       <small style="font-family:var(--label);font-size:10px;color:var(--ink-3)">
-        ${z?escapeHtml(z.name):'ngoài khu vực'}${d.mh!=null? " · +"+fmtPlan(d.mh)+"m":""}</small>`;
+        ${z?escapeHtml(z.name):'ngoài khu vực'}${mhLabel(d)? " · "+escapeHtml(mhLabel(d))+(d.mhTxt?"":"m"):""}</small>`;
     el.appendChild(dd);
     el.onclick=()=>{ selDevice=d.id; selLights=[]; selSwitch=null; selTrack=null; selFan=null;
       const vp=$("#viewport").getBoundingClientRect();
@@ -4804,7 +4843,7 @@ function openCalibrateModal(){
     done();
   };
   m.querySelector("#calOk").onclick=apply;
-  m.querySelector("#calVal").addEventListener("input", syncWarn);
+  decField(m.querySelector("#calVal")).addEventListener("input", syncWarn);
   m.querySelector("#calVal").addEventListener("keydown",e=>{ if(e.key==="Enter") apply(); });
   syncWarn();
   m.querySelector("#calVal").focus(); m.querySelector("#calVal").select();
@@ -5221,7 +5260,10 @@ function refreshDevicePanel(){
       <label>Cao độ lắp (m, từ sàn)</label>
       <div class="inline" style="gap:6px;flex-wrap:wrap" id="dvMhChips">
         ${mhChips.map(v=>`<button type="button" class="btn sm" data-mh="${v}">+${fmtPlan(v,2)}</button>`).join("")}
-        <input type="number" id="dvMh" step="0.05" style="width:66px" placeholder="khác">
+        <input type="text" id="dvMh" inputmode="decimal" style="width:104px" placeholder="số hoặc chữ">
+      </div>
+      <div class="inline" style="gap:6px;flex-wrap:wrap;margin-top:6px" id="dvMhNotes">
+        ${MH_NOTES.map(n=>`<button type="button" class="btn sm" data-nt="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}
       </div>
       ${provChips}
       ${spec.wet? `<p class="pr-hint" style="margin:8px 0 0">⚠ Vùng ẩm: ổ cắm phải đạt IP44 và đặt ngoài vùng nguy hiểm quanh vòi/sen.</p>`:""}`;
@@ -5230,18 +5272,27 @@ function refreshDevicePanel(){
       if(DEVICE_SPEC[d.kind].mh!=null && d.mh==null) d.mh=DEVICE_SPEC[d.kind].mh;
       d.code=nextDeviceCode(d.kind); });
     p.querySelector("#dvDel").onclick=()=>{ mutate(()=>deleteDevice(d.id)); };
-    p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{ d.mh=+b.dataset.mh; }));
-    p.querySelector("#dvMh").oninput=e=>{ const v=e.target.value.trim(); mutate(()=>{ d.mh = v===""? DEVICE_SPEC[d.kind].mh : parseNum(v); }); };
+    p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{ d.mh=+b.dataset.mh; delete d.mhTxt; }));
+    p.querySelector("#dvMh").oninput=e=>{ const r=parseMhInput(e.target.value);
+      mutate(()=>{ d.mh = r.mh===undefined? DEVICE_SPEC[d.kind].mh : r.mh;
+        if(r.txt) d.mhTxt=r.txt; else delete d.mhTxt; }); };
+    p.querySelectorAll("#dvMhNotes [data-nt]").forEach(b=> b.onclick=()=>mutate(()=>{
+      d.mhTxt=b.dataset.nt; d.mh=null; }));
     const noteSeg=p.querySelector("#dvNote");
     if(noteSeg) noteSeg.querySelectorAll("[data-nt]").forEach(b=> b.onclick=()=>mutate(()=>{ d.note=b.dataset.nt; }));
     const noteTxt=p.querySelector("#dvNoteTxt");
     if(noteTxt) noteTxt.oninput=e=>mutate(()=>{ d.note=e.target.value; });
   }
   // cập nhật giá trị (không phá focus)
-  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
-  setV("#dvMh", d.mh!=null && !(DEV_MH_CHIPS[d.kind]||[]).includes(d.mh)? d.mh : "");
+  // So sau khi TRIM: ô cao độ nay nhận chữ, mà giá trị lưu đã trim — ghi đè khi anh vừa gõ dấu
+  // cách là nuốt mất dấu cách ("Ổ cắm hiện trạng" thành "Ổcắmhiệntrạng"). Guard focus không đủ.
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(!el) return;
+    if(String(el.value).trim()===String(v).trim()) return;
+    if(document.activeElement!==el) el.value=v; };
+  setV("#dvMh", d.mhTxt || (d.mh!=null? d.mh : ""));
+  p.querySelectorAll("#dvMhNotes [data-nt]").forEach(b=> b.classList.toggle("on", b.dataset.nt===d.mhTxt));
   const nt=p.querySelector("#dvNoteTxt"); if(nt && document.activeElement!==nt) nt.value=d.note||"";
-  p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.classList.toggle("primary", +b.dataset.mh===d.mh));
+  p.querySelectorAll("#dvMhChips [data-mh]").forEach(b=> b.classList.toggle("primary", !d.mhTxt && +b.dataset.mh===d.mh));
   const ns=p.querySelector("#dvNote"); if(ns) ns.querySelectorAll("[data-nt]").forEach(b=> b.classList.toggle("on", b.dataset.nt===d.note));
 }
 /* Panel RAY NAM CHÂM — cùng khuôn #devPanel: dựng lại chỉ khi đổi ray, còn lại chỉ cập nhật giá trị
@@ -5286,7 +5337,7 @@ function refreshTrackPanel(){
       if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`))
         mutate(()=>deleteTrack(tr.id));
     };
-    p.querySelector("#trLen").oninput=e=>{ const v=parseNum(e.target.value);
+    decField(p.querySelector("#trLen")).oninput=e=>{ const v=parseNum(e.target.value);
       if(!(v>0.1)) return; mutate(()=>{ tr.len=v; syncTrackLights(tr, fl); }); };
     p.querySelector("#trRot").oninput=e=>{ const v=parseNum(e.target.value);
       if(v==null||isNaN(v)) return; mutate(()=>{ tr.rot=((v%360)+360)%360; syncTrackLights(tr, fl); }); };
@@ -5294,13 +5345,19 @@ function refreshTrackPanel(){
     p.querySelector("#trV").onclick=()=>mutate(()=>{ tr.rot=90; syncTrackLights(tr, fl); });
     p.querySelectorAll("#trMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{
       tr.mh = b.dataset.mh===""? null : +b.dataset.mh; syncTrackLights(tr, fl); }));
-    p.querySelector("#trMh").oninput=e=>{ const v=e.target.value.trim();
+    decField(p.querySelector("#trMh")).oninput=e=>{ const v=e.target.value.trim();
       mutate(()=>{ tr.mh = v===""? null : parseNum(v); syncTrackLights(tr, fl); }); };
   }
-  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  // So sau khi TRIM, và bỏ qua khi giá trị SỐ đã bằng nhau: đang gõ "2," mà ghi đè thành "2" là
+  // nuốt mất dấu thập phân (gõ tiếp thành "24"). Guard focus một mình không đủ — nó gãy bất cứ khi
+  // nào ô mất focus vì lý do khác.
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(!el) return;
+    if(String(el.value).trim()===String(v).trim()) return;
+    if(parseNum(el.value)===parseNum(v) && String(el.value).trim()!=="") return;
+    if(document.activeElement!==el) el.value=v; };
   setV("#trLen", Math.round((tr.len||1)*100)/100);
   setV("#trRot", Math.round(tr.rot||0));
-  setV("#trMh", tr.mh!=null && ![2.4,2.6,2.8].includes(tr.mh)? tr.mh : "");
+  setV("#trMh", tr.mh!=null? tr.mh : "");
   p.querySelectorAll("#trMhChips [data-mh]").forEach(b=>
     b.classList.toggle("primary", b.dataset.mh===""? tr.mh==null : +b.dataset.mh===tr.mh));
   // Danh sách đèn trên ray — mỗi dòng một ô SỐ để đặt chính xác vị trí trượt (m).
@@ -5323,7 +5380,7 @@ function refreshTrackPanel(){
         dd.onclick=()=>{ selLights=[{zid:z.id, li}]; selTrack=null; F().selectedZone=z.id; renderAll(); };
         row.appendChild(dd);
         const inp=document.createElement("input");
-        inp.type="number"; inp.className="tin"; inp.step="0.05"; inp.min="0";
+        inp.className="tin"; inp.step="0.05"; inp.min="0"; decField(inp);
         inp.max=String(tr.len||1); inp.value=String(Math.round((l.t||0)*100)/100);
         inp.style.width="62px"; inp.title="Vị trí trượt tính từ đầu A của ray (m)";
         inp.oninput=e=>{ const v=parseNum(e.target.value);
@@ -5382,7 +5439,7 @@ function refreshFanPanel(){
         Cách chữa duy nhất là <b>dời đèn ra ngoài vòng quét</b> hoặc <b>đổi sang sải cánh nhỏ hơn</b>.</p>`;
     p.querySelector("#fnDel").onclick=()=>{ let np=0; mutate(()=>{ np=deleteFan(fan.id, fl); });
       toast(dimNote("Đã xoá quạt trần", np)); };
-    p.querySelector("#fnDia").oninput=e=>{ const v=parseNum(e.target.value);
+    decField(p.querySelector("#fnDia")).oninput=e=>{ const v=parseNum(e.target.value);
       if(!(v>0.2)) return; mutate(()=>{ fan.dia=v; lastFanDia=v; }); };
     p.querySelector("#fnBl").oninput=e=>{ const v=parseNum(e.target.value);
       mutate(()=>{ fan.blades=clamp(Math.round(v)||4, 2, 8); }); };
@@ -5390,7 +5447,7 @@ function refreshFanPanel(){
       fan.dia=+b.dataset.d; lastFanDia=fan.dia; }));
     p.querySelectorAll("#fnMhChips [data-mh]").forEach(b=> b.onclick=()=>mutate(()=>{
       fan.mh = b.dataset.mh===""? null : +b.dataset.mh; }));
-    p.querySelector("#fnMh").oninput=e=>{ const v=e.target.value.trim();
+    decField(p.querySelector("#fnMh")).oninput=e=>{ const v=e.target.value.trim();
       mutate(()=>{ fan.mh = v===""? null : parseNum(v); }); };
     p.querySelector("#fnPush").onclick=()=>pushLightsOutOfFan(fan);
     p.querySelector("#fnCir").onchange=e=>mutate(()=>{
@@ -5406,10 +5463,16 @@ function refreshFanPanel(){
     cs.innerHTML='<option value="">— Không qua công tắc (remote) —</option>'
       + (fl.circuits||[]).map(c=>`<option value="${c.id}">Cụm ${c.key}</option>`).join(""); }
   if(document.activeElement!==cs) cs.value=fan.circuit||"";
-  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  // So sau khi TRIM, và bỏ qua khi giá trị SỐ đã bằng nhau: đang gõ "2," mà ghi đè thành "2" là
+  // nuốt mất dấu thập phân (gõ tiếp thành "24"). Guard focus một mình không đủ — nó gãy bất cứ khi
+  // nào ô mất focus vì lý do khác.
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(!el) return;
+    if(String(el.value).trim()===String(v).trim()) return;
+    if(parseNum(el.value)===parseNum(v) && String(el.value).trim()!=="") return;
+    if(document.activeElement!==el) el.value=v; };
   setV("#fnDia", Math.round((fan.dia||1.32)*100)/100);
   setV("#fnBl", fan.blades||4);
-  setV("#fnMh", fan.mh!=null && ![2.4,2.6,2.8].includes(fan.mh)? fan.mh : "");
+  setV("#fnMh", fan.mh!=null? fan.mh : "");
   p.querySelectorAll("#fnDiaChips [data-d]").forEach(b=> b.classList.toggle("primary", +b.dataset.d===(fan.dia||1.32)));
   p.querySelectorAll("#fnMhChips [data-mh]").forEach(b=>
     b.classList.toggle("primary", b.dataset.mh===""? fan.mh==null : +b.dataset.mh===fan.mh));
@@ -5522,11 +5585,18 @@ function refreshDimPanel(){
       fl.dims=(fl.dims||[]).filter(d=>d.id!==dm.id); selDim=null; });
     p.querySelectorAll("#dmAxis [data-ax]").forEach(b=> b.onclick=()=>mutate(()=>{ dm.axis=b.dataset.ax; }));
     p.querySelectorAll("#dmSheet [data-sh]").forEach(b=> b.onclick=()=>mutate(()=>{ dm.sheet=b.dataset.sh||null; }));
+    // offset đường ghi ĐƯỢC PHÉP ÂM (lật sang phía kia) nên không dùng decField — chỉ chặn chữ
     p.querySelector("#dmOff").oninput=e=>{ const v=parseNum(e.target.value); mutate(()=>{ dm.off=v; }); };
     p.querySelector("#dmFlip").onclick=()=>mutate(()=>{ dm.off=-(dm.off||0); });
     p.querySelector("#dmSwap").onchange=e=>mutate(()=>{ dm.swap=e.target.checked||undefined; });
   }
-  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(el && document.activeElement!==el) el.value=v; };
+  // So sau khi TRIM, và bỏ qua khi giá trị SỐ đã bằng nhau: đang gõ "2," mà ghi đè thành "2" là
+  // nuốt mất dấu thập phân (gõ tiếp thành "24"). Guard focus một mình không đủ — nó gãy bất cứ khi
+  // nào ô mất focus vì lý do khác.
+  const setV=(sel,v)=>{ const el=p.querySelector(sel); if(!el) return;
+    if(String(el.value).trim()===String(v).trim()) return;
+    if(parseNum(el.value)===parseNum(v) && String(el.value).trim()!=="") return;
+    if(document.activeElement!==el) el.value=v; };
   setV("#dmOff", Math.round((dm.off||0)*1000)/1000);
   p.querySelectorAll("#dmAxis [data-ax]").forEach(b=> b.classList.toggle("on", b.dataset.ax===(dm.axis||"h")));
   p.querySelectorAll("#dmSheet [data-sh]").forEach(b=> b.classList.toggle("on", (b.dataset.sh||null)===(dm.sheet||null)));
@@ -5594,7 +5664,12 @@ function refreshRight(){
   $("#zoneProps").classList.toggle("hidden", !z);
   if(!z) return;
   // không ghi đè ô user đang gõ (đang focus) — tránh nuốt ký tự kiểu "0.5" → "0.75"
-  const setVal=(sel,v)=>{ const el=$(sel); if(document.activeElement!==el) el.value=v; };
+  // So theo GIÁ TRỊ chứ không theo chuỗi: đang gõ "3," mà ghi đè thành "3" là nuốt mất dấu thập
+  // phân, người dùng gõ tiếp thành "32". Guard focus không đủ vì không phải lúc nào ô cũng focus.
+  const setVal=(sel,v)=>{ const el=$(sel);
+    if(String(el.value).trim()===String(v).trim()) return;
+    if(parseNum(el.value)===parseNum(v) && String(el.value).trim()!=="") return;
+    if(document.activeElement!==el) el.value=v; };
   setVal("#zName", z.name);
   setVal("#zRoom", z.roomIdx??0);
   setVal("#zLux", z.lux);
@@ -5950,7 +6025,7 @@ function bindRight(){
   $("#zRoom").addEventListener("change", e=>{ commit(); upd(z=>{ z.roomIdx=+e.target.value; if(z.roomIdx>0) z.lux=ROOM_LUX[z.roomIdx].lux; }); });
   $("#zLux").addEventListener("input", e=>upd(z=>z.lux=parseNum(e.target.value)));
   $("#zLux").addEventListener("change", commit);
-  $("#zCeil").addEventListener("input", e=>upd(z=>z.ceilH=parseNum(e.target.value)||2.8));
+  decField($("#zCeil")).addEventListener("input", e=>upd(z=>z.ceilH=parseNum(e.target.value)||2.8));
   $("#zCeil").addEventListener("change", commit);
   $("#zLoss").addEventListener("input", e=>upd(z=>z.lossFactor=clamp(parseNum(e.target.value)||0.7,0.3,1)));
   $("#zLoss").addEventListener("change", commit);
@@ -6553,7 +6628,7 @@ $("#btnCsv").onclick=()=>{
       const spec=DEVICE_SPEC[d.kind]||{}; const z=deviceZone(d,f);
       lines.push([csvCell(f.name), csvCell(spec.label||d.kind),
         csvCell(z?z.name:"Ngoài khu vực"), 1,
-        d.mh!=null?fq(d.mh):"", csvCell(d.note||"")].join(","));
+        csvCell(d.mhTxt || (d.mh!=null? fq(d.mh):"")), csvCell(d.note||"")].join(","));
     }));
   }
   lines.push([""],["Dự án",csvCell(state.projectName)].join(","));
@@ -6802,8 +6877,8 @@ async function buildPrintDoc(){
       if(!byZone.has(zn)) byZone.set(zn, {grp:new Map(), prov:[]});
       const b=byZone.get(zn);
       if(d.kind==="prov"){ b.prov.push(d); return; }
-      const key=d.kind+"|"+(d.mh??"");
-      if(!b.grp.has(key)) b.grp.set(key, {kind:d.kind, mh:d.mh, qty:0});
+      const key=d.kind+"|"+(d.mhTxt || (d.mh??""));
+      if(!b.grp.has(key)) b.grp.set(key, {kind:d.kind, mh:d.mh, mhTxt:d.mhTxt, qty:0});
       b.grp.get(key).qty += 1;   // 1 vị trí = 1 thiết bị (ổ cắm đôi vẫn là MỘT vị trí)
     });
     // thứ tự phòng theo đúng thứ tự khu vực trên bản vẽ, "Ngoài khu vực" xuống cuối
@@ -6824,13 +6899,13 @@ async function buildPrintDoc(){
           body+=`<tr><td>${deviceIconSVG(g.kind,"pr-sym").outerHTML}</td>
             <td>${escapeHtml(kindLabel(g.kind))}</td>
             <td class="num">${g.qty}</td>
-            <td class="num">${g.mh!=null? "+"+fmtPlan(g.mh,2):"—"}</td></tr>`;
+            <td class="num">${escapeHtml(mhLabel(g)) || "—"}</td></tr>`;
         });
       b.prov.sort((x,y)=>(x.mh??0)-(y.mh??0)).forEach(d=>{
         body+=`<tr><td>${deviceIconSVG("prov","pr-sym").outerHTML}</td>
           <td><b>Nguồn chờ:</b> ${d.note? escapeHtml(d.note):'<span style="color:#B4553C">CHƯA ĐẶT TÊN</span>'}</td>
           <td class="num">1</td>
-          <td class="num">${d.mh!=null? "+"+fmtPlan(d.mh,2):"—"}</td></tr>`;
+          <td class="num">${escapeHtml(mhLabel(d)) || "—"}</td></tr>`;
       });
     });
     body+=`<tr class="tot"><td colspan="2">Tổng${multi? " — "+escapeHtml(fl.name):""}</td>
