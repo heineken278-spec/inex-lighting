@@ -6705,104 +6705,33 @@ async function buildPrintDoc(){
 
   let totUnits=0, totMeters=0, totW=0, totArea=0;
   const usedLamps=new Map();
+  // Gom KHỐI LƯỢNG toàn dự án ngay trong lúc duyệt tầng — bảng vật tư đứng ở đầu hồ sơ nên phải
+  // tính xong trước khi lắp trang; các Map này là nguồn duy nhất cho nó.
+  const lampQty=new Map();          // lid → {count, w}
+  const luxRows=[];                 // {fl, z, A, lux, actual, ok}
 
   // ---- Mỗi TẦNG: bản vẽ + bảng thống kê (mỗi khu vực một cụm có hàng tiêu đề riêng) ----
   const multi=state.floors.length>1;
   const floorPieces=state.floors.map((fl,fi)=>{
-  let rowsHtml="";
-  let flUnits=0, flMeters=0, flW=0;
+  // Không còn bảng khối lượng theo khu vực (anh Khoa chốt): mọi số lượng dồn về BẢNG VẬT TƯ ở đầu
+  // hồ sơ. Vòng này giờ chỉ TÍCH LUỸ, và giữ lại đúng thứ bảng vật tư không thay thế được:
+  // độ rọi từng khu vực (thứ chứng minh thiết kế đạt chuẩn) và cấu hình công tắc.
   fl.zones.forEach(z=>{
     const A=areaM2(z, fl), lf=z.lossFactor||0.7;
     const groups=zoneGroups(z, true);
     const allLm=groups.reduce((s,g)=>s+g.lm,0);
     const actual=A? allLm*lf/A : null;
-    const ok = actual!=null && z.lux && actual>=z.lux*0.9;
     totArea+=(A||0);
-    const meta=[A? fmt(A,2)+" m²" : null,
-      z.lux? `chuẩn ${z.lux} lx` : null,
-      actual!=null? `<span class="${ok?"ok":"no"}">ước tính ${Math.round(actual)} lx</span>` : null,
-      `trần ${fmt(z.ceilH,2)} m`].filter(Boolean).join("  ·  ");
-    rowsHtml+=`<tr class="zh"><td colspan="8">
-      <span class="zn">${escapeHtml(z.name)}</span> <span class="zm">${meta}</span></td></tr>`;
-    if(!groups.length){
-      rowsHtml+=`<tr><td colspan="8" style="color:#8A8175;font-style:italic">Chưa bố trí đèn</td></tr>`;
-    }
+    luxRows.push({fl, z, A, lux:z.lux, actual,
+      ok: actual!=null && z.lux && actual>=z.lux*0.9});
     groups.forEach(g=>{
       usedLamps.set(g.lid, g.lamp);
-      const isStrip=g.lamp.type==="strip";
-      if(isStrip){ totMeters+=g.count; flMeters+=g.count; } else { totUnits+=g.count; flUnits+=g.count; }
-      totW+=g.w; flW+=g.w;
-      const th=g.lamp.thumb? `<img src="${g.lamp.thumb}">` : "";
-      // Cao độ lắp: gom các mh khác nhau của đèn cùng loại trong khu vực. Trần = âm/ốp trần.
-      const inst=z.lights.filter(l=>l.lightId===g.lid);
-      const hs=[...new Set(inst.map(l=> l.mh!=null? "+"+fmtPlan(l.mh,2)+"m" : "trần"))];
-      const caoDo = hs.length<=2? hs.join(" / ") : "hỗn hợp";
-      rowsHtml+=`<tr><td style="width:28px">${th}</td>
-        <td><span class="pr-code">${escapeHtml(g.lamp.code||"")}</span></td>
-        <td>${escapeHtml(g.lamp.name)}</td>
-        <td class="num">${fmt(g.count,1)}</td>
-        <td>${unitOf(g.lamp)}</td>
-        <td class="num">${g.lamp.watt}</td>
-        <td class="num">${fmt(g.w)}</td>
-        <td class="num" style="font-family:var(--mono);font-size:9.5px">${caoDo}</td></tr>`;
+      const q=lampQty.get(g.lid) || {count:0, w:0};
+      q.count+=g.count; q.w+=g.w; lampQty.set(g.lid, q);
+      if(g.lamp.type==="strip") totMeters+=g.count; else totUnits+=g.count;
+      totW+=g.w;
     });
   });
-  const flArea=fl.zones.reduce((s,z)=>s+(areaM2(z,fl)||0),0);
-  const table=`<table class="pr"><thead><tr>
-      <th style="width:28px"></th><th style="width:44px">Mã</th><th>Loại đèn</th>
-      <th class="num" style="width:44px">SL</th><th style="width:34px">ĐVT</th>
-      <th class="num" style="width:52px">W/đèn</th><th class="num" style="width:56px">Tổng W</th>
-      <th class="num" style="width:56px">Cao độ</th>
-    </tr></thead><tbody>${rowsHtml||`<tr><td colspan="8" style="color:#8A8175;font-style:italic">Tầng chưa có khu vực</td></tr>`}
-    <tr class="tot"><td></td><td colspan="2">${multi? "CỘNG "+escapeHtml(fl.name).toUpperCase() : "TỔNG CỘNG"} — ${fmt(flArea,1)} m² sàn</td>
-      <td colspan="2">${qty(flUnits,flMeters)}</td><td></td><td class="num">${fmt(flW)} W</td><td></td></tr>
-    </tbody></table>`;
-  // ---- Bảng RAY NAM CHÂM — vật tư tính bằng MÉT nên không nhét được vào bảng đèn (cột SL/ĐVT/W
-  // của bảng đèn nói về "bộ đèn"). Đèn gắn trên ray vẫn nằm ở bảng đèn như mọi đèn khác. ----
-  let trkHtml="";
-  if((fl.tracks||[]).length){
-    const rows=(fl.tracks||[]).map(t=>{ const z=deviceZone(t, fl); return {t, zn: z? z.name : "Ngoài khu vực"}; });
-    const zOrder=fl.zones.map(z=>z.name);
-    rows.sort((a,b)=>{ const ia=zOrder.indexOf(a.zn), ib=zOrder.indexOf(b.zn);
-      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || String(a.t.code).localeCompare(String(b.t.code),"vi"); });
-    const totM=rows.reduce((s,r)=>s+(r.t.len||0),0);
-    trkHtml=`<h2>Ray nam châm${multi? " — "+escapeHtml(fl.name):""}</h2>
-      <table class="pr"><thead><tr><th style="width:52px">Mã ray</th><th>Khu vực</th>
-      <th class="num" style="width:60px">Dài (m)</th><th class="num" style="width:66px">Cao độ (m)</th>
-      <th class="num" style="width:56px">Số đèn</th></tr></thead><tbody>`
-      + rows.map(({t,zn})=>`<tr><td><span class="pr-code">${escapeHtml(t.code||"RAY")}</span></td>
-        <td>${escapeHtml(zn)}</td>
-        <td class="num">${fmtPlan(t.len||0)}</td>
-        <td class="num">${t.mh!=null? "+"+fmtPlan(t.mh,2) : "sát trần"}</td>
-        <td class="num">${trackLights(t.id, fl).length}</td></tr>`).join("")
-      + `<tr class="tot"><td colspan="2">Tổng chiều dài ray${multi? " — "+escapeHtml(fl.name):""}</td>
-         <td class="num">${fmtPlan(totM)}</td><td></td>
-         <td class="num">${rows.reduce((s,r)=>s+trackLights(r.t.id, fl).length,0)}</td></tr>
-        </tbody></table>
-      <p class="pr-hint">Ray đặt hàng theo MÉT, cắt tại công trường. Đèn gắn trên ray liệt ở bảng đèn phía trên;
-      vị trí trượt của từng đèn xem trên mặt bằng.</p>`;
-  }
-  // ---- Bảng QUẠT TRẦN — sải cánh là thông số ĐẶT HÀNG, cao độ cánh là thông số THI CÔNG ----
-  let fanHtml="";
-  if((fl.fans||[]).length){
-    const rows=(fl.fans||[]).map(f=>({f, zn:(deviceZone(f, fl)||{}).name || "Ngoài khu vực"}));
-    const zOrder=fl.zones.map(z=>z.name);
-    rows.sort((a,b)=>{ const ia=zOrder.indexOf(a.zn), ib=zOrder.indexOf(b.zn);
-      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || String(a.f.code).localeCompare(String(b.f.code),"vi"); });
-    fanHtml=`<h2>Quạt trần${multi? " — "+escapeHtml(fl.name):""}</h2>
-      <table class="pr"><thead><tr><th style="width:52px">Mã</th><th>Khu vực</th>
-      <th class="num" style="width:70px">Sải cánh Ø (m)</th><th class="num" style="width:44px">Số cánh</th>
-      <th class="num" style="width:76px">Cao độ cánh (m)</th></tr></thead><tbody>`
-      + rows.map(({f,zn})=>`<tr><td><span class="pr-code">${escapeHtml(f.code||"QT")}</span></td>
-        <td>${escapeHtml(zn)}</td>
-        <td class="num">${fmtPlan(f.dia||1.32)}</td>
-        <td class="num">${f.blades||4}</td>
-        <td class="num">+${fmtPlan(fanMh(f, fl))}</td></tr>`).join("")
-      + `<tr class="tot"><td colspan="2">Tổng${multi? " — "+escapeHtml(fl.name):""}</td>
-         <td class="num">${rows.length} cái</td><td></td><td></td></tr></tbody></table>
-      <p class="pr-hint">Vòng nét đứt quanh quạt trên mặt bằng là VÙNG QUÉT CÁNH, vẽ đúng tỉ lệ —
-      dùng để kiểm tra cánh không cắt ngang chùm đèn (gây bóng quét nhấp nháy) và không chạm tường.</p>`;
-  }
   // Bảng công tắc + kịch bản của tầng
   let ctlHtml="";
   if((fl.switches||[]).length){
@@ -6862,69 +6791,10 @@ async function buildPrintDoc(){
     });
     ctlHtml+=`</tbody></table>`;
   }
-  // ---- Bảng THIẾT BỊ (ổ cắm / mạng / TV / wifi / nguồn chờ) — đi kèm tờ THI CÔNG riêng ----
-  let devHtml="";
-  if((fl.devices||[]).length){
-    // NGUYÊN LÝ TRÌNH BÀY (anh Khoa chốt): giống hệt bảng đèn — GOM THEO PHÒNG, mỗi phòng một
-    // hàng tiêu đề, bên trong gộp theo (loại × cao độ) và đếm số VỊ TRÍ. Lý do: thợ đi lắp theo
-    // từng phòng, và chủ nhà đọc/duyệt cũng theo từng phòng; cả hồ sơ đọc chung một mạch.
-    // Nguồn chờ liệt RIÊNG TỪNG CÁI trong phòng của nó vì mỗi cái chờ cho một thiết bị khác nhau.
-    const kindLabel=k=>DEVICE_SPEC[k]?DEVICE_SPEC[k].label:k;
-    const kindOrder=Object.keys(DEVICE_SPEC);
-    const byZone=new Map();
-    (fl.devices||[]).forEach(d=>{
-      const z=deviceZone(d, fl), zn=z? z.name : "Ngoài khu vực";
-      if(!byZone.has(zn)) byZone.set(zn, {grp:new Map(), prov:[]});
-      const b=byZone.get(zn);
-      if(d.kind==="prov"){ b.prov.push(d); return; }
-      const key=d.kind+"|"+(d.mhTxt || (d.mh??""));
-      if(!b.grp.has(key)) b.grp.set(key, {kind:d.kind, mh:d.mh, mhTxt:d.mhTxt, qty:0});
-      b.grp.get(key).qty += 1;   // 1 vị trí = 1 thiết bị (ổ cắm đôi vẫn là MỘT vị trí)
-    });
-    // thứ tự phòng theo đúng thứ tự khu vực trên bản vẽ, "Ngoài khu vực" xuống cuối
-    const zOrder=fl.zones.map(z=>z.name);
-    const zoneNames=[...byZone.keys()].sort((a,b)=>{
-      const ia=zOrder.indexOf(a), ib=zOrder.indexOf(b);
-      return (ia<0?9e9:ia)-(ib<0?9e9:ib) || a.localeCompare(b,"vi"); });
-    let body="", tong=0;
-    zoneNames.forEach(zn=>{
-      const b=byZone.get(zn);
-      const n=[...b.grp.values()].reduce((s,g)=>s+g.qty,0)+b.prov.length;
-      tong+=n;
-      body+=`<tr class="zh"><td colspan="4"><span class="zn">${escapeHtml(zn)}</span>
-        <span class="zm">${n} vị trí</span></td></tr>`;
-      [...b.grp.values()]
-        .sort((x,y)=>kindOrder.indexOf(x.kind)-kindOrder.indexOf(y.kind) || (x.mh??0)-(y.mh??0))
-        .forEach(g=>{
-          body+=`<tr><td>${deviceIconSVG(g.kind,"pr-sym").outerHTML}</td>
-            <td>${escapeHtml(kindLabel(g.kind))}</td>
-            <td class="num">${g.qty}</td>
-            <td class="num">${escapeHtml(mhLabel(g)) || "—"}</td></tr>`;
-        });
-      b.prov.sort((x,y)=>(x.mh??0)-(y.mh??0)).forEach(d=>{
-        body+=`<tr><td>${deviceIconSVG("prov","pr-sym").outerHTML}</td>
-          <td><b>Nguồn chờ:</b> ${d.note? escapeHtml(d.note):'<span style="color:#B4553C">CHƯA ĐẶT TÊN</span>'}</td>
-          <td class="num">1</td>
-          <td class="num">${escapeHtml(mhLabel(d)) || "—"}</td></tr>`;
-      });
-    });
-    body+=`<tr class="tot"><td colspan="2">Tổng${multi? " — "+escapeHtml(fl.name):""}</td>
-      <td class="num">${tong}</td><td></td></tr>`;
-    // Bỏ cột "Mã": bản vẽ không còn ghi mã từng ổ nên cột này chẳng trỏ tới đâu.
-    // Bỏ cột "Khu vực": đã thành hàng tiêu đề. Đơn vị mét đưa lên tiêu đề cột, không lặp từng dòng.
-    devHtml+=`<table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th>
-      <th>Loại</th><th class="num" style="width:46px">SL</th>
-      <th class="num" style="width:56px">Cao độ (m)</th></tr></thead><tbody>${body}</tbody></table>
-      <p class="pr-hint">SL = số VỊ TRÍ lắp (một ổ đôi vẫn là một vị trí). Bản vẽ thể hiện VỊ TRÍ ổ cắm /
-      thiết bị theo yêu cầu sử dụng. Đấu nối, tiết diện dây và bảo vệ do kỹ sư M&amp;E triển khai.
-      Nguồn chờ = chừa sẵn nguồn cho thiết bị lắp sau (ghi rõ thiết bị).</p>`;
-  }
   // BẢN VẼ và BẢNG THỐNG KÊ ở HAI TRANG RIÊNG (anh Khoa): tờ bản vẽ để nguyên một trang thì mặt
   // bằng được in to hết cỡ, thợ đọc được; nhét bảng xuống dưới là ép ảnh nhỏ lại vô ích.
   const suffix = multi? " — "+escapeHtml(fl.name) : "";
-  const devSheet = (imgsDev[fi] && devHtml)
-    ? `<section class="pr-floor"><h2>Bảng thống kê ổ cắm &amp; thiết bị${suffix}</h2>${devHtml}</section>`
-    : "";
+
   // BẢN VẼ và BẢNG tách thành HAI TẬP (anh Khoa): mọi trang bản vẽ đi liền nhau trước, rồi mới tới
   // các bảng thống kê — đúng thông lệ hồ sơ, và người xem không phải lật qua bảng để so hai mặt bằng.
   const plans =
@@ -6934,12 +6804,16 @@ async function buildPrintDoc(){
         <div class="planbox"><img class="plan" src="${imgsDev[fi]}"></div></section>` : "")
     + (imgsDim[fi]? `<section class="pr-floor pr-plan"><h2>Mặt bằng kích thước định vị${suffix}</h2>
         <div class="planbox"><img class="plan" src="${imgsDim[fi]}"></div></section>` : "");
-  const tables =
-    `<section class="pr-floor">
-      <h2>Bảng thống kê đèn${suffix}</h2>${table}${trkHtml}${fanHtml}${ctlHtml}</section>${devSheet}`;
+  // Của tầng chỉ còn lại BẢNG CÔNG TẮC — nó không phải bảng khối lượng mà là bảng CẤU HÌNH
+  // ĐIỀU KHIỂN (nút nào bật cụm nào, đặt ở đâu, cao độ), thứ bảng vật tư không thay thế được.
+  const tables = ctlHtml
+    ? `<section class="pr-floor">${ctlHtml}</section>` : "";
   return {plans, tables};
   });
-  let floorBlocks = floorPieces.map(p=>p.plans).join("") + floorPieces.map(p=>p.tables).join("");
+  // Trật tự hồ sơ (anh Khoa): TẬP BẢN VẼ liền nhau → BẢNG VẬT TƯ (đặt hàng) → tổng theo tầng →
+  // độ rọi → cấu hình công tắc → chú thích. Đi từ tổng tới chi tiết, và thứ dùng sớm nhất đứng trước.
+  let floorBlocks = floorPieces.map(p=>p.plans).join("");
+  const tableBlocks = floorPieces.map(p=>p.tables).join("");
   // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
   // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
   // rồi bỏ trống. Nhét vào trong cùng một <section> có break-inside:avoid thì KHÔNG THỂ tách.
@@ -6953,7 +6827,7 @@ async function buildPrintDoc(){
     `<section class="pr-floor pr-plan pr-first">${headHtml}`);
   const totQty=qty(totUnits,totMeters);
   // bảng tổng toàn dự án khi có nhiều tầng
-  const grand=multi? `<h2>Tổng hợp toàn dự án</h2><table class="pr"><thead><tr>
+  const grand=multi? `<section class="pr-floor"><h2>Khối lượng theo tầng</h2><table class="pr"><thead><tr>
       <th>Tầng</th><th class="num" style="width:90px">Diện tích</th>
       <th class="num" style="width:110px">Số lượng đèn</th><th class="num" style="width:80px">Tổng W</th>
     </tr></thead><tbody>${state.floors.map(fl=>{
@@ -6966,38 +6840,119 @@ async function buildPrintDoc(){
         <td class="num">${qty(u,m)}</td><td class="num">${fmt(w)}</td></tr>`;
     }).join("")}
     <tr class="tot"><td>TOÀN DỰ ÁN — ${state.floors.length} tầng</td><td class="num">${fmt(totArea,1)} m²</td>
-      <td class="num">${totQty}</td><td class="num">${fmt(totW)} W</td></tr></tbody></table>` : "";
+      <td class="num">${totQty}</td><td class="num">${fmt(totW)} W</td></tr></tbody></table>
+    <p class="pr-hint">Dùng để chia đợt giao hàng và thi công theo tầng. Chi tiết từng mã xem Bảng vật tư.</p>
+    </section>` : "";
 
-  // ---- Bảng thông số kỹ thuật đèn + link xem chi tiết ----
-  let specHtml="";
-  usedLamps.forEach(l=>{
+  /* ================= BẢNG VẬT TƯ — tờ ĐẶT HÀNG =================
+     Gộp bảng "Ký hiệu & thông số kỹ thuật" cũ với SỐ LƯỢNG toàn dự án. Bảng cũ đã liệt đúng danh
+     sách mẫu cần mua nhưng thiếu đúng một cột: bao nhiêu cái. Gộp lại thì bớt được một bảng, và
+     tờ này vừa gửi được cho nhà cung cấp vừa dùng tra ký hiệu trên bản vẽ.
+     KHÔNG có đơn giá / thành tiền: bản vẽ và báo giá có vòng đời khác nhau, sửa bản vẽ một lần là
+     báo giá sai theo. Số liệu để dựng báo giá nằm đủ trong file CSV. */
+  let matHtml="";
+  usedLamps.forEach((l, lid)=>{
+    const q=lampQty.get(lid) || {count:0, w:0};
     const th=l.thumb? `<img src="${l.thumb}">` : "";
-    // chuẩn hoá URL để chắc chắn thành hyperlink click được (tự thêm https:// nếu thiếu;
-    // bỏ scheme lạ như javascript: cho an toàn)
     let u=(l.url||"").trim();
     if(u && !/^https?:\/\//i.test(u)) u = /^[a-z][a-z0-9+.-]*:/i.test(u) ? "" : "https://"+u;
     const link = u
-      ? `<a class="pr-link" href="${escapeHtml(u)}">${escapeHtml(u.replace(/^https?:\/\//,"").slice(0,42))}</a>`
+      ? `<a class="pr-link" href="${escapeHtml(u)}">${escapeHtml(u.replace(/^https?:\/\//,"").slice(0,34))}</a>`
       : `<span style="color:#A9A093">—</span>`;
-    // Ký hiệu THẬT (cùng hàm vẽ trên mặt bằng) — cột này là bảng chú giải ký hiệu: thợ nhìn ký hiệu
-    // trên bản vẽ, tra sang đây ra tên + thông số. mnt để đèn tường hiện đúng ký hiệu lưng tường.
+    // Ký hiệu THẬT (cùng hàm vẽ trên mặt bằng): thợ nhìn ký hiệu trên bản vẽ rồi tra thẳng sang đây.
     const sym=symbolIconSVG(l.type, "pr-sym", l.mount).outerHTML;
-    specHtml+=`<tr><td style="width:26px">${sym}</td><td style="width:34px">${th}</td>
+    matHtml+=`<tr><td style="width:26px">${sym}</td><td style="width:34px">${th}</td>
       <td><span class="pr-code">${escapeHtml(l.code||"")}</span></td>
-      <td>${escapeHtml(l.name)}</td><td>${typeLabel(l.type)}</td>
-      <td class="num">${fmt(lampLumen(l))}</td><td class="num">${l.watt}</td>
-      <td class="num">${l.beam}°</td><td>${link}</td></tr>`;
+      <td>${escapeHtml(l.name)}</td>
+      <td class="num"><b>${fmt(q.count,1)}</b></td><td style="width:34px">${unitOf(l)}</td>
+      <td class="num">${l.watt}</td><td class="num">${fmt(q.w)}</td>
+      <td class="num">${fmt(lampLumen(l))}</td><td class="num">${l.beam}°</td>
+      <td style="width:130px">${link}</td></tr>`;
   });
-  const spec=usedLamps.size? `<h2>Ký hiệu &amp; thông số kỹ thuật đèn sử dụng</h2>
-    <table class="pr"><thead><tr><th style="width:26px">Ký hiệu</th><th style="width:34px"></th><th style="width:44px">Mã</th>
-      <th>Tên đèn</th><th style="width:64px">Kiểu</th>
-      <th class="num" style="width:56px">Quang thông</th><th class="num" style="width:40px">W</th>
-      <th class="num" style="width:44px">Góc chiếu</th><th style="width:150px">Xem chi tiết</th>
-    </tr></thead><tbody>${specHtml}</tbody></table>` : "";
+  const matLights = usedLamps.size? `<table class="pr"><thead><tr>
+      <th style="width:26px">Ký hiệu</th><th style="width:34px"></th><th style="width:44px">Mã</th>
+      <th>Tên đèn</th><th class="num" style="width:46px">SL</th><th style="width:34px">ĐVT</th>
+      <th class="num" style="width:40px">W</th><th class="num" style="width:54px">Tổng W</th>
+      <th class="num" style="width:56px">Quang thông</th><th class="num" style="width:44px">Góc chiếu</th>
+      <th style="width:130px">Xem chi tiết</th></tr></thead><tbody>${matHtml}
+      <tr class="tot"><td colspan="4">TỔNG ĐÈN — ${state.floors.length>1? state.floors.length+" tầng · ":""}${fmt(totArea,1)} m² sàn</td>
+        <td class="num" colspan="2">${qty(totUnits,totMeters)}</td>
+        <td></td><td class="num">${fmt(totW)} W</td><td colspan="3"></td></tr>
+      </tbody></table>` : "";
+
+  /* Vật tư KHÔNG phải đèn — ray tính bằng mét, quạt/ổ cắm/công tắc tính bằng cái. Gộp toàn dự án
+     theo ĐÚNG thứ nhà cung cấp báo giá: cùng quy cách thì một dòng. */
+  const otherRows=[];
+  { const trs=allFans? allTracks() : [];
+    if(trs.length){
+      const byLen=new Map();
+      trs.forEach(t=>{ const k=(t.mh!=null? "+"+fmtPlan(t.mh,2)+" m" : "sát trần");
+        byLen.set(k, (byLen.get(k)||0)+(t.len||0)); });
+      byLen.forEach((m,k)=>otherRows.push({ic:null, ten:"Ray nam châm gắn trần",
+        sl:fmtPlan(m), dvt:"m", gc:`cao độ ${k} · cắt tại công trường · ${trs.length} thanh`}));
+    }
+  }
+  { const fns=allFans();
+    const byKind=new Map();
+    fns.forEach(f=>{ const k=fmtPlan(f.dia||1.32)+"|"+(f.blades||4);
+      byKind.set(k, (byKind.get(k)||0)+1); });
+    byKind.forEach((n,k)=>{ const [d,b]=k.split("|");
+      otherRows.push({ic:null, ten:`Quạt trần Ø${d} m · ${b} cánh`, sl:n, dvt:"cái", gc:""}); });
+  }
+  { const byKind=new Map(), provs=new Map();
+    allDevices().forEach(d=>{
+      if(d.kind==="prov"){ const n=(d.note||"chưa đặt tên").trim();
+        provs.set(n, (provs.get(n)||0)+1); return; }
+      byKind.set(d.kind, (byKind.get(d.kind)||0)+1);
+    });
+    Object.keys(DEVICE_SPEC).forEach(k=>{ if(!byKind.has(k)) return;
+      otherRows.push({ic:deviceIconSVG(k,"pr-sym").outerHTML, ten:DEVICE_SPEC[k].label,
+        sl:byKind.get(k), dvt:"vị trí", gc:""}); });
+    provs.forEach((n,ten)=>otherRows.push({ic:deviceIconSVG("prov","pr-sym").outerHTML,
+      ten:"Nguồn chờ: "+ten, sl:n, dvt:"điểm", gc:"chừa sẵn nguồn, không lắp thiết bị"}));
+  }
+  { const byGang=new Map();
+    state.floors.forEach(f=>(f.switches||[]).forEach(sw=>{
+      const g=switchGang(sw); byGang.set(g, (byGang.get(g)||0)+1); }));
+    [...byGang.keys()].sort((a,b)=>a-b).forEach(g=>otherRows.push({ic:null,
+      ten:`Công tắc ${g} nút`, sl:byGang.get(g), dvt:"cái", gc:""}));
+  }
+  const matOther = otherRows.length? `<table class="pr" style="margin-top:10px"><thead><tr>
+      <th style="width:26px">Ký hiệu</th><th>Hạng mục</th>
+      <th class="num" style="width:60px">SL</th><th style="width:52px">ĐVT</th>
+      <th style="width:230px">Ghi chú</th></tr></thead><tbody>${
+      otherRows.map(r=>`<tr><td>${r.ic||""}</td><td>${escapeHtml(r.ten)}</td>
+        <td class="num"><b>${r.sl}</b></td><td>${r.dvt}</td>
+        <td style="color:#6E665A">${escapeHtml(r.gc)}</td></tr>`).join("")}
+      </tbody></table>` : "";
+  const mat = (matLights||matOther)? `<section class="pr-floor"><h2>Bảng vật tư — toàn dự án</h2>
+    ${matLights}${matOther}
+    <p class="pr-hint">Tờ này dùng để ĐẶT HÀNG: mọi tầng, mọi khu vực đã gộp lại theo mã. Ký hiệu ở
+    cột đầu đúng bằng ký hiệu trên mặt bằng. SL ổ cắm/thiết bị đếm theo VỊ TRÍ lắp (một ổ đôi vẫn là
+    một vị trí). Đơn giá và thành tiền không đưa vào hồ sơ bản vẽ — dùng file CSV để dựng báo giá.</p>
+    </section>` : "";
+
+  /* Độ rọi theo khu vực — thứ DUY NHẤT của bảng theo phòng cũ mà bảng vật tư không thay thế được:
+     nó chứng minh thiết kế đạt chuẩn, và là thứ khách hỏi khi duyệt phương án. */
+  const luxHtml = luxRows.length? `<section class="pr-floor"><h2>Độ rọi theo khu vực</h2>
+    <table class="pr"><thead><tr>
+      ${multi? '<th style="width:70px">Tầng</th>':""}<th>Khu vực</th>
+      <th class="num" style="width:76px">Diện tích</th><th class="num" style="width:64px">Cao trần</th>
+      <th class="num" style="width:78px">Lux chuẩn</th><th class="num" style="width:92px">Lux ước tính</th>
+    </tr></thead><tbody>${luxRows.map(r=>`<tr>
+      ${multi? `<td>${escapeHtml(r.fl.name)}</td>`:""}
+      <td>${escapeHtml(r.z.name)}</td>
+      <td class="num">${r.A? fmt(r.A,2)+" m²" : "—"}</td>
+      <td class="num">${fmt(r.z.ceilH,2)} m</td>
+      <td class="num">${r.lux||"—"}</td>
+      <td class="num">${r.actual!=null? `<span class="${r.ok?"ok":"no"}">${Math.round(r.actual)} lx</span>` : "—"}</td>
+    </tr>`).join("")}</tbody></table>
+    <p class="pr-hint">Lux ước tính theo phương pháp quang thông, hệ số suy giảm 0,7 — là con số THIẾT KẾ
+    để so với chuẩn, không phải kết quả đo tại công trình.</p></section>` : "";
 
   // ---- Chú thích cho khách hàng ----
   const note=`<h2>Chú thích</h2><div class="pr-note">
-    <div><dt>Mã đèn</dt><dd>— ký hiệu ghi cạnh mỗi đèn trên bản vẽ mặt bằng, dùng để tra sang bảng thông số kỹ thuật.</dd></div>
+    <div><dt>Mã đèn</dt><dd>— ký hiệu ghi cạnh mỗi đèn trên bản vẽ mặt bằng, dùng để tra sang Bảng vật tư.</dd></div>
     <div><dt>Độ rọi tiêu chuẩn (chuẩn … lx)</dt><dd>— mức sáng khuyến nghị cho từng loại phòng theo TCVN 7114-1 và EN 12464-1. Ví dụ: phòng khách 150–300 lx, bếp 500 lx, phòng ngủ 100–150 lx, bàn làm việc 300–500 lx.</dd></div>
     <div><dt>Độ rọi ước tính (ước tính … lx)</dt><dd>— độ rọi trung bình <b>ước tính</b> trên mặt sàn khi bật đủ đèn của khu vực, theo phương pháp quang thông với hệ số suy giảm 0,7 (chưa xét chỉ số phòng và phản xạ bề mặt cụ thể). <span style="color:#4B6B39;font-weight:600">Xanh</span> = đạt chuẩn, <span style="color:${"#B4553C"};font-weight:600">đỏ</span> = còn thiếu sáng. Số mang tính tham khảo cho thiết kế sơ bộ.</dd></div>
     <div><dt>Lux (lx)</dt><dd>— đơn vị đo độ rọi: lượng ánh sáng chiếu tới bề mặt. Quang thông (lumen) là tổng lượng sáng đèn phát ra.</dd></div>
@@ -7015,8 +6970,10 @@ async function buildPrintDoc(){
 
   $("#printArea").innerHTML=`
     ${floorBlocks}
+    ${mat}
     ${grand}
-    ${spec}
+    ${luxHtml}
+    ${tableBlocks}
     ${note}
     <div class="pr-foot">INEX DESIGN · inexdesign.vn — Số liệu tính theo phương pháp quang thông, mang tính tham khảo cho thiết kế sơ bộ.</div>`;
 
