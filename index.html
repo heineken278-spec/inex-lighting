@@ -61,7 +61,23 @@
   }
   .proj-name:focus{outline:none; border-bottom-color:var(--accent)}
   header .spacer{flex:1}
+  .savewarn{display:inline-flex; align-items:center; gap:6px; flex:none; border:1px solid #E9C9BE; background:#FBEFEA;
+    color:var(--danger); border-radius:20px; padding:4px 11px; font-family:var(--label); font-size:12px; font-weight:600; cursor:pointer}
+  .savewarn svg{width:14px; height:14px}
+  .savewarn:hover{background:#F7E4DD}
   .hbtns{display:flex; gap:7px; flex-wrap:wrap; align-items:center}
+  .hmenu-t .chev{width:13px; height:13px; margin-right:-3px; transition:transform .15s}
+  .hmenu-t[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .hmenu-t[aria-expanded="true"]{border-color:var(--accent); color:var(--accent-dark)}
+  .hmenu-pop{position:fixed; z-index:45; min-width:230px; background:var(--bg); border:1px solid var(--line);
+    border-radius:12px; box-shadow:0 8px 32px rgba(39,39,39,.16); padding:6px; display:flex; flex-direction:column}
+  .hmenu-pop button{display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:none;
+    background:none; padding:9px 10px; border-radius:8px; font-family:var(--body); font-size:13px;
+    color:var(--ink); cursor:pointer; white-space:nowrap}
+  .hmenu-pop button:hover, .hmenu-pop button:focus-visible{background:var(--cream); outline:none}
+  .hmenu-pop button .bi{width:16px; height:16px; flex:none; color:var(--ink-2)}
+  .hmenu-sep{height:1px; background:var(--line); margin:5px 4px}
+  @media (pointer:coarse){ .hmenu-pop button{min-height:44px} }
   .hsep{width:1px; align-self:stretch; min-height:22px; background:var(--line); margin:0 2px}
   .histbtns{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
   .histbtns button{border:none; background:var(--bg); padding:6px 10px; display:flex; align-items:center; cursor:pointer;
@@ -144,6 +160,20 @@
   }
   #rightToggle:hover{color:var(--accent-dark)}
   .panel-sec{padding:13px 14px; border-bottom:1px solid var(--line)}
+  #luxStrip{position:sticky; bottom:0; z-index:4; width:100%; display:flex; align-items:center; gap:8px;
+    padding:10px 14px; border:none; border-top:1px solid var(--line); background:var(--bg); cursor:pointer;
+    box-shadow:0 -6px 18px rgba(39,39,39,.07); font-family:var(--label); text-align:left}
+  #luxStrip:hover{background:#FBF7F0}
+  #luxStrip .ls-z{flex:1; min-width:0; font-size:12px; font-weight:600; color:var(--ink-2);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  #luxStrip .ls-v{font-family:var(--serif); font-size:15px; font-weight:600; color:var(--ink)}
+  #luxStrip .ls-v small{font-family:var(--label); font-size:11px; font-weight:500; color:var(--ink-3)}
+  #luxStrip .ls-w{font-family:var(--mono); font-size:11px; color:var(--ink-3)}
+  #luxStrip .ls-st{font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.05em}
+  #luxStrip .ls-st:empty{display:none}
+  #luxStrip .ls-st.ok{background:#E6EFE3; color:#3D6B33}
+  #luxStrip .ls-st.low{background:#F7E4DD; color:var(--danger)}
+  #luxStrip .ls-st.high{background:#F5EBD9; color:var(--accent-deep)}
   /* khối thu gọn được — panel phải gọn, anh mở đúng thứ cần */
   details.sec{border-bottom:1px solid var(--line)}
   details.sec>summary{list-style:none; cursor:pointer; padding:11px 14px;
@@ -230,7 +260,11 @@
   #floorBar .fladd:hover{border-color:var(--accent); color:var(--accent-dark)}
   /* chọn TỜ đang xem — NẰM CHUNG một thanh với tầng: hai hộp nổi chồng nhau ở góc trái làm
      bản vẽ rối và khó biết cái nào thuộc cái nào. Một thanh, hai nhóm, ngăn bằng vạch mảnh. */
-  #floorBar .flgrp{display:flex; gap:5px; align-items:center}
+  #floorBar .flgrp{display:flex; gap:5px; align-items:center; min-width:96px; flex:0 1 auto}
+  #floorBar .flscroll{display:flex; gap:5px; align-items:center; overflow-x:auto; min-width:0; flex:0 1 auto;
+    scrollbar-width:thin; scrollbar-color:var(--line) transparent; padding-bottom:1px}
+  #floorBar .flscroll .fl{flex-shrink:0}
+  #floorBar .bsep, #floorBar .sblbl{flex-shrink:0}
   #floorBar .bsep{width:1px; align-self:stretch; background:var(--line); margin:2px 5px}
   #floorBar .sblbl{font-family:var(--label); font-size:11px; font-weight:600;
     color:var(--ink-3); padding-right:2px; white-space:nowrap}
@@ -301,6 +335,10 @@
   .btn .bi{width:14px; height:14px; flex:none; margin-left:-2px}
   .histbtns .bi{width:16px; height:16px; display:block}
   .btn.danger:hover{border-color:var(--danger); color:var(--danger)}
+  .btn.danger-solid{background:var(--danger); border-color:var(--danger); color:#fff}
+  .btn.danger-solid:hover{background:#8F3D29; border-color:#8F3D29; color:#fff}
+  .modal.ask .ask-p{margin:0; font-size:13.5px; line-height:1.6; color:var(--ink-2)}
+  .modal.ask .ask-in{margin-top:4px}
   .btn:disabled{opacity:.4; cursor:not-allowed}
 
   .tool{
@@ -550,6 +588,7 @@
   }
   @media (max-width:600px){
     .brand .vdiv{display:none}
+    .savewarn{padding:6px 8px} .savewarn .sw-t{display:none}   /* chỉ còn icon cảnh báo, giữ header 2 hàng */
     .wordmark{font-size:16px}
     /* đáy bản vẽ quá hẹp cho cả nhãn tỉ lệ lẫn thanh zoom trên một hàng → nhãn tỉ lệ lên trên thanh kịch bản */
     #scaleTag{bottom:auto; top:64px; max-width:calc(100% - 28px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -585,7 +624,51 @@
   .modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; align-items:center;
     gap:8px; flex:none; flex-wrap:wrap; row-gap:8px}
   .modal .foot .btn{flex:none}
+  .kb-body{display:grid; grid-template-columns:1fr 1fr; gap:4px 24px}
+  @media (max-width:640px){ .kb-body{grid-template-columns:1fr} }
+  .kb-h{margin:4px 0 6px; font-family:var(--label); font-size:11px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink-2)}
+  .kb-h:not(:first-child){margin-top:14px}
+  table.kb{border-collapse:collapse; width:100%; font-size:13px}
+  table.kb td{padding:4px 0; vertical-align:top; line-height:1.45}
+  table.kb td:first-child{white-space:nowrap; padding-right:12px; width:1%}
+  table.kb td span{color:var(--ink-3)}
+  kbd{font-family:var(--mono); font-size:11.5px; background:var(--cream); border:1px solid var(--line);
+    border-bottom-width:2px; border-radius:5px; padding:1px 6px; color:var(--ink)}
+  .pf-h{margin:0 0 6px; font-weight:600; font-size:13.5px}
+  .pf-h.err{color:var(--danger)} .pf-h.warn{color:var(--accent-deep)}
+  .pf-ul{margin:0 0 12px; padding-left:18px; line-height:1.55}
+  .pf-go{all:unset; cursor:pointer; display:inline-flex; gap:6px; align-items:baseline; padding:2px 4px;
+    margin:0 -4px; border-radius:6px; color:inherit}
+  .pf-go:hover, .pf-go:focus-visible{background:var(--cream); color:var(--ink); outline:2px solid transparent}
+  .pf-go:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+  .pf-go span{color:var(--accent-dark); font-weight:600}
+  .pf-tip, .pvw-tip{margin:10px 0 0; font-size:12px; color:var(--ink-3)}
+  .pvw-sum{margin:0 0 12px; font-size:13px; color:var(--ink-2)}
+  .pvw-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px}
+  .pvw-grid figure{margin:0}
+  .pvw-th{aspect-ratio:1.414; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(39,39,39,.06)}
+  .pvw-th img{max-width:100%; max-height:100%; display:block}
+  .pvw-grid figcaption{margin-top:6px; font-size:12px; color:var(--ink-2); line-height:1.4}
+  .pvw-grid figcaption b{font-family:var(--mono); color:var(--accent-dark); margin-right:4px}
+  .pvw-h{margin:16px 0 4px; font-family:var(--label); font-size:11px; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink-2)}
+  .pvw-list{margin:0; padding-left:22px; font-size:13px; line-height:1.7; color:var(--ink)}
   .libnote{flex:none}
+  .libtools{flex:none; padding:12px 20px 10px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:8px}
+  .libtools input[type=search]{width:100%; height:36px; padding:6px 12px; border:1px solid var(--line); border-radius:8px;
+    font-family:var(--body); font-size:13.5px; color:var(--ink); background:var(--bg)}
+  .libtools input[type=search]:focus{border-color:var(--accent); outline:none}
+  .libchips{display:flex; gap:6px; flex-wrap:wrap}
+  .libchip{border:1px solid var(--line); background:var(--bg); border-radius:20px; padding:4px 10px; cursor:pointer;
+    font-family:var(--label); font-size:12px; font-weight:600; color:var(--ink-2)}
+  .libchip span{font-family:var(--mono); font-weight:400; color:var(--ink-3); margin-left:2px}
+  .libchip:hover{border-color:var(--accent-soft); color:var(--ink)}
+  .libchip.on{background:var(--accent-dark); border-color:var(--accent-dark); color:#fff}
+  .libchip.on span{color:rgba(255,255,255,.8)}
+  #libModal .modal{max-width:580px}
+  #libModal .foot{flex-wrap:wrap; row-gap:8px}
   .lp-item{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--line);
     border-radius:9px; margin-bottom:7px; cursor:pointer}
   .lp-item:hover{border-color:var(--accent-soft)}
@@ -720,23 +803,35 @@
       <a class="wordmark" href="https://inexdesign.vn/" target="_blank" rel="noopener" title="inexdesign.vn">InEx <b>Lighting</b></a>
       <span class="vdiv"></span>
     </div>
-    <input id="projName" class="proj-name" placeholder="Tên dự án…" value="Dự án chưa đặt tên">
+    <input id="projName" class="proj-name" placeholder="Tên dự án…" value="Dự án chưa đặt tên" aria-label="Tên dự án">
+    <button id="saveWarn" class="savewarn hidden" aria-label="Chưa lưu tự động được — bấm để lưu file" title="Trình duyệt không cho lưu tự động. Bấm để lưu dự án ra file ngay.">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span class="sw-t">Chưa lưu tự động được — Lưu file</span></button>
     <div class="spacer"></div>
     <div class="hbtns">
       <div class="histbtns">
         <button id="btnUndo" title="Hoàn tác (Ctrl+Z)"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
         <button id="btnRedo" title="Làm lại (Ctrl+Y)"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
       </div>
-      <button class="btn sm" id="btnOpenFile" title="Mở dự án từ file .inexlight"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Mở</button>
+      <div class="hmenu">
+        <button class="btn sm hmenu-t" aria-haspopup="menu" aria-expanded="false" aria-controls="mnProject" title="Mở, khôi phục, tạo dự án mới">Dự án<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="hmenu-pop hidden" role="menu" id="mnProject" aria-label="Dự án">
+          <button role="menuitem" id="btnOpenFile" title="Mở dự án từ file .inexlight"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Mở file dự án…</button>
+          <button role="menuitem" id="btnRecover" title="Khôi phục dự án từ bản lưu tự động"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9"/><path d="M4.5 4.5V9H9"/><path d="M12 8v4l2.5 1.5"/></svg>Khôi phục bản tự lưu…</button>
+          <div class="hmenu-sep" role="separator"></div>
+          <button role="menuitem" id="btnReset" title="Nạp dự án mẫu để xem thử"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>Nạp dự án mẫu</button>
+          <button role="menuitem" id="btnClear" title="Bắt đầu dự án trống"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3.5V8h4.5M12 11v6M9 14h6"/></svg>Dự án mới (trống)</button>
+        </div>
+      </div>
       <input type="file" id="projFile" accept=".inexlight,application/json" class="hidden">
       <button class="btn sm" id="btnSaveFile" title="Lưu dự án ra file (kèm ảnh nền các tầng)"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Lưu file</button>
-      <button class="btn sm" id="btnRecover" title="Khôi phục dự án từ bản lưu tự động"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9"/><path d="M4.5 4.5V9H9"/><path d="M12 8v4l2.5 1.5"/></svg>Khôi phục</button>
       <span class="hsep"></span>
-      <button class="btn ghost sm" id="btnReset" title="Nạp dự án mẫu để xem thử">Dự án mẫu</button>
-      <button class="btn ghost sm" id="btnClear" title="Bắt đầu dự án trống — xoá hết tầng, khu vực, đèn hiện tại">Dự án mới</button>
-      <span class="hsep"></span>
-      <button class="btn sm" id="btnPng" title="Xuất bản vẽ ra ảnh PNG">Xuất PNG</button>
-      <button class="btn sm" id="btnCsv" title="Xuất bảng thống kê ra CSV (mở bằng Excel)">Xuất CSV</button>
+      <div class="hmenu">
+        <button class="btn sm hmenu-t" aria-haspopup="menu" aria-expanded="false" aria-controls="mnExport" title="Xuất ảnh PNG hoặc bảng CSV">Xuất khác<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        <div class="hmenu-pop hidden" role="menu" id="mnExport" aria-label="Xuất khác">
+          <button role="menuitem" id="btnPng" title="Xuất bản vẽ ra ảnh PNG"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M3.5 15.5l5-5 4.5 4.5 3-3 4.5 4.5"/></svg>Ảnh bản vẽ (PNG)</button>
+          <button role="menuitem" id="btnCsv" title="Xuất bảng thống kê ra CSV (mở bằng Excel)"><svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/></svg>Bảng thống kê (CSV)</button>
+        </div>
+      </div>
       <button class="btn primary sm" id="btnPdf" title="Xuất hồ sơ PDF đầy đủ">Xuất PDF</button>
     </div>
   </header>
@@ -794,6 +889,9 @@
       <button class="railbtn" id="btnLibrary" title="Thư viện đèn">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.2c.9.8 1.3 1.7 1.3 2.8h5.4c0-1.1.4-2 1.3-2.8A6 6 0 0 0 12 3z"/></svg>
       </button>
+      <button class="railbtn" id="btnHelp" title="Phím tắt &amp; thao tác (phím ?)">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.7"/><circle cx="12" cy="16.9" r=".6" fill="currentColor"/></svg>
+      </button>
     </aside>
     <div id="bgPop" class="uifloat hidden">
       <p class="eyebrow">Mặt bằng nền</p>
@@ -831,7 +929,8 @@
         Delete xoá · Ctrl+Z hoàn tác · Ctrl+D nhân bản<br>
         Q/E xoay · T bật/tắt cụm · Mũi tên dịch 5 cm (Shift 25 cm)<br>
         L đặt đèn · W công tắc · O ổ cắm/thiết bị (phím 1–9 đổi loại)<br>
-        Double-click: chọn cả loại · Alt+click: chọn đèn bị đè dưới
+        Double-click: chọn cả loại · Alt+click: chọn đèn bị đè dưới<br>
+        <b>?</b> mở bảng phím tắt đầy đủ
       </p>
     </div>
 
@@ -965,7 +1064,7 @@
           <div class="secbody"><div id="cirList"></div></div>
         </details>
 
-        <div class="panel-sec">
+        <div class="panel-sec" id="resSec">
           <p class="eyebrow">Kết quả chiếu sáng</p>
           <div class="kpis">
             <div class="kpi hero"><div class="v" id="rNeed">–</div><div class="k" id="rNeedK">Cần thêm (loại đang chọn)</div></div>
@@ -997,6 +1096,14 @@
         <summary>Tổng hợp dự án</summary>
         <div class="secbody"><div id="summary"></div></div>
       </details>
+      <!-- Dải kết quả GHIM đáy panel: chỉ hiện khi khối "Kết quả chiếu sáng" bị cuộn khuất
+           (vd đang chọn đèn → thuộc tính đèn đẩy kết quả xuống dưới). Luôn trả lời "phòng đủ sáng chưa?" -->
+      <button id="luxStrip" class="hidden" title="Xem kết quả chiếu sáng đầy đủ">
+        <span class="ls-z" id="lsZone"></span>
+        <span class="ls-v" id="lsLux"></span>
+        <span class="ls-st" id="lsState"></span>
+        <span class="ls-w" id="lsWatt"></span>
+      </button>
     </aside>
   </main>
 </div>
@@ -1598,11 +1705,19 @@ function save(){
     const snap=JSON.parse(JSON.stringify(state));
     snap._at=Date.now();
     dbPut(DB_KEY, snap).then(()=>{
+      setSaveWarn(false);
       if(Date.now()-lastBk < 120000) return;            // mỗi ~2 phút một bản dự phòng
       lastBk=Date.now();
       return dbPut("backup_"+lastBk, snap).then(trimBackups);
-    }).catch(()=>toast("Không lưu tự động được — hãy dùng “Lưu file” để giữ dự án"));
+    }).catch(()=>{ if(!$("#saveWarn") || $("#saveWarn").classList.contains("hidden"))
+        toast("Không lưu tự động được — hãy dùng “Lưu file” để giữ dự án");
+      setSaveWarn(true); });
   }, 300);
+}
+// Lưu tự động hỏng (trình duyệt chặn bộ nhớ, ổ đầy…) → nhãn cảnh báo ĐỨNG YÊN trên header cho tới
+// khi lưu lại được; một toast 2,8 giây giữa lúc đang vẽ rất dễ bỏ lỡ.
+function setSaveWarn(on){
+  const w=$("#saveWarn"); if(w) w.classList.toggle("hidden", !on);
 }
 function dbKeys(){ return db().then(d=>new Promise((res,rej)=>{
   const t=d.transaction(DB_STORE,"readonly");
@@ -1634,10 +1749,10 @@ function applySnap(s){
   state.floors.forEach(f=>{ const c=bgCache[f.id];
     if(c){ f.bg=c.bg; f.bgW=c.bgW; f.bgH=c.bgH; } });
 }
-function pushHist(snap){ flushArrowSeq(); hist.push(snap||snapshot()); if(hist.length>60) hist.shift(); future.length=0; updateUndoBtns(); }
+function pushHist(snap){ flushArrowSeq(); projRedo=null; hist.push(snap||snapshot()); if(hist.length>60) hist.shift(); future.length=0; updateUndoBtns(); }
 function mutate(fn){ pushHist(); fn(); save(); renderAll(); }
-function undo(){ flushArrowSeq(); if(!hist.length) return; future.push(snapshot()); applySnap(hist.pop()); selLights=[]; draft=null; save(); renderAll(); }
-function redo(){ flushArrowSeq(); if(!future.length) return; hist.push(snapshot()); applySnap(future.pop()); selLights=[]; draft=null; save(); renderAll(); }
+function undo(){ flushArrowSeq(); if(!hist.length){ restoreStash(); return; } future.push(snapshot()); applySnap(hist.pop()); selLights=[]; draft=null; save(); renderAll(); }
+function redo(){ flushArrowSeq(); if(!future.length){ redoStash(); return; } hist.push(snapshot()); applySnap(future.pop()); selLights=[]; draft=null; save(); renderAll(); }
 function commitFocus(){ if(focusSnap){ pushHist(focusSnap); focusSnap=null; } }
 /* Chuỗi bấm mũi tên = 1 bước undo: chụp snapshot trước cú đầu, commit sau 700ms yên */
 let arrowSeq=null;
@@ -1665,7 +1780,85 @@ function nudgeSelected(dx,dy){
   });
   save(); render(); refreshRight(); renderSummary();
 }
-function updateUndoBtns(){ $("#btnUndo").disabled=!hist.length; $("#btnRedo").disabled=!future.length; }
+function updateUndoBtns(){ $("#btnUndo").disabled=!hist.length && !projStash; $("#btnRedo").disabled=!future.length && !projRedo; }
+
+/* ---- Thay CẢ dự án (mẫu / mới / mở file / khôi phục) vẫn hoàn tác được ----
+   History thường không chứa ảnh nền (nằm ở bgCache theo id tầng) và id tầng của dự án mới
+   TRÙNG id tầng cũ → không nhét được vào hist. Giữ riêng 1 bản: JSON + ảnh nền của dự án cũ.
+   Ctrl+Z khi hist đã cạn (ngay sau khi thay) sẽ đưa dự án cũ về nguyên vẹn. */
+let projStash=null, projRedo=null;
+function stashProject(label){
+  const json=snapshot();            // snapshot() đồng thời nạp ảnh nền mọi tầng vào bgCache
+  projStash={json, bgs:{...bgCache}, label};
+  projRedo=null;
+}
+function swapProject(from){
+  bgCache=from.bgs; applySnap(from.json);
+  hist=[]; future=[]; selLights=[]; draft=null;
+  $("#projName").value=state.projectName;
+  save(); fitView(); renderAll(); updateUndoBtns();
+}
+function restoreStash(){
+  if(!projStash) return false;
+  const st=projStash; projStash=null;
+  projRedo={json:snapshot(), bgs:{...bgCache}, label:st.label};
+  swapProject(st);
+  toast(`Đã quay lại “${state.projectName}” — Ctrl+Y để làm lại`);
+  return true;
+}
+function redoStash(){
+  if(!projRedo) return false;
+  const r=projRedo; projRedo=null;
+  projStash={json:snapshot(), bgs:{...bgCache}, label:r.label};
+  swapProject(r);
+  return true;
+}
+
+/* ---- Hộp thoại có thương hiệu thay cho confirm()/prompt() của trình duyệt ----
+   askDialog → Promise: "ok" | "alt" | null (huỷ) ; khi có input → chuỗi | null.
+   Nút được focus sẵn là nút AN TOÀN khi danger, để lỡ Enter không xoá nhầm. */
+function askDialog({title, body="", ok="Đồng ý", cancel="Huỷ", alt=null, danger=false, input=null}){
+  return new Promise(res=>{
+    const m=document.createElement("div"); m.className="modal-bg";
+    m.innerHTML=`<div class="modal ask" style="max-width:420px"><h3 class="serif"></h3>
+      <div class="body">${body?`<p class="ask-p"></p>`:""}${input? `<input type="text" class="ask-in">`:""}</div>
+      <div class="foot"><span style="flex:1"></span>
+        <button class="btn" data-r="">${escapeHtml(cancel)}</button>
+        ${alt? `<button class="btn" data-r="alt">${escapeHtml(alt)}</button>`:""}
+        <button class="btn ${danger?"danger-solid":"primary"}" data-r="ok">${escapeHtml(ok)}</button>
+      </div></div>`;
+    m.querySelector("h3").textContent=title;
+    if(body) m.querySelector(".ask-p").textContent=body;
+    const inp=m.querySelector(".ask-in");
+    if(inp){ inp.value=input.value||""; if(input.placeholder) inp.placeholder=input.placeholder; }
+    let done=false;
+    const finish=r=>{ if(done) return; done=true; m.remove();
+      res(input? (r==="ok"? (inp.value.trim()||null) : null) : (r||null)); };
+    m.__close=()=>finish(null);
+    m.querySelectorAll(".foot .btn").forEach(b=> b.onclick=()=>finish(b.dataset.r));
+    let downOnBg=false;
+    m.addEventListener("pointerdown", e=>{ downOnBg=(e.target===m); });
+    m.addEventListener("click", e=>{ if(e.target===m && downOnBg) finish(null); });
+    m.addEventListener("keydown", e=>{
+      if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); finish(null); }
+      else if(e.key==="Enter" && e.target===inp){ e.preventDefault(); finish("ok"); }
+    });
+    document.body.appendChild(m);
+    requestAnimationFrame(()=>{
+      if(inp){ inp.focus(); inp.select(); }
+      else m.querySelector(danger? (alt? '[data-r="alt"]' : '[data-r=""]') : '[data-r="ok"]').focus();
+    });
+  });
+}
+const askConfirm=(title, body, ok="Xoá")=>askDialog({title, body, ok, danger:true}).then(r=>r==="ok");
+const askText=(title, value, placeholder)=>askDialog({title, ok:"Lưu", input:{value, placeholder}});
+// Thay cả dự án: gợi ý lưu file trước; trả true nếu được phép tiếp tục
+async function askReplaceProject(title, body, ok){
+  const r=await askDialog({title, body: body+" Thay xong vẫn bấm Ctrl+Z để quay lại được.",
+    ok, alt:"Lưu file rồi tiếp tục", danger:true});
+  if(r==="alt"){ $("#btnSaveFile").click(); return true; }
+  return r==="ok";
+}
 
 /* =========================== HELPERS =========================== */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1824,20 +2017,21 @@ function applyScene(id){
 }
 function saveScene(){
   const fl=F();
-  const name=prompt("Tên kịch bản (VD: Sinh hoạt, Xem phim, Đêm):",
-    "Kịch bản "+((fl.scenes||[]).length+1));
-  if(name===null || !name.trim()) return;
+  askText("Tên kịch bản", "Kịch bản "+((fl.scenes||[]).length+1), "VD: Sinh hoạt, Xem phim, Đêm").then(name=>{
+  if(!name) return;
   mutate(()=>{
     fl.scenes=fl.scenes||[];
     const s={id:"sc"+fl.seq++, name:name.trim(), off:[...(fl.liveOff||[])]};
     fl.scenes.push(s); fl.scene=s.id;
   });
   toast(`Đã lưu kịch bản “${name.trim()}”`);
+  });
 }
 function deleteScene(id){
   const fl=F(); const s=(fl.scenes||[]).find(x=>x.id===id);
-  if(!s || !confirm(`Xoá kịch bản “${s.name}”?`)) return;
-  mutate(()=>{ fl.scenes=fl.scenes.filter(x=>x.id!==id); if(fl.scene===id) fl.scene=null; });
+  if(!s) return;
+  askConfirm(`Xoá kịch bản “${s.name}”?`, "Các đèn không bị ảnh hưởng. Ctrl+Z để hoàn tác.").then(ok=>{ if(!ok) return;
+  mutate(()=>{ fl.scenes=fl.scenes.filter(x=>x.id!==id); if(fl.scene===id) fl.scene=null; }); });
 }
 /* Bật/tắt CỤM của các đèn đang chọn (nút ⏻ trên chip hoặc phím T).
    Không tắt lẻ được — đúng thực tế: muốn điều khiển riêng thì phải tách cụm riêng. */
@@ -3875,22 +4069,23 @@ function deleteFloor(i){
   if(state.floors.length<=1){ toast("Dự án cần ít nhất 1 tầng"); return; }
   const f=state.floors[i];
   const n=f.zones.reduce((s,z)=>s+z.lights.length,0);
-  if(!confirm(`Xoá “${f.name}”${n?` (${f.zones.length} khu vực, ${n} đèn)`:""}?`)) return;
+  askConfirm(`Xoá “${f.name}”?`, n? `${f.zones.length} khu vực và ${n} đèn trên tầng này sẽ bị xoá. Ctrl+Z để hoàn tác.` : "Ctrl+Z để hoàn tác.").then(ok=>{ if(!ok) return;
   mutate(()=>{
     state.floors.splice(i,1);
     state.cur=clamp(state.cur>=i? state.cur-1 : state.cur, 0, state.floors.length-1);
     selLights=[];
   });
   fitView();
-  toast("Đã xoá tầng — Ctrl+Z để hoàn tác");
+  toast("Đã xoá tầng — Ctrl+Z để hoàn tác"); });
 }
 function renameFloor(i){
   const f=state.floors[i];
-  const v=prompt("Tên tầng:", f.name);
-  if(v!==null && v.trim()) mutate(()=>{ f.name=v.trim(); });
+  askText("Tên tầng", f.name, "VD: Tầng trệt, Lầu 1, Sân thượng").then(v=>{ if(v) mutate(()=>{ f.name=v; }); });
 }
 function renderFloorBar(){
-  const bar=$("#flList"); bar.innerHTML="";
+  const grp=$("#flList"); grp.innerHTML="";
+  // các nút tầng nằm trong ống cuộn riêng → 15 tầng cũng không đẩy nút + và các tab TỜ ra khỏi màn hình
+  const bar=document.createElement("div"); bar.className="flscroll"; grp.appendChild(bar);
   state.floors.forEach((f,i)=>{
     const b=document.createElement("button");
     b.className="fl"+(i===state.cur?" on":"");
@@ -3914,7 +4109,12 @@ function renderFloorBar(){
   const add=document.createElement("button");
   add.className="fladd"; add.textContent="+"; add.title="Thêm tầng / mặt bằng mới";
   add.onclick=addFloor;
-  bar.appendChild(add);
+  grp.appendChild(add);
+  const on=bar.querySelector(".fl.on");
+  if(on){ const l=on.offsetLeft, r=l+on.offsetWidth;
+    if(l<bar.scrollLeft) bar.scrollLeft=l-4; else if(r>bar.scrollLeft+bar.clientWidth) bar.scrollLeft=r-bar.clientWidth+4; }
+  bar.addEventListener("wheel", e=>{ if(bar.scrollWidth>bar.clientWidth && Math.abs(e.deltaY)>Math.abs(e.deltaX)){
+    e.preventDefault(); e.stopPropagation(); bar.scrollLeft+=e.deltaY; } }, {passive:false});
 }
 
 function renderSceneBar(){
@@ -3923,7 +4123,8 @@ function renderSceneBar(){
   // Kịch bản là tính năng ít dùng (anh Khoa: cụm đã làm hết việc). Ẩn dải khi CHƯA có kịch bản nào —
   // trả lại chỗ ở đáy canvas (vốn chen với #selChip). Vẫn hiện khi có kịch bản, hoặc khi vừa tắt
   // vài cụm (dirty) để còn nút "Lưu cảnh này" — giữ được đường tạo kịch bản đầu tiên.
-  const show=(fl.circuits||[]).length>0 && ((fl.scenes||[]).length>0 || dirty);
+  // tờ KÍCH THƯỚC tắt quầng sáng/lux → kịch bản không có tác dụng gì ở đó, ẩn luôn
+  const show=(fl.circuits||[]).length>0 && ((fl.scenes||[]).length>0 || dirty) && state.sheet!=="dim";
   bar.classList.toggle("hidden", !show);
   if(!show){ bar.innerHTML=""; return; }
   let h=`<span class="sclbl">Kịch bản</span>
@@ -4048,6 +4249,7 @@ function renderFanList(){
 }
 function renderAll(){
   render(); renderFloorBar(); renderSceneBar(); renderZoneList(); renderDeviceList(); renderTrackList(); renderFanList(); refreshRight(); renderSummary(); updateUndoBtns();
+  { const pn=$("#projName"); if(pn.title!==pn.value) pn.title=pn.value; }   // tên dài bị cắt → rê chuột xem đủ
   if(tool==="light" && !$("#lightPop").classList.contains("hidden")) renderLightPop();
   // đồng bộ các control ngoài right-panel sau undo/redo/nạp dữ liệu
   const pn=$("#projName"); if(document.activeElement!==pn) pn.value=state.projectName;
@@ -4073,6 +4275,7 @@ function setSheet(s, quiet){
   state.sheet=s; save(); renderAll();
   if(!quiet) toast(s==="light"? "Tờ CHIẾU SÁNG — ổ cắm đang ẩn"
     : s==="device"? "Tờ Ổ CẮM — đèn chỉ hiện mờ tham chiếu"
+    : s==="dim"? "Tờ KÍCH THƯỚC — tắt quầng sáng, lux và đường công tắc"
     : "Xem tất cả các lớp");
 }
 $$("#floorBar .sh").forEach(b=> b.onclick=()=>setSheet(b.dataset.sheet));
@@ -4710,6 +4913,7 @@ window.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey)&&k==="d"){ e.preventDefault(); duplicateSelected(); return; }
   if((e.ctrlKey||e.metaKey)&&k==="a"){ e.preventDefault(); selectAllLights(); return; }
   if(e.ctrlKey||e.metaKey) return;
+  if(e.key==="?"){ e.preventDefault(); openShortcuts(); return; }
   switch(k){
     case "v": setTool("select"); break;
     case "c": setTool("calibrate"); break;
@@ -4759,10 +4963,11 @@ window.addEventListener("keydown", e=>{
         toast(dimNote("Đã xoá thiết bị", np)); }
       else if(selTrack){
         const n=trackLights(selTrack).length;
-        if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`)){
-          let np=0; mutate(()=>{ np=deleteTrack(selTrack); });
+        const tid=selTrack;
+        (n? askConfirm("Xoá thanh ray này?", `${n} đèn đang gắn trên ray sẽ bị xoá theo. Ctrl+Z để hoàn tác.`) : Promise.resolve(true)).then(ok=>{ if(!ok) return;
+          let np=0; mutate(()=>{ np=deleteTrack(tid); });
           toast(dimNote(n? `Đã xoá ray và ${n} đèn` : "Đã xoá ray", np));
-        }
+        });
       }
       else if(selFan){ let np=0; mutate(()=>{ np=deleteFan(selFan); });
         toast(dimNote("Đã xoá quạt trần", np)); }
@@ -5201,9 +5406,9 @@ function renderCircuitList(z){
     cdel.title="Xoá cụm "+c.key+" — đèn giữ nguyên, chỉ bỏ gán cụm";
     cdel.onclick=ev=>{ ev.stopPropagation();
       const tong=fl.zones.reduce((s,zz)=>s+zz.lights.filter(l=>l.circuit===c.id).length,0);
-      if(!confirm(`Xoá cụm ${c.key}?\n${tong} đèn sẽ trở về “chưa gán cụm” (đèn không bị xoá).`)) return;
+      askConfirm(`Xoá cụm ${c.key}?`, `${tong} đèn sẽ trở về “chưa gán cụm” — đèn không bị xoá.`).then(ok=>{ if(!ok) return;
       mutate(()=>deleteCircuit(c.id, fl));
-      toast(`Đã xoá cụm ${c.key} — Ctrl+Z để hoàn tác`); };
+      toast(`Đã xoá cụm ${c.key} — Ctrl+Z để hoàn tác`); }); };
     el.appendChild(cdel);
     const gp=document.createElement("button"); gp.className="gp"+(off?"":" on");
     gp.title=off?"Đang tắt — bấm bật cụm":"Đang bật — bấm tắt cụm";
@@ -5385,8 +5590,8 @@ function refreshTrackPanel(){
         kéo đèn để trượt dọc ray · kéo ra xa hơn 0,6 m để gỡ khỏi ray · <b>Q/E</b> xoay ray.</p>`;
     p.querySelector("#trDel").onclick=()=>{
       const n=trackLights(tr.id).length;
-      if(!n || confirm(`Xoá thanh ray này? ${n} đèn đang gắn trên ray sẽ bị xoá theo.`))
-        mutate(()=>deleteTrack(tr.id));
+      (n? askConfirm("Xoá thanh ray này?", `${n} đèn đang gắn trên ray sẽ bị xoá theo. Ctrl+Z để hoàn tác.`) : Promise.resolve(true))
+        .then(ok=>{ if(ok) mutate(()=>deleteTrack(tr.id)); });
     };
     decField(p.querySelector("#trLen")).oninput=e=>{ const v=parseNum(e.target.value);
       if(!(v>0.1)) return; mutate(()=>{ tr.len=v; syncTrackLights(tr, fl); }); };
@@ -5792,6 +5997,14 @@ function refreshRight(){
   $("#rCount").textContent = c.count;
   $("#rWatt").innerHTML = `${fmt(c.totW)}<small> W</small>`;
   $("#rDensity").innerHTML = c.density!=null? `${fmt(c.density,1)}<small> W/m²</small>` : "–";
+  // dải ghim đáy panel
+  $("#lsZone").textContent=z.name;
+  $("#lsLux").innerHTML = c.actual!=null? `${fmt(c.actual)}<small>/${c.E} lux</small>` : "–";
+  const lsSt=$("#lsState"), rr=(c.actual!=null && c.E)? c.actual/c.E : null;
+  lsSt.className="ls-st "+(rr==null?"":rr<0.9?"low":rr>1.5?"high":"ok");
+  lsSt.textContent = rr==null? "" : rr<0.9? "Thiếu" : rr>1.5? "Dư" : "Đủ";
+  $("#lsWatt").textContent=`${fmt(c.totW)} W`;
+  syncLuxStrip();
 
   // cờ trạng thái
   const flag=$("#spaceFlag"); flag.innerHTML="";
@@ -6081,8 +6294,9 @@ function bindRight(){
   $("#zLoss").addEventListener("input", e=>upd(z=>z.lossFactor=clamp(parseNum(e.target.value)||0.7,0.3,1)));
   $("#zLoss").addEventListener("change", commit);
   $("#btnAuto").addEventListener("click", autoLayout);
-  $("#btnClearLights").addEventListener("click", ()=>{ const z=selZone(); if(!z) return;
-    mutate(()=>{ z.lights=[]; selLights=[]; }); toast("Đã xoá đèn — Ctrl+Z để hoàn tác"); });
+  $("#btnClearLights").addEventListener("click", ()=>{ const z=selZone(); if(!z || !z.lights.length) return;
+    askConfirm(`Xoá hết ${z.lights.length} đèn trong “${z.name}”?`, "Ctrl+Z để hoàn tác.", "Xoá hết đèn").then(ok=>{ if(!ok) return;
+    mutate(()=>{ z.lights=[]; selLights=[]; }); toast("Đã xoá đèn — Ctrl+Z để hoàn tác"); }); });
   // "Đổi…" mẫu đèn sắp đặt = chuyển sang công cụ Đèn và mở bảng chọn mẫu (một đường duy nhất)
   $("#btnPickLight").addEventListener("click", ()=>{ setTool("light"); });
   bindRightGrip();
@@ -6214,10 +6428,14 @@ function openLibrary(pickMode){
   const m=document.createElement("div"); m.className="modal-bg"; m.id="libModal";
   m.innerHTML=`<div class="modal"><h3 class="serif">Thư viện đèn</h3>
     <p class="libnote">Danh mục dùng chung mọi dự án — thêm, sửa hay xoá ở đây sẽ áp cho các dự án mới.</p>
+    <div class="libtools" id="libTools">
+      <input type="search" id="libQ" placeholder="Tìm theo mã, tên, công suất, góc chiếu…" aria-label="Tìm mẫu đèn" autocomplete="off">
+      <div class="libchips" id="libChips" role="group" aria-label="Lọc theo loại"></div>
+    </div>
     <div class="body" id="libBody"></div>
     <div class="foot">
       <button class="btn ghost" id="libAdd">+ Thêm đèn</button>
-      <button class="btn ghost sm" id="libRestore" title="Thêm lại các mẫu đèn mặc định còn thiếu — không đụng tới mẫu anh đã sửa hoặc tự thêm">⟲ Mẫu mặc định</button>
+      <button class="btn ghost sm" id="libRestore" title="Thêm lại các mẫu đèn mặc định còn thiếu — không đụng tới mẫu anh đã sửa hoặc tự thêm">Mẫu mặc định</button>
       <span style="flex:1"></span>
       <button class="btn" id="libCancel">Đóng</button>
       ${z?'<button class="btn primary" id="libUse">Dùng cho khu vực</button>':""}
@@ -6244,11 +6462,28 @@ function openLibrary(pickMode){
     toast("Đã thêm lại "+missing.length+" mẫu mặc định — Ctrl+Z để hoàn tác");
     renderLib();
   };
+  let libQ="", libType="";
+  const qIn=m.querySelector("#libQ");
+  qIn.addEventListener("input", ()=>{ libQ=qIn.value.trim().toLowerCase(); renderLib(); });
+  qIn.addEventListener("keydown", e=>{ if(e.key==="Escape" && qIn.value){ e.stopPropagation(); qIn.value=""; libQ=""; renderLib(); } });
   renderLib();
+  requestAnimationFrame(()=>qIn.focus());
 
   function renderLib(){
     const b=m.querySelector("#libBody"); b.innerHTML="";
-    state.lights.forEach(l=>{
+    m.querySelector("#libTools").classList.remove("hidden");
+    // chip loại: chỉ hiện loại đang có trong thư viện, kèm số lượng
+    const types=[...new Set(state.lights.map(l=>l.type))];
+    const chips=m.querySelector("#libChips");
+    chips.innerHTML=[["", "Tất cả", state.lights.length], ...types.map(t=>[t, typeLabel(t), state.lights.filter(l=>l.type===t).length])]
+      .map(([t,lbl,n])=>`<button class="libchip${t===libType?" on":""}" data-t="${t}" aria-pressed="${t===libType}">${escapeHtml(lbl)} <span>${n}</span></button>`).join("");
+    chips.querySelectorAll(".libchip").forEach(c=> c.onclick=()=>{ libType=c.dataset.t; renderLib(); });
+    const match=l=>(!libType || l.type===libType) && (!libQ ||
+      [l.code,l.name,typeLabel(l.type),l.watt+"w",l.beam+"°",lampLumen(l)+" lm"].join(" ").toLowerCase().includes(libQ));
+    const list=state.lights.filter(match);
+    if(!list.length){ b.innerHTML=`<p class="visempty">Không có mẫu nào khớp “${escapeHtml(libQ||typeLabel(libType))}”. <button class="btn sm" id="libQClr">Xoá bộ lọc</button></p>`;
+      b.querySelector("#libQClr").onclick=()=>{ libQ=""; libType=""; qIn.value=""; renderLib(); }; return; }
+    list.forEach(l=>{
       const el=document.createElement("div"); el.className="lp-item"+(l.id===libSel?" sel":"");
       el.appendChild(symbolIconSVG(l.type, null, l.mount));
       const lth=thumbEl(l); if(lth) el.appendChild(lth);
@@ -6281,6 +6516,7 @@ function openLibrary(pickMode){
     });
   }
   function lightForm(existing){
+    m.querySelector("#libTools").classList.add("hidden");
     const b=m.querySelector("#libBody");
     const l=existing||{name:"",type:"downlight",beam:60,lumen:"",watt:12,url:"",thumb:null};
     b.innerHTML=`
@@ -6427,7 +6663,7 @@ $("#fileInput").addEventListener("change", e=>{
 });
 $("#opacity").addEventListener("input", e=>{ F().bgOpacity=e.target.value/100;
   $("#opv").textContent=e.target.value+"%"; $("#bg").style.opacity=F().bgOpacity; save(); });
-$("#btnRemoveBg").onclick=()=>{ if(confirm(`Gỡ ảnh nền của ${F().name}? Các khu vực đã vẽ vẫn giữ.`)){
+$("#btnRemoveBg").onclick=async()=>{ if(await askConfirm(`Gỡ ảnh nền của ${F().name}?`, "Khu vực và đèn đã vẽ vẫn giữ nguyên. Thao tác này không hoàn tác được — muốn dùng lại phải tải ảnh lên lần nữa.", "Gỡ ảnh nền")){
   F().bg=null; delete bgCache[F().id];
   $("#bgControls").classList.add("hidden"); save(); fitView(); } };
 $("#chkGlow").addEventListener("change", e=>{ state.showGlow=e.target.checked; save(); render(); });
@@ -6456,9 +6692,9 @@ $("#btnGenDims").onclick=()=>{
 $("#btnClrDims").onclick=()=>{
   const fl=F(), n=(fl.dims||[]).length;
   if(!n){ toast("Tầng này chưa có kích thước nào"); return; }
-  if(!confirm(`Xoá hết ${n} kích thước của ${fl.name}?`)) return;
+  askConfirm(`Xoá hết ${n} kích thước của ${fl.name}?`, "Ctrl+Z để hoàn tác.").then(ok=>{ if(!ok) return;
   mutate(()=>{ fl.dims=[]; selDim=null; });
-  toast(`Đã xoá ${n} kích thước — Ctrl+Z để hoàn tác`);
+  toast(`Đã xoá ${n} kích thước — Ctrl+Z để hoàn tác`); });
 };
 $$("#lblSeg button").forEach(b=> b.onclick=()=>{
   state.labelMode=b.dataset.lm; save(); render(); syncLblSeg();
@@ -6531,7 +6767,7 @@ $("#btnPng").onclick=async()=>{
 $("#btnSaveFile").onclick=()=>{
   const blob=new Blob([JSON.stringify(state)],{type:"application/json"});
   downloadURL(URL.createObjectURL(blob), safeName()+FILE_EXT);
-  toast("Đã lưu file dự án — mở lại bằng nút “Mở”");
+  toast("Đã lưu file dự án — mở lại bằng Dự án ▸ Mở file");
 };
 /* ---- Khôi phục: quét MỌI nguồn còn sót trong trình duyệt này ---- */
 function scanRecovery(){
@@ -6579,7 +6815,7 @@ $("#btnRecover").onclick=()=>{
     if(!found.length){
       b.innerHTML=`<p style="font-size:13px;line-height:1.7">Không tìm thấy bản lưu nào trong trình duyệt này.<br><br>
         <b>Hãy thử:</b><br>• Mở app đúng bằng cách anh vẫn dùng (nếu hay mở bằng file thì mở lại đúng file đó — dữ liệu lưu riêng theo từng cách mở).<br>
-        • Nếu có file <b>.inexlight</b> đã lưu, dùng nút <b>Mở</b>.</p>`;
+        • Nếu có file <b>.inexlight</b> đã lưu, dùng <b>Dự án ▸ Mở file dự án</b>.</p>`;
       return;
     }
     found.sort((a,b2)=>(b2.raw._at||0)-(a.raw._at||0));
@@ -6590,8 +6826,9 @@ $("#btnRecover").onclick=()=>{
       el.innerHTML=`<div class="d"><b>${escapeHtml(d.name)}</b>
         <small>${f.src}${d.at? " · "+d.at:""} — ${d.floors} tầng · ${d.zones} khu vực · ${d.lights} đèn${d.devices? " · "+d.devices+" thiết bị":""}${d.imgs? " · "+d.imgs+" ảnh nền":""}</small></div>
         <button class="btn primary sm">Nạp</button>`;
-      el.querySelector("button").onclick=()=>{
-        if(!confirm(`Nạp “${d.name}” (${d.lights} đèn)? Dự án đang mở sẽ bị thay thế.`)) return;
+      el.querySelector("button").onclick=async()=>{
+        if(!await askReplaceProject(`Nạp “${d.name}”?`, `Bản này có ${d.lights} đèn. “${state.projectName}” đang mở sẽ được thay thế.`, "Nạp bản này")) return;
+        stashProject("khôi phục");
         bgCache={}; adopt(JSON.parse(JSON.stringify(f.raw)));
         hist=[]; future=[]; selLights=[]; draft=null;
         save(); renderAll(); fitView(); close();
@@ -6606,11 +6843,12 @@ $("#projFile").addEventListener("change", e=>{
   const f=e.target.files[0]; e.target.value="";
   if(!f) return;
   const rd=new FileReader();
-  rd.onload=()=>{
+  rd.onload=async()=>{
     try{
       const raw=JSON.parse(rd.result);
       if(!raw || (!raw.floors && !raw.zones)) throw 0;
-      if(!confirm("Mở dự án này? Dự án đang làm sẽ được thay thế (hãy Lưu file trước nếu cần).")) return;
+      if(!await askReplaceProject(`Mở “${raw.projectName||f.name}”?`, `“${state.projectName}” đang mở sẽ được thay thế.`, "Mở dự án")) return;
+      stashProject("mở file");
       // bgCache phải xoá TRƯỚC adopt (id tầng của file mới trùng id tầng cũ → lẫn ảnh nền),
       // nhưng nếu adopt ném thì phải TRẢ LẠI: nếu không, dự án đang làm mất sạch ảnh nền
       // dù người dùng chỉ mới lỡ chọn nhầm một file hỏng.
@@ -6692,38 +6930,86 @@ function preflightIssues(){
   const out=[];
   state.floors.forEach(f=>{
     const hasContent=(f.zones&&f.zones.length)||(f.devices&&f.devices.length);
-    if(hasContent && !f.pxPerMeter) out.push({lv:"err", msg:`Tầng “${f.name}” chưa cân tỉ lệ — diện tích và số đo sẽ sai.`});
+    const fi=state.floors.indexOf(f);
+    if(hasContent && !f.pxPerMeter) out.push({lv:"err", msg:`Tầng “${f.name}” chưa cân tỉ lệ — diện tích và số đo sẽ sai.`, go:{fi, tool:"calibrate"}});
     (f.devices||[]).forEach(d=>{
       if(d.kind==="prov" && !(d.note||"").trim())
-        out.push({lv:"err", msg:`Nguồn chờ ${d.code} (${f.name}) chưa ghi tên thiết bị chờ.`});
+        out.push({lv:"err", msg:`Nguồn chờ ${d.code} (${f.name}) chưa ghi tên thiết bị chờ.`, go:{fi, dev:d.id}});
       const z=deviceZone(d,f);
       const wet = z && /wc|tắm|lavabo|vệ sinh|toilet/i.test(z.name);
       if(wet && d.kind==="socket")
-        out.push({lv:"warn", msg:`Ổ cắm ${d.code} ở “${z.name}” (vùng ẩm) — nên dùng loại chống nước IP44.`});
+        out.push({lv:"warn", msg:`Ổ cắm ${d.code} ở “${z.name}” (vùng ẩm) — nên dùng loại chống nước IP44.`, go:{fi, dev:d.id}});
     });
     // cụm rỗng in vào hồ sơ
-    emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}” (${f.name}) — nên xoá trước khi xuất.`}));
+    emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}” (${f.name}) — nên xoá trước khi xuất.`, go:{fi, sec:"secCir"}}));
   });
   return out;
 }
+// Nhảy tới đúng chỗ của một lỗi kiểm tra: đổi tầng, chọn thiết bị / mở mục / bật công cụ
+function goToIssue(go){
+  if(!go) return;
+  if(go.fi!=null && go.fi!==state.cur){ state.cur=go.fi; }
+  selLights=[]; selSwitch=null; selDevice=null; selTrack=null; selDim=null; selFan=null;
+  if(go.dev) selDevice=go.dev;
+  renderAll(); fitView();
+  if(go.tool) setTool(go.tool);
+  if(go.sec){ const d=document.getElementById(go.sec); if(d){ d.open=true; d.scrollIntoView({block:"nearest"}); } }
+  if(RP_NARROW.matches && (go.dev||go.sec)){ $("#right").classList.add("open"); syncRightToggle(); }
+}
+async function exportPdf(){
+  await buildPrintDoc();
+  openPrintPreview();
+}
+/* Xem trước hồ sơ NGAY TRONG APP trước khi vào hộp in của trình duyệt — đây là thứ gửi khách,
+   phải nhìn thấy đủ trang, đúng thứ tự trước khi bấm in. */
+function openPrintPreview(){
+  const pa=$("#printArea");
+  const plans=[...pa.querySelectorAll("section.pr-plan")].map((sec,i)=>{
+    const img=sec.querySelector("img.plan");
+    const h=sec.querySelector("h2");
+    return {src:img?img.src:"", title:h? h.textContent.trim() : (state.floors.length===1? "Mặt bằng chiếu sáng" : state.floors[0].name)};
+  });
+  const tables=[...new Set([...pa.querySelectorAll("section:not(.pr-plan) h2, .pr-sec h2")].map(h=>h.textContent.trim()).filter(Boolean))];
+  const m=document.createElement("div"); m.className="modal-bg";
+  m.innerHTML=`<div class="modal pvw" style="max-width:760px"><h3 class="serif">Hồ sơ sẵn sàng — ${escapeHtml(state.projectName)}</h3>
+    <div class="body">
+      <p class="pvw-sum">${plans.length} bản vẽ${tables.length? ` · ${tables.length} bảng`:""} · đã bật hết đèn, bỏ vùng chọn</p>
+      <div class="pvw-grid">${plans.map((p,i)=>`<figure><div class="pvw-th"><img src="${p.src}" alt=""></div>
+        <figcaption><b>${i+1}</b> ${escapeHtml(p.title)}</figcaption></figure>`).join("")}</div>
+      ${tables.length? `<p class="pvw-h">Kèm theo</p><ol class="pvw-list" start="${plans.length+1}">${tables.map(t=>`<li>${escapeHtml(t)}</li>`).join("")}</ol>`:""}
+      <p class="pvw-tip">Trong hộp in, chọn <b>Đích: Lưu dưới dạng PDF</b>. Khổ giấy và hướng giấy anh chọn tuỳ ý.</p>
+    </div>
+    <div class="foot"><button class="btn" data-a="back">Quay lại</button><span style="flex:1"></span>
+      <button class="btn primary" data-a="print">In / Lưu PDF</button></div></div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove(); m.__close=close;
+  m.querySelector('[data-a="back"]').onclick=close;
+  m.querySelector('[data-a="print"]').onclick=()=>{ close(); setTimeout(()=>window.print(), 60); };
+  requestAnimationFrame(()=>m.querySelector('[data-a="print"]').focus());
+}
 $("#btnPdf").onclick=async()=>{
   const issues=preflightIssues();
-  if(!issues.length){ await buildPrintDoc(); setTimeout(()=>window.print(), 60); return; }
+  if(!issues.length){ await exportPdf(); return; }
   const m=document.createElement("div"); m.className="modal-bg"; m.id="pfModal";
   const errs=issues.filter(i=>i.lv==="err"), warns=issues.filter(i=>i.lv==="warn");
+  const li=(i,k)=>`<li>${i.go? `<button class="pf-go" data-k="${k}" title="Tới chỗ này trên bản vẽ">${escapeHtml(i.msg)}<span aria-hidden="true">→</span></button>` : escapeHtml(i.msg)}</li>`;
   m.innerHTML=`<div class="modal"><h3 class="serif">Kiểm tra trước khi xuất</h3>
     <div class="body">
-      ${errs.length? `<p style="margin:0 0 6px;color:#B4553C;font-weight:600">${errs.length} lỗi nên sửa:</p>
-        <ul style="margin:0 0 10px;padding-left:18px;line-height:1.6">${errs.map(i=>`<li>${escapeHtml(i.msg)}</li>`).join("")}</ul>`:""}
-      ${warns.length? `<p style="margin:0 0 6px;color:#8A6D3B;font-weight:600">${warns.length} lưu ý:</p>
-        <ul style="margin:0;padding-left:18px;line-height:1.6;color:var(--ink-2)">${warns.map(i=>`<li>${escapeHtml(i.msg)}</li>`).join("")}</ul>`:""}
+      ${errs.length? `<p class="pf-h err">${errs.length} lỗi nên sửa — sẽ in sai vào hồ sơ gửi khách:</p>
+        <ul class="pf-ul">${errs.map(i=>li(i, issues.indexOf(i))).join("")}</ul>`:""}
+      ${warns.length? `<p class="pf-h warn">${warns.length} lưu ý:</p>
+        <ul class="pf-ul muted">${warns.map(i=>li(i, issues.indexOf(i))).join("")}</ul>`:""}
+      <p class="pf-tip">Bấm vào từng dòng để tới đúng chỗ trên bản vẽ.</p>
     </div>
-    <div class="foot"><button class="btn" id="pfBack">Quay lại sửa</button><span style="flex:1"></span>
-      <button class="btn primary" id="pfGo">Vẫn xuất</button></div></div>`;
+    <div class="foot">${errs.length
+      ? `<button class="btn ghost" id="pfGo">Vẫn xuất</button><span style="flex:1"></span><button class="btn primary" id="pfBack">Quay lại sửa</button>`
+      : `<button class="btn" id="pfBack">Quay lại sửa</button><span style="flex:1"></span><button class="btn primary" id="pfGo">Xuất PDF</button>`}</div></div>`;
   document.body.appendChild(m);
   const close=()=>m.remove(); m.__close=close;
   m.querySelector("#pfBack").onclick=close;
-  m.querySelector("#pfGo").onclick=async()=>{ close(); await buildPrintDoc(); setTimeout(()=>window.print(), 60); };
+  m.querySelector("#pfGo").onclick=async()=>{ close(); await exportPdf(); };
+  m.querySelectorAll(".pf-go").forEach(b=> b.onclick=()=>{ close(); goToIssue(issues[+b.dataset.k].go); });
+  requestAnimationFrame(()=>m.querySelector(errs.length? "#pfBack" : "#pfGo").focus());
 };
 /* Dựng nội dung trang in (tách riêng để test được mà không mở hộp thoại in) */
 async function buildPrintDoc(){
@@ -7164,18 +7450,114 @@ new MutationObserver(recs=>{
 }).observe(document.body,{subtree:true, childList:true, attributes:true, attributeFilter:["class"]});
 syncA11y();
 
+/* =========================== DẢI KẾT QUẢ GHIM =========================== */
+let _resVisible=true;
+function syncLuxStrip(){
+  const sec=$("#resSec"), st=$("#luxStrip");
+  if(!sec || !st) return;
+  st.classList.toggle("hidden", _resVisible || !sec.offsetParent);
+}
+(function(){
+  const sec=$("#resSec"); if(!sec || !("IntersectionObserver" in window)) return;
+  new IntersectionObserver(es=>{ _resVisible=es[0].isIntersecting; syncLuxStrip(); },
+    {root:$("#right"), threshold:0.35}).observe(sec);
+  $("#luxStrip").onclick=()=>sec.scrollIntoView({behavior:"smooth", block:"nearest"});
+})();
+
+/* =========================== BẢNG PHÍM TẮT (?) =========================== */
+function openShortcuts(){
+  if(document.querySelector("#kbModal")) return;
+  // công cụ đọc thẳng từ thanh công cụ → không bao giờ lệch với nút thật
+  const tools=[...document.querySelectorAll("#toolbar .tool")].map(b=>{
+    const key=(b.querySelector(".kbd")||{}).textContent||"";
+    const [name, desc]=(b.title||"").replace(/\s*\([^)]*\)\s*$/,"").split(" — ");
+    return {key, name, desc:desc||""};
+  });
+  const row=(keys,txt)=>`<tr><td>${keys.split(" ").map(k=>`<kbd>${escapeHtml(k)}</kbd>`).join(" ")}</td><td>${txt}</td></tr>`;
+  const m=document.createElement("div"); m.className="modal-bg"; m.id="kbModal";
+  m.innerHTML=`<div class="modal" style="max-width:640px"><h3 class="serif">Phím tắt &amp; thao tác</h3>
+    <div class="body kb-body">
+      <section><p class="kb-h">Công cụ</p><table class="kb">${tools.map(t=>row(t.key, `<b>${escapeHtml(t.name)}</b>${t.desc?` <span>— ${escapeHtml(t.desc)}</span>`:""}`)).join("")}</table></section>
+      <section><p class="kb-h">Chỉnh sửa</p><table class="kb">
+        ${row("Ctrl+Z","Hoàn tác — kể cả sau khi tạo dự án mới / nạp mẫu")}
+        ${row("Ctrl+Y","Làm lại")}
+        ${row("Delete","Xoá thứ đang chọn")}
+        ${row("Ctrl+D","Nhân bản")}
+        ${row("Ctrl+A","Chọn tất cả đèn của tầng")}
+        ${row("Q E","Xoay 15°")}
+        ${row("T","Bật / tắt cụm của đèn đang chọn")}
+        ${row("← → ↑ ↓","Dịch 5 cm · giữ Shift: 25 cm")}
+        ${row("1–9","Đổi loại thiết bị khi đang đặt ổ cắm")}
+        ${row("Esc","Bỏ chọn / thoát công cụ")}
+      </table>
+      <p class="kb-h">Chuột</p><table class="kb">
+        ${row("Double-click","Chọn cả loại đèn")}
+        ${row("Alt+click","Chọn đèn bị đè bên dưới")}
+        ${row("Space+kéo","Di chuyển bản vẽ (hoặc kéo chuột phải / giữa)")}
+        ${row("Ctrl+lăn","Phóng to / thu nhỏ")}
+        ${row("G","Bật / tắt quầng sáng")}
+        ${row("?","Mở bảng này")}
+      </table></section>
+    </div>
+    <div class="foot"><span style="flex:1"></span><button class="btn primary" data-a="x">Đã hiểu</button></div></div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove(); m.__close=close;
+  m.querySelector('[data-a="x"]').onclick=close;
+  m.addEventListener("click", e=>{ if(e.target===m) close(); });
+  requestAnimationFrame(()=>m.querySelector('[data-a="x"]').focus());
+}
+$("#btnHelp").onclick=openShortcuts;
+
+/* =========================== HEADER MENUS =========================== */
+// Popup đưa ra <body>: dải nút header có overflow + mask khi màn hẹp → để trong đó sẽ bị cắt/mờ
+(function initMenus(){
+  const menus=[...document.querySelectorAll(".hmenu")].map(w=>{
+    const t=w.querySelector(".hmenu-t"), pop=w.querySelector(".hmenu-pop");
+    document.body.appendChild(pop); return {t,pop};
+  });
+  const closeAll=()=>menus.forEach(({t,pop})=>{ pop.classList.add("hidden"); t.setAttribute("aria-expanded","false"); });
+  menus.forEach(({t,pop})=>{
+    const items=()=>[...pop.querySelectorAll("button")];
+    t.addEventListener("click", e=>{
+      e.stopPropagation();
+      const wasOpen=!pop.classList.contains("hidden"); closeAll(); if(wasOpen) return;
+      pop.classList.remove("hidden"); t.setAttribute("aria-expanded","true");
+      const r=t.getBoundingClientRect();
+      pop.style.top=(r.bottom+6)+"px";
+      pop.style.left=Math.max(8, Math.min(r.left, innerWidth-pop.offsetWidth-8))+"px";
+      if(e.detail===0) items()[0].focus();     // mở bằng bàn phím → con trỏ vào mục đầu
+    });
+    pop.addEventListener("click", e=>{ if(e.target.closest("button")) closeAll(); });
+    pop.addEventListener("keydown", e=>{
+      const it=items(), i=it.indexOf(document.activeElement);
+      if(e.key==="ArrowDown"){ e.preventDefault(); it[(i+1)%it.length].focus(); }
+      else if(e.key==="ArrowUp"){ e.preventDefault(); it[(i-1+it.length)%it.length].focus(); }
+      else if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); closeAll(); t.focus(); }
+      else if(e.key==="Tab"){ closeAll(); }
+    });
+  });
+  document.addEventListener("pointerdown", e=>{ if(!e.target.closest(".hmenu-pop,.hmenu-t")) closeAll(); });
+  addEventListener("resize", closeAll);
+  document.querySelector(".hbtns").addEventListener("scroll", closeAll, {passive:true});
+})();
+
 /* =========================== MISC =========================== */
 let toastTimer=null;
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show");
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2800); }
 
-$("#projName").addEventListener("input", e=>{ state.projectName=e.target.value; save(); });
+$("#saveWarn").onclick=()=>$("#btnSaveFile").click();
+$("#projName").addEventListener("input", e=>{ state.projectName=e.target.value; e.target.title=e.target.value; save(); });
 $("#projName").addEventListener("change", ()=>{ if(focusSnap){ pushHist(focusSnap); focusSnap=null; } });
-$("#btnReset").onclick=()=>{ if(confirm("Nạp dự án mẫu? Dự án hiện tại sẽ bị thay thế — hãy “Lưu file” trước nếu cần giữ.")) loadSeed(); };
-$("#btnClear").onclick=()=>{ if(confirm("Bắt đầu dự án trống? Toàn bộ tầng, ảnh nền, khu vực và đèn hiện tại sẽ bị xoá — hãy “Lưu file” trước nếu cần giữ.")){
+$("#btnReset").onclick=async()=>{
+  if(!await askReplaceProject("Nạp dự án mẫu?", `“${state.projectName}” đang mở sẽ được thay bằng nhà mẫu.`, "Nạp mẫu")) return;
+  stashProject("mẫu"); loadSeed(); updateUndoBtns(); };
+$("#btnClear").onclick=async()=>{
+  if(!await askReplaceProject("Bắt đầu dự án trống?", `Toàn bộ tầng, ảnh nền, khu vực và đèn của “${state.projectName}” sẽ được thay bằng một dự án trống.`, "Tạo dự án mới")) return;
+  stashProject("mới");
   bgCache={}; state=newState(); hist=[]; future=[]; selLights=[];
   $("#bgControls").classList.add("hidden"); $("#projName").value=state.projectName;
-  save(); fitView(); renderAll(); } };
+  save(); fitView(); renderAll(); updateUndoBtns(); };
 $("#btnLibrary").onclick=()=>openLibrary(false);
 $("#btnUndo").onclick=undo; $("#btnRedo").onclick=redo;
 $("#btnBgPop").onclick=()=>$("#bgPop").classList.toggle("hidden");

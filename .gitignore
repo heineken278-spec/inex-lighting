@@ -7,3 +7,6 @@ _*.json
 # Rác hệ thống
 Thumbs.db
 .DS_Store
+
+# Ban ghi danh gia giao dien (impeccable) — tai lieu noi bo, khong phai app
+.impeccable/
