@@ -714,14 +714,27 @@
     #app{display:none!important}
     #printArea{display:block!important}
     body{background:#fff; color:var(--ink); font-family:var(--body); -webkit-print-color-adjust:exact; print-color-adjust:exact}
-    /* Đầu trang — cùng nhận diện với UI */
-    .pr-head{display:flex; justify-content:space-between; align-items:flex-end;
-      border-bottom:2px solid var(--accent); padding-bottom:9px; margin-bottom:14px}
-    .pr-head .wm{font-family:var(--serif); font-weight:700; font-size:20px; letter-spacing:-.02em; color:var(--ink)}
-    .pr-head .wm b{color:var(--accent-dark); font-weight:700}
-    .pr-head .sub{font-family:var(--label); text-transform:uppercase; letter-spacing:.12em;
-      font-size:9px; font-weight:600; color:var(--ink-3); margin-top:2px}
-    .pr-head .pj{font-family:var(--serif); font-weight:600; font-size:14px}
+    /* THANH TIÊU ĐỀ MỖI TỜ (anh Khoa: tiêu đề lớn dễ đọc). Số tờ to bên trái để thợ cầm xấp giấy
+       lật tìm nhanh; tên tờ là chữ lớn nhất trang; tên dự án + ngày nằm gọn bên phải. */
+    .pr-title{display:flex; justify-content:space-between; align-items:flex-end; gap:16px;
+      border-bottom:2.5px solid var(--accent); padding-bottom:8px; margin-bottom:10px; flex:none}
+    .pr-tl{display:flex; align-items:center; gap:14px; min-width:0}
+    .pr-no{font-family:var(--serif); font-weight:700; font-size:30px; line-height:1; color:#fff;
+      background:var(--accent-dark); border-radius:8px; padding:7px 10px 6px; letter-spacing:-.02em; flex:none}
+    .pr-no small{font-size:13px; font-weight:600; opacity:.8; margin-left:1px}
+    .pr-title h1{font-family:var(--serif); font-weight:700; font-size:25px; line-height:1.15; margin:0;
+      color:var(--ink); letter-spacing:-.01em}
+    .pr-st{font-family:var(--serif); font-weight:600; font-size:16px; color:var(--accent-dark); margin-top:3px}
+    .pr-tr{text-align:right; flex:none}
+    .pr-tr .pj{font-family:var(--serif); font-weight:600; font-size:14px; color:var(--ink)}
+    .pr-tr .sub{font-family:var(--label); font-size:10px; letter-spacing:.06em; color:var(--ink-3); margin-top:2px}
+    .pr-tr .sub b{color:var(--accent-dark)}
+    /* ghi chú cho thợ ngay dưới bản vẽ: chữ to vừa đủ đọc khi cầm giấy ở công trình */
+    .pr-tips{flex:none; margin:0 0 10px; padding:8px 12px 8px 28px; border:1px solid var(--line);
+      border-left:3px solid var(--accent); border-radius:4px; background:#FBF8F3;
+      font-size:11.5px; line-height:1.55; color:var(--ink)}
+    .pr-tips li{margin:1px 0}
+    .pr-tips .warn{color:var(--danger); font-weight:600}
     /* Bản vẽ CHIẾM TRỌN MỘT TRANG, bảng thống kê sang trang sau (anh Khoa). Vẫn phải chặn chiều
        cao: trình duyệt KHÔNG cắt đôi được tấm ảnh — ảnh cao hơn chỗ còn lại là bị đẩy nguyên khối
        sang trang sau, để lại một trang trống. Vùng in A4 = 297 − 2×13 = 271mm.
@@ -738,16 +751,16 @@
     /* .planbox nuốt hết chỗ thừa của trang; ảnh bên trong chỉ nhận max-width/max-height 100% nên
        nó TỰ ÔM SÁT nội dung — viền bám đúng mép bản vẽ, không bao quanh một vùng trắng trống. */
     #printArea .planbox{flex:1 1 auto; min-height:0; display:flex;
-      align-items:center; justify-content:center}
+      align-items:flex-start; justify-content:center}
     #printArea .planbox > .plan{max-width:100%; max-height:100%; width:auto; height:auto;
       border:1px solid var(--line); border-radius:6px}
     #printArea .plan{max-width:100%; display:block;
       border:1px solid var(--line); border-radius:6px}
-    #printArea h2{font-family:var(--serif); font-weight:600; font-size:14px; margin:16px 0 7px;
+    #printArea h2{font-family:var(--serif); font-weight:700; font-size:19px; margin:22px 0 9px;
       color:var(--ink); display:flex; align-items:center; gap:8px}
     #printArea h2::after{content:""; flex:1; height:1px; background:var(--line)}
 
-    table.pr{width:100%; border-collapse:collapse; font-size:10.5px; font-family:var(--body)}
+    table.pr{width:100%; border-collapse:collapse; font-size:11px; font-family:var(--body)}
     table.pr thead{display:table-header-group}          /* lặp tiêu đề khi sang trang */
     table.pr tr{break-inside:avoid}
     /* Tiêu đề cột KHÔNG xuống dòng: bảng còn thừa bề ngang mà chữ "CAO ĐỘ (M)" lại gãy 3 dòng,
@@ -771,7 +784,15 @@
       border:1px solid var(--line); border-radius:3px; padding:0 4px}
     .pr-link{color:var(--accent-dark); font-size:9.5px; word-break:break-all}
     .pr-sym{width:20px; height:20px; color:var(--ink); display:block; margin:0 auto}
-    .pr-hint{font-size:9px; color:var(--ink-3); margin:3px 0 10px; line-height:1.5}
+    .pr-hint{font-size:10px; color:var(--ink-2); margin:4px 0 10px; line-height:1.5}
+    /* các bảng CHẢY LIỀN nhau (trước đây mỗi bảng ép sang trang mới → trang chỉ có 3 dòng) */
+    .pr-tables{break-before:page; page-break-before:always}
+    .pr-tables .pr-sec:first-child h2{margin-top:0}
+    .pr-sec{break-inside:auto}
+    .pr-sec h2{break-after:avoid; page-break-after:avoid}
+    .pr-notes{margin:0; padding:10px 14px 10px 32px; border:1px solid var(--line); border-radius:6px;
+      background:var(--cream); font-size:12px; line-height:1.6; color:var(--ink)}
+    .pr-notes li{margin:2px 0; padding-left:2px}
     /* Chú thích cho khách hàng */
     .pr-note{border:1px solid var(--line); border-radius:6px; padding:10px 12px;
       background:var(--cream); font-size:10px; line-height:1.65}
@@ -964,7 +985,7 @@
         <button class="sh" data-sheet="all" title="Làm việc — thấy hết mọi lớp">Tất cả</button>
         <button class="sh" data-sheet="light" title="Tờ chiếu sáng: đèn + công tắc + kích thước định vị. Không có ổ cắm.">Chiếu sáng</button>
         <button class="sh" data-sheet="device" title="Tờ ổ cắm & thiết bị: ổ cắm / mạng / wifi / nguồn chờ. Đèn chỉ hiện mờ để tham chiếu.">Ổ cắm</button>
-        <button class="sh" data-sheet="dim" title="Tờ kích thước: ký hiệu + mã đèn + số định vị. Tắt quầng sáng, lux và đường công tắc.">Kích thước</button>
+        <button class="sh" data-sheet="dim" title="Tờ định vị đèn: ký hiệu + mã đèn + kích thước định vị. Tắt quầng sáng, lux và đường công tắc.">Định vị đèn</button>
       </div>
       <div id="sceneBar" class="uifloat"></div>
       <div id="scaleTag" class="uifloat">Tỉ lệ: <b id="scaleTxt">chưa cân</b></div>
@@ -2766,6 +2787,9 @@ function drawDimChain(ov, inv, segs, fr, ppm, froms, col){
   let ang=Math.atan2(fr.u.y, fr.u.x)*180/Math.PI;
   if(ang>=90) ang-=180; if(ang<-90) ang+=180;
   const ar=ang*Math.PI/180, ud={x:Math.cos(ar), y:Math.sin(ar)};
+  // Tờ ĐỊNH VỊ / Ổ CẮM khi xuất: số đo là thứ DUY NHẤT thợ đọc trên tờ đó → to hơn 30%, đậm, mực đen
+  // (in A4 bản vẽ bị thu nhỏ, cỡ màn hình thì số chỉ còn ~1,5 mm — đọc phải dí sát mắt).
+  const dimK = (exportInv!=null && ["DV","OC"].includes((curSheet()||{}).no))? 1.3 : 1;
   segs.forEach(sg=>{
     const A=fr.at(sg.a), B=fr.at(sg.b);
     ov.appendChild(svg("line",{x1:A.x,y1:A.y,x2:B.x,y2:B.y, stroke:col, "stroke-width":0.9*inv}));
@@ -2776,8 +2800,9 @@ function drawDimChain(ov, inv, segs, fr, ppm, froms, col){
     const tx=M.x+ud.y*4*inv, ty=M.y-ud.x*4*inv;   // nhích lên phía trên chữ (theo hệ đã xoay)
     const t=svg("text",{x:tx, y:ty, "text-anchor":"middle",
       transform: ang? `rotate(${ang.toFixed(2)} ${tx} ${ty})` : "",
-      "font-family":"'JetBrains Mono',monospace", "font-size":8.5*inv*textScale(),
-      fill:col, stroke:C_WHITE, "stroke-width":2.2*inv, "paint-order":"stroke",
+      "font-family":"'JetBrains Mono',monospace", "font-size":8.5*inv*textScale()*dimK,
+      "font-weight": dimK>1? 600 : 400,
+      fill: dimK>1? C_INK : col, stroke:C_WHITE, "stroke-width":2.6*inv, "paint-order":"stroke",
       style:"pointer-events:none"});
     t.textContent=txt;
     ov.appendChild(t);
@@ -2789,11 +2814,12 @@ function drawManualDims(ov0, inv, P){
   // Tờ hiện hành, tính giống nhau cho cả lúc XEM lẫn lúc XUẤT — không thì file xuất ra khác
   // hẳn cái đang nhìn, đúng lỗi anh Khoa đã bắt được một lần.
   const cs=curSheet();
-  const sh = (cs&&cs.allDims)? "all"
+  const sh = (cs&&cs.lightDims)? "lightpos"
     : cs===SHEET_LIGHT? "light" : cs===SHEET_DEVICE? "device" : "all";
   const g0=svg("g",{}); ov0.appendChild(g0);
   (fl.dims||[]).forEach(dm=>{
-    if(dm.sheet && sh!=="all" && dm.sheet!==sh) return;
+    if(sh==="lightpos"){ if(dm.sheet==="device") return; }
+    else if(dm.sheet && sh!=="all" && dm.sheet!==sh) return;
     const pts=dimPoints(dm, fl); if(!pts) return;     // mất neo → im lặng bỏ qua, không ném lỗi
     const sel = exportInv==null && selDim===dm.id;
     const col = sel? C_ACCENT_D : "#6E665A";
@@ -2973,17 +2999,24 @@ let exportPad=0;     // chiều cao DẢI CHÚ THÍCH thêm dưới tờ xuất 
    Quầng sáng thì GIỮ: nó không phải chỉ dẫn cho thợ nào cả, mà là thứ giải thích con số lux in
    ngay trên tờ đó — bỏ đi thì tờ giấy tự mâu thuẫn với chính nó.
    devKinds: trong đám thiết bị chỉ cho "nguồn chờ" lên tờ này, ổ cắm/mạng/wifi vẫn ở tờ riêng. */
-const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","dims","devices"]),
-                       devKinds:new Set(["prov"]), hideStrips:true };
+/* (2026-11, anh Khoa) Tờ chiếu sáng KHÔNG còn kích thước — số định vị đèn sang hẳn tờ ĐỊNH VỊ ĐÈN,
+   để tờ này chỉ đọc một chuyện: đèn nào, chung công tắc nào. */
+const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","devices"]),
+                       devKinds:new Set(["prov"]), hideStrips:true,
+                       no:"CS", title:"Mặt bằng chiếu sáng & công tắc" };
 /* KHÔNG override độ mờ ảnh nền: tờ nào cũng dùng đúng độ mờ anh đang chỉnh ở thanh "Mặt bằng nền".
    Trước đây tờ ổ cắm bị ép 0,9 nên ảnh trace in ra đậm khác hẳn cái đang xem — đọc như bị lỗi. */
 /* "dims" CÓ trên tờ ổ cắm: kích thước định vị ổ cắm là thứ thợ điện cần nhất trên đúng tờ đó.
    Lọc tinh bằng `dim.sheet` của từng kích thước — dim định vị đèn thì để ở tờ chiếu sáng. */
-const SHEET_DEVICE = { layers:new Set(["devices","dims"]), ghostLights:true };
+const SHEET_DEVICE = { layers:new Set(["devices","dims"]), ghostLights:true,
+                       no:"OC", title:"Mặt bằng ổ cắm & điện nhẹ" };
 /* Tờ KÍCH THƯỚC (anh Khoa): chỉ để ĐỌC SỐ khi định vị. Tắt quầng sáng, lux và đường công tắc, còn
    ký hiệu VÀ MÃ ĐÈN giữ nguyên — đo tới một ký hiệu mà không biết nó là đèn mã gì thì con số đó
    không dùng để đặt hàng hay nghiệm thu được. Hiện MỌI kích thước, bỏ qua cờ `sheet` của từng cái. */
-const SHEET_DIM = { layers:new Set(["dims","devices"]), allDims:true };
+/* (2026-11) Tờ này thành tờ ĐỊNH VỊ ĐÈN: mọi kích thước TRỪ kích thước của tờ ổ cắm (đó là chỗ của
+   chúng); trong đám thiết bị chỉ giữ NGUỒN CHỜ — điểm thợ điện phải chừa đúng chỗ như đèn. */
+const SHEET_DIM = { layers:new Set(["dims","devices"]), devKinds:new Set(["prov"]), lightDims:true,
+                    no:"DV", title:"Mặt bằng định vị đèn" };
 /* Tờ đang xem/đang xuất. Trên màn hình mặc định "all" = làm việc, thấy hết mọi lớp. */
 const SHEETS = { all:null, light:SHEET_LIGHT, device:SHEET_DEVICE, dim:SHEET_DIM };
 function curSheet(){ return exportInv!=null? exportOpts : SHEETS[state.sheet||"all"]; }
@@ -3600,7 +3633,8 @@ function titleBlockBox(inv, P){
   }
   const th=6*inv, ts=textScale();
   const line1=state.projectName||"Dự án";
-  const line2=F().name+(F().pxPerMeter? "":" · CHƯA CÂN TỈ LỆ");
+  const cs0=curSheet();
+  const line2=F().name+(cs0&&cs0.title? " · "+cs0.title : "")+(F().pxPerMeter? "":" · CHƯA CÂN TỈ LỆ");
   const FOOT="Không đo số trực tiếp trên bản vẽ";
 
   // BỀ RỘNG / CHIỀU CAO khối tính từ CHỮ THẬT (đã gồm textScale), không phải hằng số. Bản trước
@@ -4275,7 +4309,8 @@ function setSheet(s, quiet){
   state.sheet=s; save(); renderAll();
   if(!quiet) toast(s==="light"? "Tờ CHIẾU SÁNG — ổ cắm đang ẩn"
     : s==="device"? "Tờ Ổ CẮM — đèn chỉ hiện mờ tham chiếu"
-    : s==="dim"? "Tờ KÍCH THƯỚC — tắt quầng sáng, lux và đường công tắc"
+    : s==="light"? "Tờ CHIẾU SÁNG & CÔNG TẮC — kích thước nằm ở tờ Định vị đèn"
+    : s==="dim"? "Tờ ĐỊNH VỊ ĐÈN — kích thước định vị, tắt quầng sáng và công tắc"
     : "Xem tất cả các lớp");
 }
 $$("#floorBar .sh").forEach(b=> b.onclick=()=>setSheet(b.dataset.sheet));
@@ -4304,6 +4339,7 @@ function setTool(t){
   // trên tờ Chiếu sáng sẽ không thấy gì hiện ra và tưởng app hỏng
   if(t==="device" && !sheetHas("devices")) setSheet("all", true);
   else if((t==="light"||t==="switch"||t==="track"||t==="fan") && (curSheet()||{}).ghostLights) setSheet("all", true);
+  else if(t==="dim" && !sheetHas("dims")) setSheet("dim", true);
   tool=t; draft=null;
   if(t!=="dim") dimSnap=null;   // đổi công cụ mà chưa rê chuột thì ô bắt điểm còn treo lại trên bản vẽ
   $$("#toolbar .tool").forEach(b=>b.classList.toggle("active", b.dataset.tool===t));
@@ -6942,6 +6978,8 @@ function preflightIssues(){
     });
     // cụm rỗng in vào hồ sơ
     emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}” (${f.name}) — nên xoá trước khi xuất.`, go:{fi, sec:"secCir"}}));
+    if(f.zones.some(z=>z.lights.length) && !(f.dims||[]).some(dm=>dm.sheet!=="device"))
+      out.push({lv:"warn", msg:`${f.name} chưa có kích thước định vị đèn — tờ Định vị đèn sẽ không có số đo.`, go:{fi, tool:"dim"}});
   });
   return out;
 }
@@ -6964,12 +7002,12 @@ async function exportPdf(){
    phải nhìn thấy đủ trang, đúng thứ tự trước khi bấm in. */
 function openPrintPreview(){
   const pa=$("#printArea");
-  const plans=[...pa.querySelectorAll("section.pr-plan")].map((sec,i)=>{
+  const plans=[...pa.querySelectorAll("section.pr-plan")].map(sec=>{
     const img=sec.querySelector("img.plan");
-    const h=sec.querySelector("h2");
-    return {src:img?img.src:"", title:h? h.textContent.trim() : (state.floors.length===1? "Mặt bằng chiếu sáng" : state.floors[0].name)};
+    const h=sec.querySelector(".pr-title h1"), st=sec.querySelector(".pr-st");
+    return {src:img?img.src:"", title:(h?h.textContent.trim():"Mặt bằng")+(st? " — "+st.textContent.trim():"")};
   });
-  const tables=[...new Set([...pa.querySelectorAll("section:not(.pr-plan) h2, .pr-sec h2")].map(h=>h.textContent.trim()).filter(Boolean))];
+  const tables=[...new Set([...pa.querySelectorAll(".pr-tables h2")].map(h=>h.textContent.trim()).filter(Boolean))];
   const m=document.createElement("div"); m.className="modal-bg";
   m.innerHTML=`<div class="modal pvw" style="max-width:760px"><h3 class="serif">Hồ sơ sẵn sàng — ${escapeHtml(state.projectName)}</h3>
     <div class="body">
@@ -7026,15 +7064,20 @@ async function buildPrintDoc(){
   state.floors.forEach(f=>f.liveOff=[]);
   // 2 ảnh mỗi tầng: tờ CHIẾU SÁNG (đèn+điều khiển, không ổ cắm) và tờ THI CÔNG (ổ cắm, không quầng
   // sáng/lux) — chỉ dựng tờ thi công khi tầng có thiết bị.
-  const imgs=[], imgsDev=[], imgsDim=[];
+  // MỖI TẦNG tối đa 3 tờ, đúng thứ tự thợ dùng (anh Khoa): CHIẾU SÁNG & CÔNG TẮC → ĐỊNH VỊ ĐÈN →
+  // Ổ CẮM. Tờ nào không có nội dung thì bỏ, không in trang trống.
+  const sheetsOf=[];
   for(let i=0;i<state.floors.length;i++){
     state.cur=i;
-    exportOpts=SHEET_LIGHT; render(); imgs.push(await composite());
-    if((state.floors[i].devices||[]).length){ exportOpts=SHEET_DEVICE; render(); imgsDev.push(await composite()); }
-    else imgsDev.push(null);
-    // tờ KÍCH THƯỚC chỉ dựng khi tầng thật sự có kích thước — không thì đó là một trang trống
-    if((state.floors[i].dims||[]).length){ exportOpts=SHEET_DIM; render(); imgsDim.push(await composite()); }
-    else imgsDim.push(null);
+    const fl=state.floors[i], list=[];
+    const nLights=fl.zones.reduce((s,z)=>s+z.lights.length,0);
+    const hasSock=(fl.devices||[]).some(d=>d.kind!=="prov");
+    if(nLights || (fl.switches||[]).length || !hasSock){
+      exportOpts=SHEET_LIGHT; render(); list.push({sh:SHEET_LIGHT, img:await composite()}); }
+    if(nLights){ exportOpts=SHEET_DIM; render(); list.push({sh:SHEET_DIM, img:await composite(),
+      noDims:!(fl.dims||[]).some(dm=>dm.sheet!=="device")}); }
+    if(hasSock){ exportOpts=SHEET_DEVICE; render(); list.push({sh:SHEET_DEVICE, img:await composite()}); }
+    sheetsOf.push(list);
   }
   exportOpts=null;
   state.floors.forEach((f,i)=>f.liveOff=live0[i]);
@@ -7134,37 +7177,50 @@ async function buildPrintDoc(){
 
   // BẢN VẼ và BẢNG tách thành HAI TẬP (anh Khoa): mọi trang bản vẽ đi liền nhau trước, rồi mới tới
   // các bảng thống kê — đúng thông lệ hồ sơ, và người xem không phải lật qua bảng để so hai mặt bằng.
-  const plans =
-    `<section class="pr-floor pr-plan">${multi? `<h2>${escapeHtml(fl.name)}</h2>`:""}
-      <div class="planbox"><img class="plan" src="${imgs[fi]}"></div></section>`
-    + (imgsDev[fi]? `<section class="pr-floor pr-plan"><h2>Mặt bằng ổ cắm &amp; điện nhẹ${suffix}</h2>
-        <div class="planbox"><img class="plan" src="${imgsDev[fi]}"></div></section>` : "")
-    + (imgsDim[fi]? `<section class="pr-floor pr-plan"><h2>Mặt bằng kích thước định vị${suffix}</h2>
-        <div class="planbox"><img class="plan" src="${imgsDim[fi]}"></div></section>` : "");
+  const hasStrip=fl.zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip"));
+  const swH=[...new Set((fl.switches||[]).map(sw=>sw.mh!=null?sw.mh:1.25))];
+  // GHI CHÚ NGAY DƯỚI BẢN VẼ — viết cho THỢ đọc tại công trình: ngắn, một ý một dòng, không lý thuyết
+  const tips={
+    CS:[ "Chữ <b>a, b, c…</b> cạnh đèn là <b>cụm</b>: các đèn cùng chữ bật chung một nút công tắc.",
+         "Nét đứt chỉ cho biết đèn nào chung công tắc — <b>không phải đường đi dây</b>.",
+         (fl.switches||[]).length? `Công tắc cao <b>+${fmtPlan(swH.length===1? swH[0]:1.25,2)} m</b> tính từ sàn hoàn thiện${swH.length>1?" (chỗ khác ghi riêng trên bảng công tắc)":""}.` : null,
+         hasStrip? "LED dây do <b>xưởng gỗ</b> lắp — thợ điện chỉ chừa <b>nguồn chờ (NC)</b> tại điểm ghi trên bản vẽ." : null ],
+    DV:[ "Kích thước ghi bằng <b>mm</b>, đo từ <b>mặt tường hoàn thiện</b> tới <b>tâm đèn</b>.",
+         "Chỉ dùng số ghi — <b>không đo trên giấy in</b>.",
+         "Mã đèn (VD BG12) tra loại đèn và số lượng ở <b>Bảng vật tư</b>." ],
+    OC:[ "Số cạnh ổ (VD <b>+0,4</b>) là <b>cao độ tâm ổ</b>, tính bằng mét từ sàn hoàn thiện.",
+         "Kích thước ghi bằng <b>mm</b>, đo từ mặt tường hoàn thiện tới tâm ổ.",
+         "Đèn vẽ mờ chỉ để tham chiếu vị trí — chi tiết đèn xem tờ chiếu sáng." ]
+  };
+  const plans = sheetsOf[fi].map(({sh,img,noDims})=>{
+    const tp=(tips[sh.no]||[]).filter(Boolean);
+    if(noDims) tp.unshift(`<span class="warn">Tầng này chưa có kích thước định vị — liên hệ thiết kế trước khi khoan trần.</span>`);
+    return `<section class="pr-floor pr-plan" data-no="${sh.no}">
+      <div class="pr-title"><div class="pr-tl"><span class="pr-no">__N__</span>
+        <div><h1>${escapeHtml(sh.title)}</h1><div class="pr-st">${escapeHtml(fl.name)}</div></div></div>
+        <div class="pr-tr"><div class="pj">${escapeHtml(state.projectName)}</div>
+          <div class="sub">InEx <b>Lighting</b> · ${dstr}</div></div></div>
+      ${tp.length? `<ul class="pr-tips">${tp.map(t=>`<li>${t}</li>`).join("")}</ul>`:""}
+      <div class="planbox"><img class="plan" src="${img}" alt=""></div>
+    </section>`;
+  }).join("");
   // Của tầng chỉ còn lại BẢNG CÔNG TẮC — nó không phải bảng khối lượng mà là bảng CẤU HÌNH
   // ĐIỀU KHIỂN (nút nào bật cụm nào, đặt ở đâu, cao độ), thứ bảng vật tư không thay thế được.
   const tables = ctlHtml
-    ? `<section class="pr-floor">${ctlHtml}</section>` : "";
+    ? `<section class="pr-sec">${ctlHtml}</section>` : "";
   return {plans, tables};
   });
   // Trật tự hồ sơ (anh Khoa): TẬP BẢN VẼ liền nhau → BẢNG VẬT TƯ (đặt hàng) → tổng theo tầng →
   // độ rọi → cấu hình công tắc → chú thích. Đi từ tổng tới chi tiết, và thứ dùng sớm nhất đứng trước.
   let floorBlocks = floorPieces.map(p=>p.plans).join("");
   const tableBlocks = floorPieces.map(p=>p.tables).join("");
-  // ĐẦU TRANG NẰM TRONG CHÍNH KHỐI BẢN VẼ ĐẦU TIÊN (anh Khoa: gộp 2 trang lại). Để nó là một khối
-  // riêng ở trên thì trình duyệt có quyền ngắt trang giữa nó và bản vẽ → ra trang 1 chỉ có tiêu đề
-  // rồi bỏ trống. Nhét vào trong cùng một <section> có break-inside:avoid thì KHÔNG THỂ tách.
-  const headHtml=`<div class="pr-head">
-      <div><div class="wm">InEx <b>Lighting</b></div>
-        <div class="sub">Hồ sơ thiết kế chiếu sáng</div></div>
-      <div style="text-align:right"><div class="pj">${escapeHtml(state.projectName)}</div>
-        <div class="sub">${multi? state.floors.length+" tầng · ":""}Ngày ${dstr}</div></div>
-    </div>`;
-  floorBlocks = floorBlocks.replace('<section class="pr-floor pr-plan">',
-    `<section class="pr-floor pr-plan pr-first">${headHtml}`);
+  // Số TỜ chạy liên tục qua mọi tầng: "Tờ 3/6" — thợ cầm tờ nào cũng biết còn thiếu tờ nào
+  { const nSheets=(floorBlocks.match(/__N__/g)||[]).length; let k=0;
+    floorBlocks=floorBlocks.replace(/__N__/g, ()=>{ k++; return `${String(k).padStart(2,"0")}<small>/${String(nSheets).padStart(2,"0")}</small>`; });
+    floorBlocks=floorBlocks.replace('<section class="pr-floor pr-plan"', '<section class="pr-floor pr-plan pr-first"'); }
   const totQty=qty(totUnits,totMeters);
   // bảng tổng toàn dự án khi có nhiều tầng
-  const grand=multi? `<section class="pr-floor"><h2>Khối lượng theo tầng</h2><table class="pr"><thead><tr>
+  const grand=multi? `<section class="pr-sec"><h2>Khối lượng theo tầng</h2><table class="pr"><thead><tr>
       <th>Tầng</th><th class="num" style="width:90px">Diện tích</th>
       <th class="num" style="width:110px">Số lượng đèn</th><th class="num" style="width:80px">Tổng W</th>
     </tr></thead><tbody>${state.floors.map(fl=>{
@@ -7262,16 +7318,14 @@ async function buildPrintDoc(){
         <td class="num"><b>${r.sl}</b></td><td>${r.dvt}</td>
         <td style="color:#6E665A">${escapeHtml(r.gc)}</td></tr>`).join("")}
       </tbody></table>` : "";
-  const mat = (matLights||matOther)? `<section class="pr-floor"><h2>Bảng vật tư — toàn dự án</h2>
+  const mat = (matLights||matOther)? `<section class="pr-sec"><h2>Bảng vật tư — toàn dự án</h2>
     ${matLights}${matOther}
-    <p class="pr-hint">Tờ này dùng để ĐẶT HÀNG: mọi tầng, mọi khu vực đã gộp lại theo mã. Ký hiệu ở
-    cột đầu đúng bằng ký hiệu trên mặt bằng. SL ổ cắm/thiết bị đếm theo VỊ TRÍ lắp (một ổ đôi vẫn là
-    một vị trí). Đơn giá và thành tiền không đưa vào hồ sơ bản vẽ — dùng file CSV để dựng báo giá.</p>
+    <p class="pr-hint">Dùng để đặt hàng: mọi tầng đã gộp theo mã. Ký hiệu cột đầu giống ký hiệu trên bản vẽ. Ổ cắm, thiết bị đếm theo vị trí lắp.</p>
     </section>` : "";
 
   /* Độ rọi theo khu vực — thứ DUY NHẤT của bảng theo phòng cũ mà bảng vật tư không thay thế được:
      nó chứng minh thiết kế đạt chuẩn, và là thứ khách hỏi khi duyệt phương án. */
-  const luxHtml = luxRows.length? `<section class="pr-floor"><h2>Độ rọi theo khu vực</h2>
+  const luxHtml = luxRows.length? `<section class="pr-sec"><h2>Độ rọi theo khu vực</h2>
     <table class="pr"><thead><tr>
       ${multi? '<th style="width:70px">Tầng</th>':""}<th>Khu vực</th>
       <th class="num" style="width:76px">Diện tích</th><th class="num" style="width:64px">Cao trần</th>
@@ -7284,34 +7338,31 @@ async function buildPrintDoc(){
       <td class="num">${r.lux||"—"}</td>
       <td class="num">${r.actual!=null? `<span class="${r.ok?"ok":"no"}">${Math.round(r.actual)} lx</span>` : "—"}</td>
     </tr>`).join("")}</tbody></table>
-    <p class="pr-hint">Lux ước tính theo phương pháp quang thông, hệ số suy giảm 0,7 — là con số THIẾT KẾ
-    để so với chuẩn, không phải kết quả đo tại công trình.</p></section>` : "";
+    <p class="pr-hint">Lux ước tính (phương pháp quang thông, hệ số 0,7) — số thiết kế để so với chuẩn TCVN 7114-1, không phải số đo tại công trình. Xanh = đạt, đỏ = thiếu.</p></section>` : "";
 
-  // ---- Chú thích cho khách hàng ----
-  const note=`<h2>Chú thích</h2><div class="pr-note">
-    <div><dt>Mã đèn</dt><dd>— ký hiệu ghi cạnh mỗi đèn trên bản vẽ mặt bằng, dùng để tra sang Bảng vật tư.</dd></div>
-    <div><dt>Độ rọi tiêu chuẩn (chuẩn … lx)</dt><dd>— mức sáng khuyến nghị cho từng loại phòng theo TCVN 7114-1 và EN 12464-1. Ví dụ: phòng khách 150–300 lx, bếp 500 lx, phòng ngủ 100–150 lx, bàn làm việc 300–500 lx.</dd></div>
-    <div><dt>Độ rọi ước tính (ước tính … lx)</dt><dd>— độ rọi trung bình <b>ước tính</b> trên mặt sàn khi bật đủ đèn của khu vực, theo phương pháp quang thông với hệ số suy giảm 0,7 (chưa xét chỉ số phòng và phản xạ bề mặt cụ thể). <span style="color:#4B6B39;font-weight:600">Xanh</span> = đạt chuẩn, <span style="color:${"#B4553C"};font-weight:600">đỏ</span> = còn thiếu sáng. Số mang tính tham khảo cho thiết kế sơ bộ.</dd></div>
-    <div><dt>Lux (lx)</dt><dd>— đơn vị đo độ rọi: lượng ánh sáng chiếu tới bề mặt. Quang thông (lumen) là tổng lượng sáng đèn phát ra.</dd></div>
-    <div><dt>ĐVT</dt><dd>— đơn vị tính: <b>bộ</b> = số bộ đèn rời; <b>m</b> = số mét dài đối với LED dây.</dd></div>
-    <div><dt>Vùng sáng trên bản vẽ</dt><dd>— quầng vàng minh hoạ phạm vi chiếu của mỗi đèn theo góc chiếu và chiều cao lắp đặt.</dd></div>
-    <div><dt>Cụm điều khiển (a, b, c…)</dt><dd>— nhóm đèn cùng bật/tắt bởi một nút công tắc, tương đương một mạch/đường dây (VD: đèn trần, đèn hắt, đèn rọi tranh). Chữ cụm ghi cạnh mỗi đèn trên bản vẽ.</dd></div>
-    <div><dt>Công tắc</dt><dd>— vị trí công tắc trên tường; chữ cạnh công tắc (VD “abc”) là các cụm nó điều khiển, “số nút” là số cụm. <b>Nét đứt trên bản vẽ nối các đèn CÙNG MỘT CỤM với nhau và với công tắc — đó là quan hệ ĐIỀU KHIỂN, KHÔNG phải tuyến đi dây.</b></dd></div>
-    <div><dt>Kịch bản chiếu sáng</dt><dd>— các cảnh sáng thường dùng, mỗi cảnh bật một số cụm (VD: “Sinh hoạt” bật đèn trần + hắt; “Xem phim” chỉ bật đèn hắt). Bản vẽ trong hồ sơ này thể hiện trạng thái <b>bật toàn bộ</b>.</dd></div>
-    <div><dt>Cách tính</dt><dd>— phương pháp quang thông: <b>Số đèn = (Độ rọi × Diện tích) ÷ (Quang thông mỗi đèn × Hệ số tổn hao)</b>. Hệ số tổn hao (mặc định 0,7) tính hao hụt do bụi bám, suy giảm quang thông và hấp thụ của tường/trần.</dd></div>
-    ${state.floors.some(f=>f.zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip")))
-      ? `<div><dt>LED dây</dt><dd>— <b>do xưởng gỗ lắp đặt</b> cùng đồ nội thất, không nằm trong phần việc của thợ điện. Trên mặt bằng chiếu sáng chỉ thể hiện <b>điểm nguồn chờ cho driver</b>; vị trí và chiều dài sợi dây xem <b>bản vẽ đồ gỗ</b>. Số mét trong bảng thống kê là số mét đặt hàng.</dd></div>`
-      : ""}
-    <div><dt>Phạm vi hồ sơ</dt><dd>— đây là bản vẽ <b>bố trí chiếu sáng</b> phục vụ thiết kế nội thất: vị trí đèn, cụm điều khiển và công tắc. Hồ sơ <b>không bao gồm</b> tính toán điện: tiết diện dây, aptomat, tủ điện, sơ đồ nguyên lý — các nội dung này do kỹ sư M&E triển khai.</dd></div>
-  </div>`;
+  // ---- GHI CHÚ THI CÔNG — viết cho THỢ (anh Khoa): mỗi dòng một việc, không giải thích lý thuyết.
+  // Phần lux/quang thông đã có 1 dòng ngay dưới bảng độ rọi — khách cần thì đọc ở đó.
+  const anyStrip=state.floors.some(f=>f.zones.some(z=>z.lights.some(l=>lightById(l.lightId).type==="strip")));
+  const anyTwoWay=state.floors.some(f=>{ const c={}; (f.switches||[]).forEach(sw=>(sw.circuits||[]).forEach(id=>c[id]=(c[id]||0)+1)); return Object.values(c).some(n=>n>1); });
+  const notes=[
+    "<b>Đơn vị:</b> kích thước ghi bằng <b>mm</b>; cao độ ghi bằng <b>m</b>, tính từ <b>sàn hoàn thiện</b>.",
+    "<b>Không đo trên giấy in</b> — chỉ dùng số ghi. Thực tế lệch so với bản vẽ thì báo thiết kế <b>trước khi khoan, đục</b>.",
+    "<b>Mã đèn</b> (VD BG12, M07) ghi cạnh mỗi đèn — tra loại đèn và số lượng ở <b>Bảng vật tư</b>.",
+    "<b>Cụm a, b, c…</b> — các đèn cùng chữ bật chung một nút công tắc."+(anyTwoWay? " Dấu <b>↔</b> = bật/tắt được ở 2 công tắc (đảo chiều).":""),
+    anyStrip? "<b>LED dây</b> do xưởng gỗ lắp cùng đồ nội thất — thợ điện chỉ chừa <b>nguồn chờ (NC)</b> cho driver." : null,
+    "Hồ sơ <b>không gồm</b> tiết diện dây, aptomat, tủ điện — làm theo hồ sơ M&amp;E."
+  ].filter(Boolean);
+  const note=`<section class="pr-sec"><h2>Ghi chú thi công</h2><ol class="pr-notes">${notes.map(n=>`<li>${n}</li>`).join("")}</ol></section>`;
 
   $("#printArea").innerHTML=`
     ${floorBlocks}
+    <div class="pr-tables">
     ${mat}
+    ${tableBlocks}
     ${grand}
     ${luxHtml}
-    ${tableBlocks}
     ${note}
+    </div>
     <div class="pr-foot">INEX DESIGN · inexdesign.vn — Số liệu tính theo phương pháp quang thông, mang tính tham khảo cho thiết kế sơ bộ.</div>`;
 
   // ĐỢI ẢNH GIẢI MÃ XONG rồi mới trả về. Ảnh bản vẽ là data-URL cỡ MB; nút Xuất PDF chỉ chờ 60ms
