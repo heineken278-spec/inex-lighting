@@ -2821,14 +2821,53 @@ function drawDimChain(ov, inv, segs, fr, ppm, froms, col){
   // Tờ ĐỊNH VỊ / Ổ CẮM khi xuất: số đo là thứ DUY NHẤT thợ đọc trên tờ đó → to hơn 30%, đậm, mực đen
   // (in A4 bản vẽ bị thu nhỏ, cỡ màn hình thì số chỉ còn ~1,5 mm — đọc phải dí sát mắt).
   const dimK = (exportInv!=null && ["DV","OC"].includes((curSheet()||{}).no))? 1.3 : 1;
-  segs.forEach(sg=>{
+  /* ĐẶT SỐ ĐO KHÔNG ĐÈ (anh Khoa: dim rối, khó nhìn). Mỗi số thử lần lượt: trên đường ghi → dưới
+     đường ghi → hàng 2 phía trên → hàng 2 phía dưới → (đoạn đầu/cuối chuỗi) ra ngoài đầu mút.
+     Chọn chỗ ÍT ĐÈ NHẤT lên: số đo khác, nhãn đèn/khu vực (lblBoxes), ký hiệu (lblObst). Thứ tự thử
+     cũng là thứ tự ưu tiên — chỗ "chuẩn" (trên, giữa đoạn) thắng khi không có gì vướng. */
+  const fs=8.5*inv*textScale()*dimK;
+  const pd={x:ud.y, y:-ud.x};                       // hướng "lên" của chữ (đã xoay theo đường ghi)
+  const gapT=4*inv;
+  const boxOf=(bx,by,w)=>{                          // hộp bao (trục thẳng) của chữ, neo giữa, baseline (bx,by)
+    const cx=bx+pd.x*fs*0.3, cy=by+pd.y*fs*0.3;
+    const hw=Math.abs(ud.x)*w/2+Math.abs(pd.x)*fs*0.55, hh=Math.abs(ud.y)*w/2+Math.abs(pd.y)*fs*0.55;
+    return {x:cx-hw, y:cy-hh, w:hw*2, h:hh*2};
+  };
+  const obstB=(lblObst||[]).map(o=>({x:o.x-o.hw, y:o.y-o.hh, w:o.hw*2, h:o.hh*2}));
+  segs.forEach((sg,si)=>{
     const A=fr.at(sg.a), B=fr.at(sg.b);
     ov.appendChild(svg("line",{x1:A.x,y1:A.y,x2:B.x,y2:B.y, stroke:col, "stroke-width":0.9*inv}));
     [A,B].forEach(p=>slash(p,1));
     const len=Math.abs(sg.b-sg.a);
     const txt = sg.txt!=null ? sg.txt : fmt(Math.round(len/ppm*1000));
     const M=fr.at((sg.a+sg.b)/2);
-    const tx=M.x+ud.y*4*inv, ty=M.y-ud.x*4*inv;   // nhích lên phía trên chữ (theo hệ đã xoay)
+    const tw=String(txt).length*fs*0.62+2*inv;      // font mono: ~0,6 em mỗi ký tự
+    const lo=Math.min(sg.a,sg.b), hi=Math.max(sg.a,sg.b);
+    const cands=[
+      {v:(lo+hi)/2, c: gapT,                 pen:0},
+      {v:(lo+hi)/2, c:-(gapT+fs*0.85),       pen:1},
+      {v:(lo+hi)/2, c: gapT+fs*1.15,         pen:2},
+      {v:(lo+hi)/2, c:-(gapT+fs*2.0),        pen:3}];
+    if(si===0) cands.push({v:lo-tw/2-4*inv, c:gapT, pen:1.5, out:lo});
+    if(si===segs.length-1) cands.push({v:hi+tw/2+4*inv, c:gapT, pen:1.5, out:hi});
+    let best=null;
+    cands.forEach(cd=>{
+      const P0=fr.at(cd.v);
+      const bx=P0.x+pd.x*cd.c, by=P0.y+pd.y*cd.c;
+      const box=boxOf(bx,by,tw);
+      let score=cd.pen*fs*fs*0.4;
+      // chữ dài hơn đoạn mà nằm GIỮA đoạn → tràn sang số bên cạnh: phạt theo phần tràn
+      if(cd.out==null && tw>len) score+=(tw-len)*fs*0.6;
+      lblBoxes.forEach(b=>{ score+=boxOverlap(box,b)*6; });
+      obstB.forEach(b=>{ score+=boxOverlap(box,b)*3; });
+      if(!best || score<best.score) best={...cd, bx, by, box, score};
+    });
+    lblBoxes.push(best.box);                       // số đo sau sẽ né số đo trước
+    if(best.out!=null){                            // ra ngoài đầu mút: kéo dài đường ghi tới chữ
+      const E=fr.at(best.out), T=fr.at(best.v+(best.v>best.out? -tw/2 : tw/2));
+      ov.appendChild(svg("line",{x1:E.x,y1:E.y,x2:T.x,y2:T.y, stroke:col, "stroke-width":0.6*inv}));
+    }
+    const tx=best.bx, ty=best.by;
     const t=svg("text",{x:tx, y:ty, "text-anchor":"middle",
       transform: ang? `rotate(${ang.toFixed(2)} ${tx} ${ty})` : "",
       "font-family":"'JetBrains Mono',monospace", "font-size":8.5*inv*textScale()*dimK,
@@ -2857,7 +2896,10 @@ function drawManualDims(ov0, inv, P){
     const fr=dimFrame(dm.axis||"h", pts, dm.off||0, ppm);
     const vs=pts.map(p=>fr.along(p));
     const order=vs.map((v,i)=>i).sort((a,b)=>vs[a]-vs[b]);
-    const sorted=order.map(i=>vs[i]);
+    // MỐC TRÙNG (cách nhau < 5 mm, VD đèn nằm đúng trên mốc tường) → gộp: không thì ra đoạn "0"
+    // chồng lên số bên cạnh, đọc thành "12000"
+    const sorted=[]; order.map(i=>vs[i]).forEach(v=>{ if(!sorted.length || v-sorted[sorted.length-1] > 0.005*ppm) sorted.push(v); });
+    if(sorted.length<2) return;
     const segs=dimSegments(sorted, ppm);
     if(dm.text && segs.length===1) segs[0].txt=dm.text;
     const g=svg("g",{"data-dim":dm.id, class:"dimm"});
@@ -2915,12 +2957,26 @@ function genZoneDims(z, fl){
   const xs=clusterCoords(pts.map(l=>l.x), tol);
   const ys=clusterCoords(pts.map(l=>l.y), tol);
   // đường ghi nằm TRONG khu vực, sát mép — nhiều phòng liền nhau nên đặt ngoài sẽ đè phòng bên
-  const offH=Math.min(0.34*ppm, bb.h*0.14), offV=Math.min(0.34*ppm, bb.w*0.14);
-  const lineH=bb.y1-offH, lineV=bb.x0+offV;
+  // Đường ghi nằm GIỮA KHE tường ↔ hàng đèn sát tường đó (trước đây cố định 34 cm → hàng đèn cách
+  // tường 25 cm bị đường ghi và số đo cắt ngang nhãn). Khe quá hẹp thì sát tường 12 cm.
+  const gapB=bb.y1-Math.max(...pts.map(l=>l.y)), gapL=Math.min(...pts.map(l=>l.x))-bb.x0;
+  const fitOff=(gap,lim)=>Math.max(0.12*ppm, Math.min(0.34*ppm, lim, gap*0.5));
+  const offH=fitOff(gapB, bb.h*0.14), offV=fitOff(gapL, bb.w*0.14);
+  // KHE QUÁ HẸP (hàng đèn cách tường < 45 cm): đường ghi đặt RA NGOÀI tường 30 cm — đúng cách bản vẽ
+  // kỹ thuật ghi kích thước ngoài hình. Chỉ làm khi phía ngoài TRỐNG (không phải phòng khác), không
+  // thì chuỗi số đè sang nội dung phòng bên cạnh — khi đó vẫn ở trong.
+  const outsideFree=(isH, line)=>{ for(let k=0;k<9;k++){ const t=(k+0.5)/9;
+      const qx=isH? bb.x0+t*bb.w : line, qy=isH? line : bb.y0+t*bb.h;
+      if(fl.zones.some(o=>o!==z && pointInPoly(qx,qy,o.poly))) return false; } return true; };
+  const outB=gapB<0.45*ppm && outsideFree(true,  bb.y1+0.3*ppm);
+  const outL=gapL<0.45*ppm && outsideFree(false, bb.x0-0.3*ppm);
+  const lineH=outB? bb.y1+0.3*ppm : bb.y1-offH, lineV=outL? bb.x0-0.3*ppm : bb.x0+offV;
   // mốc = MẶT TƯỜNG THẬT tại đúng đường ghi (không phải mép bbox): phòng chữ L hay phòng xoay
-  // thì bbox là một cạnh không có thật, con số ghi ra sẽ lệch với "khoảng cách tới tường" ở panel
-  const cH=polyCross(z.poly, lineH, true),  x0=cH.length? cH[0] : bb.x0;
-  const cV=polyCross(z.poly, lineV, false), y0=cV.length? cV[0] : bb.y0;
+  // thì bbox là một cạnh không có thật, con số ghi ra sẽ lệch với "khoảng cách tới tường" ở panel.
+  // Đường ghi nằm ngoài thì lấy mặt tường ở sát mép TRONG (ngoài polygon không có giao điểm nào).
+  const refH=outB? bb.y1-0.05*ppm : lineH, refV=outL? bb.x0+0.05*ppm : lineV;
+  const cH=polyCross(z.poly, refH, true),  x0=cH.length? cH[0] : bb.x0;
+  const cV=polyCross(z.poly, refV, false), y0=cV.length? cV[0] : bb.y0;
   const rep=(v,isH)=>{ const l=pts.find(o=>Math.abs((isH? o.x : o.y)-v)<=tol);
     return l? {k:"L", uid:uidOf(l, fl)} : {k:"P", x:isH? v:lineV, y:isH? lineH:v}; };
   const out=[];
@@ -2934,8 +2990,8 @@ function genZoneDims(z, fl){
     // chuỗi này định vị ĐÈN → thuộc tờ chiếu sáng; tờ ổ cắm có dim riêng của nó
     out.push({id:"dm"+(fl.seq++), pts:anchors, axis, off:+off.toFixed(3), text:null, sheet:"light"});
   };
-  mk("h", [edgeAnchorAt(z, {x:x0, y:lineH}), ...xs.map(x=>rep(x,true))],  lineH);
-  mk("v", [edgeAnchorAt(z, {x:lineV, y:y0}), ...ys.map(y=>rep(y,false))], lineV);
+  mk("h", [edgeAnchorAt(z, {x:x0, y:refH}), ...xs.map(x=>rep(x,true))],  lineH);
+  mk("v", [edgeAnchorAt(z, {x:refV, y:y0}), ...ys.map(y=>rep(y,false))], lineV);
   return out;
 }
 /* Mã thiết bị duy nhất theo TOÀN DỰ ÁN (không theo tầng): bảng thống kê gộp mọi tầng, mã trùng
@@ -3538,6 +3594,7 @@ function drawOverlay(){
     if(!pos) return;                              // quá chật: panel bên phải vẫn có đủ thông số
     pos={x:pos.x+(z.lx||0)*inv, y:pos.y+(z.ly||0)*inv};   // offset kéo tay (đơn vị px màn hình)
     drawZoneChip(ov, pos, lw, lh, z, line2, ok, inv);
+    lblBoxes.push({x:pos.x, y:pos.y, w:lw, h:lh});   // tên phòng là vật cản cho số đo vẽ sau
   });
 
   // ---- lớp 5a: KÍCH THƯỚC ĐỊNH VỊ (công cụ Dim) — cố định trên bản vẽ, vào cả PNG/PDF ----
