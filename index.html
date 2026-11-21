@@ -2483,7 +2483,23 @@ const DEVICE_KINDS = Object.keys(DEVICE_SPEC);
    mới là sai, mà bỏ trống thì bảng thống kê đọc ra như thiếu sót.
    `d.mh` LUÔN là số|null để mọi phép tính an toàn; chữ nằm riêng ở `d.mhTxt` và được ưu tiên khi
    hiển thị. Một chỗ đọc duy nhất (mhLabel) để nhãn bản vẽ, panel, PDF và CSV không bao giờ lệch nhau. */
-const MH_NOTES = ["Hiện trạng", "Theo hiện trạng", "Chờ khảo sát"];
+const MH_NOTES = ["Trên trần", "Hiện trạng", "Theo hiện trạng", "Chờ khảo sát"];
+/* ĐẶT TRÊN TRẦN (anh Khoa): không in chữ "Trên trần" lên bản vẽ — vẽ VẠCH TRẦN gạch chéo ngay
+   trên ký hiệu (cách vẽ mặt trần quen thuộc), chú thích ký hiệu giải nghĩa một lần cho cả tờ. */
+const isAboveCeil = d => !!d && /trên\s*trần/i.test(d.mhTxt||"");
+// cao độ để IN LÊN BẢN VẼ: thiết bị trên trần thì không ghi gì — vạch trần đã nói thay
+const drawMh = d => isAboveCeil(d)? "" : mhLabel(d);
+// vạch trần: một nét ngang + gạch chéo phía trên, không xoay theo thiết bị (luôn nằm phía trên)
+function appendCeilMark(parent, x, y, w, sw, col){
+  const g=svg("g",{transform:`translate(${x.toFixed(1)},${y.toFixed(1)})`, "pointer-events":"none"});
+  const h=w*0.22, n=4;
+  [[C_WHITE, sw*3],[col, sw]].forEach(([c,wd])=>{
+    g.appendChild(svg("line",{x1:-w/2,y1:0,x2:w/2,y2:0, stroke:c, "stroke-width":wd, "stroke-linecap":"round"}));
+    for(let i=0;i<n;i++){ const x0=-w/2+(i+0.5)*w/n;
+      g.appendChild(svg("line",{x1:x0-h*0.5,y1:0,x2:x0+h*0.5,y2:-h, stroke:c, "stroke-width":wd*0.85, "stroke-linecap":"round"})); }
+  });
+  parent.appendChild(g);
+}
 function mhLabel(d, pre){
   if(d.mhTxt) return d.mhTxt;
   return d.mh!=null? (pre===false? fmtPlan(d.mh,2) : "+"+fmtPlan(d.mh,2)) : "";
@@ -3459,6 +3475,8 @@ function drawOverlay(){
     appendDevice(g, d.kind, szD, Math.max(0.012*P, 0.9*inv), sel? C_ACCENT_D : (spec.prov? "#8A6D3B" : C_INK));
     g.appendChild(svg("circle",{r:Math.max(szD, 14*inv), fill:"transparent", class:"hit"}));
     ov.appendChild(g);
+    if(st.all.some(isAboveCeil)) appendCeilMark(ov, d.x, d.y-szD*0.78, szD*1.15, Math.max(0.012*P, 0.9*inv),
+      sel? C_ACCENT_D : (spec.prov? "#8A6D3B" : C_INK));
     if(lblMode!=="off"){
       // Nhãn = CAO ĐỘ, không ghi mã (anh Khoa): ổ cắm giống hệt nhau thì đánh số từng cái chỉ rải
       // thêm hàng chục nhãn "OC7" lên bản vẽ mà thợ chẳng dùng tới — cái thợ cần là ĐẶT CAO BAO NHIÊU.
@@ -3469,8 +3487,8 @@ function drawOverlay(){
         // chú thích ký hiệu dưới tờ — câu dài "CHỜ: Driver LED dưới tủ bếp (công tắc cảm ứng…)" nằm
         // giữa mặt bằng đè lên đèn và tường. Chưa đặt tên thì vẫn báo "?" để không ai bỏ sót.
         ? st.all.map(x=>{ const ck=provCircuit(x, fl); const c=ck? circuitById(ck, fl) : null;
-            return (x.code||"NC")+(c? c.key:"")+(x.note? "":" ?")+(mhLabel(x)? " "+mhLabel(x):""); })
-        : st.all.map(x=>mhLabel(x)).filter(Boolean);
+            return (x.code||"NC")+(c? c.key:"")+(x.note? "":" ?")+(drawMh(x)? " "+drawMh(x):""); })
+        : st.all.map(x=>drawMh(x)).filter(Boolean);
       lines.reverse();                 // cao nhất lên trên, đúng như nhìn vào mặt tường
       // Ổ cắm / mạng / TV / nguồn chờ đều BÁM TƯỜNG (rot do wallSnap đặt, hướng vào phòng) → chữ
       // phải ra phía phòng. Ổ SÀN và WIFI không có lưng nên không ép hướng.
@@ -3741,8 +3759,10 @@ function symbolLegendBox(inv, P){
         .sort((a,b)=>String(a.code).localeCompare(String(b.code),"vi",{numeric:true}))
         .forEach(d=>{ if(seenNC.has(d.code)) return; seenNC.add(d.code);
           const ck=provCircuit(d, fl), c=ck? circuitById(ck, fl) : null;
-          rows.push({dev:"prov", txt:`${d.code||"NC"} — chờ ${d.note||"(chưa đặt tên)"}${mhLabel(d)? " · "+mhLabel(d):""}${c? " · cụm "+c.key:""}`}); });
+          rows.push({dev:"prov", txt:`${d.code||"NC"} — chờ ${d.note||"(chưa đặt tên)"}${drawMh(d)? " · "+drawMh(d):""}${c? " · cụm "+c.key:""}`}); });
     }
+    if((fl.devices||[]).some(d=>deviceOnSheet(d) && isAboveCeil(d)))
+      rows.push({ceil:true, txt:"Vạch gạch trên ký hiệu = đặt trên trần (trong trần thạch cao)"});
   }
   if(!rows.length) return null;
 
@@ -3791,6 +3811,7 @@ function symbolLegendBox(inv, P){
           stroke:C_INK,"stroke-width":Math.max(0.9*inv,ic*0.05)})));
       }
       else if(r.sw) appendSwitch(gi, ic*0.55, 2, Math.max(0.9*inv,ic*0.055), C_INK);
+      else if(r.ceil) appendCeilMark(gi, 0, ic*0.12, ic*0.95, Math.max(0.9*inv,ic*0.055), C_INK);
       else if(r.dev) appendDevice(gi, r.dev, ic*0.62, Math.max(0.9*inv,ic*0.055),
         (DEVICE_SPEC[r.dev]||{}).prov? "#8A6D3B" : C_INK);
       else {
