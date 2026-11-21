@@ -7726,7 +7726,7 @@ async function boot(){
   updateUndoBtns();
 }
 boot();
-window.addEventListener("resize", ()=>{ render(); });
+window.addEventListener("resize", ()=>{ if(state) render(); });   // boot() còn đang nạp dữ liệu (IndexedDB) thì chưa có gì để vẽ
 </script>
 </body>
 </html>
