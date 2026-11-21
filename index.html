@@ -3016,7 +3016,9 @@ let exportPad=0;     // chiều cao DẢI CHÚ THÍCH thêm dưới tờ xuất 
    devKinds: trong đám thiết bị chỉ cho "nguồn chờ" lên tờ này, ổ cắm/mạng/wifi vẫn ở tờ riêng. */
 /* (2026-11, anh Khoa) Tờ chiếu sáng KHÔNG còn kích thước — số định vị đèn sang hẳn tờ ĐỊNH VỊ ĐÈN,
    để tờ này chỉ đọc một chuyện: đèn nào, chung công tắc nào. */
-const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","lux","devices"]),
+/* (2026-11, anh Khoa) Bỏ cả lớp LUX: file in là bản cho THỢ — số lux là việc duyệt phương án với
+   khách, xem trên màn hình. */
+const SHEET_LIGHT  = { layers:new Set(["glow","switches","wiring","devices"]),
                        devKinds:new Set(["prov"]), hideStrips:true,
                        no:"CS", title:"Mặt bằng chiếu sáng & công tắc" };
 /* KHÔNG override độ mờ ảnh nền: tờ nào cũng dùng đúng độ mờ anh đang chỉnh ở thanh "Mặt bằng nền".
@@ -3669,19 +3671,20 @@ function titleBlockBox(inv, P){
   // dài quá 2 dòng thì dồn phần còn lại vào dòng 2 rồi cắt (clipText tự thêm "…" cho vừa khung)
   if(nameLines.length>2)
     nameLines=[nameLines[0], clipText(nameLines.slice(1).join(" "), capW-2*pad, 12*inv, 600)];
+  const l2Lines=wrapText(line2, capW-2*pad, 10*inv, 500);
   const need=Math.max(barW, ...nameLines.map(t=>measureText(t,12*inv,600)),
-                      measureText(line2,10*inv,500), measureText(FOOT,8*inv,500));
+                      ...l2Lines.map(t=>measureText(t,10*inv,500)), measureText(FOOT,8*inv,500));
   const w=Math.min(Math.max(need+2*pad, 150*inv), capW);
   const lh1=12*inv*ts*1.35, lh2=10*inv*ts*1.55, lhF=8*inv*ts*1.55;
   const hBar=F().pxPerMeter? (th+8.5*inv*ts*1.55+4*inv) : 0;
-  const h=pad + nameLines.length*lh1 + lh2 + hBar + lhF + pad*0.5;
+  const h=pad + nameLines.length*lh1 + l2Lines.length*lh2 + hBar + lhF + pad*0.5;
   return { w, h, draw(ov, x0, y0){
     const g=svg("g",{});
     g.appendChild(svg("rect",{x:x0, y:y0, width:w, height:h, rx:4*inv,
       fill:"#FFFFFF","fill-opacity":".93", stroke:"#D8D0C2","stroke-width":inv}));
     let cy=y0+pad;
     nameLines.forEach(ln=>{ addText(g, x0+pad, cy+lh1*0.75, ln, 12*inv, C_INK, "start", 600); cy+=lh1; });
-    addText(g, x0+pad, cy+lh2*0.70, line2, 10*inv, "#8A8175", "start", 500); cy+=lh2;
+    l2Lines.forEach(ln=>{ addText(g, x0+pad, cy+lh2*0.70, ln, 10*inv, "#8A8175", "start", 500); cy+=lh2; });
     if(F().pxPerMeter){
       const bx=x0+pad, by=cy;
       for(let i=0;i<segs;i++){
@@ -3751,9 +3754,13 @@ function symbolLegendBox(inv, P){
   // bề rộng cột đo từ CHỮ THẬT; cả bảng chừa chỗ cho khối tiêu đề bên phải
   const avail=worldW()-24*inv;
   const capCol=Math.max(150*inv, (avail*0.62)/nCol - gap);
-  rows.forEach(r=> r.txt=clipText(r.txt, capCol-pad*2-ic-gap, 9*inv, 500));  // chừa cả lề phải
-  const colW=Math.min(capCol, pad+ic+gap+Math.max(...rows.map(r=>measureText(r.txt,9*inv,500)))+pad);
-  const w=colW*nCol+(nCol-1)*gap, h=pad*0.6+hh+nRow*rh+pad*0.6;
+  // HIỆN ĐỦ CHỮ (anh Khoa): mục dài thì XUỐNG DÒNG, không cắt "…". Tên nguồn chờ giờ chỉ nằm ở đây
+  // (trên bản vẽ chỉ còn mã NC1) — cắt mất đuôi "(công tắc cảm ứng trên tủ)" là mất đúng thông tin.
+  const lineH=9*inv*ts*1.35, txtMax=capCol-pad*2-ic-gap;
+  rows.forEach(r=>{ r.lines=wrapText(r.txt, txtMax, 9*inv, 500); r.h=rh+(r.lines.length-1)*lineH; });
+  const colW=Math.min(capCol, pad+ic+gap+Math.max(...rows.flatMap(r=>r.lines.map(l=>measureText(l,9*inv,500))))+pad);
+  const colH=[]; rows.forEach((r,i)=>{ const c=Math.floor(i/nRow); colH[c]=(colH[c]||0)+r.h; });
+  const w=colW*nCol+(nCol-1)*gap, h=pad*0.6+hh+Math.max(...colH)+pad*0.6;
   return { w, h, draw(ov, x, y){
     const g=svg("g",{});
     g.appendChild(svg("rect",{x, y, width:w, height:h, rx:4*inv,
@@ -3761,10 +3768,12 @@ function symbolLegendBox(inv, P){
     addText(g, x+pad, y+pad*0.6+8*inv*ts*1.15, "CHÚ THÍCH KÝ HIỆU", 8*inv, "#8A8175", "start", 700);
     g.appendChild(svg("line",{x1:x, y1:y+pad*0.6+hh, x2:x+w, y2:y+pad*0.6+hh,
       stroke:"#E7DFD3","stroke-width":inv}));
+    const yCol=[];
     rows.forEach((r,i)=>{
-      const col=Math.floor(i/nRow), row=i%nRow;
+      const col=Math.floor(i/nRow);
       const x0=x+col*(colW+gap);
-      const cy=y+pad*0.6+hh+row*rh+rh/2, cxi=x0+pad+ic/2;
+      const top=y+pad*0.6+hh+(yCol[col]||0); yCol[col]=(yCol[col]||0)+r.h;
+      const cy=top+rh/2, cxi=x0+pad+ic/2;
       const gi=svg("g",{transform:`translate(${cxi},${cy})`});
       if(r.fan){
         const R=ic*0.46;
@@ -3793,7 +3802,7 @@ function symbolLegendBox(inv, P){
         gi.appendChild(gg);
       }
       g.appendChild(gi);
-      addText(g, x0+pad+ic+gap, cy+9*inv*ts*0.36, r.txt, 9*inv, "#3A362F", "start", 500);
+      r.lines.forEach((ln,k)=>addText(g, x0+pad+ic+gap, cy+9*inv*ts*0.36+k*lineH, ln, 9*inv, "#3A362F", "start", 500));
     });
     ov.appendChild(g);
   }};
@@ -3924,12 +3933,15 @@ function drawLegend(ov, inv, P){
     fansOfCircuit(c.id, fl).forEach(f=>{ const z=deviceZone(f, fl); if(z && !zs.includes(z.name)) zs.push(z.name); });
     return zs.join(", "); };
   // ĐO thật bề rộng chữ thay vì đoán theo số ký tự: cỡ chữ đổi theo textScale, font Inter không đều nét.
-  const NAME_MAX=30;
-  const nameOf=c=>{ const s=zOf(c); return s.length>NAME_MAX? s.slice(0,NAME_MAX-1)+"…" : s; };
+  // HIỆN ĐỦ (anh Khoa): danh sách phòng dài thì XUỐNG DÒNG trong ô, không cắt "…"
+  const NAME_W=190*inv*ts, lineH=9*inv*ts*1.3;
+  const off_=c=>(fl.liveOff||[]).includes(c.id);
+  rows.forEach(c=>{ c._ln=wrapText(zOf(c)+(off_(c)?" (tắt)":""), NAME_W, 9*inv, 500); });
   const w=Math.max(150*inv, ...rows.map(c=>
-    nameX + measureText(nameOf(c), 9*inv, 500) + 10*inv
+    nameX + Math.max(...c._ln.map(l=>measureText(l, 9*inv, 500)), 0) + 10*inv
           + measureText(nOf(c), 8.5*inv, 400) + pad));
-  const h=hh+rows.length*rh+pad;
+  const rowH=c=>rh+(Math.max(1,c._ln.length)-1)*lineH;
+  const h=hh+rows.reduce((t,c)=>t+rowH(c),0)+pad;
   const x=worldW()-w-12*inv+(fl.lx||0)*inv, y=12*inv+(fl.ly||0)*inv;   // offset kéo tay (px màn hình)
   const parent=ov;
   const g=svg("g",{class:"dlbl","data-k":"LG","data-r":fl.id, style:"cursor:move"});
@@ -3938,13 +3950,13 @@ function drawLegend(ov, inv, P){
     fill:"#FFFFFF", "fill-opacity":"0.93", stroke:"#CFC6B8", "stroke-width":1*inv}));
   addText(g, x+pad, y+11*inv, "CỤM ĐIỀU KHIỂN", 8*inv, "#8A8175", "start", 700);
   g.appendChild(svg("line",{x1:x, y1:y+hh, x2:x+w, y2:y+hh, stroke:"#E7DFD3","stroke-width":1*inv}));
-  rows.forEach((c,i)=>{
-    const ry=y+hh+i*rh+11*inv;
-    const off=(fl.liveOff||[]).includes(c.id);
+  let yy=y+hh;
+  rows.forEach(c=>{
+    const ry=yy+11*inv; yy+=rowH(c);
+    const off=off_(c);
     // KHÔNG còn ô màu: cụm nhận ra bằng CHỮ CÁI, thứ duy nhất đọc được trên bản in đen trắng
     addText(ov, x+keyX, ry, c.key, 9.5*inv, off?"#A9A093":C_INK, "middle", 700);
-    addText(ov, x+nameX, ry, nameOf(c)+(off?" (tắt)":""), 9*inv,
-      off?"#A9A093":"#3A362F", "start", 500);
+    c._ln.forEach((ln,k)=>addText(ov, x+nameX, ry+k*lineH, ln, 9*inv, off?"#A9A093":"#3A362F", "start", 500));
     addText(ov, x+w-pad, ry, nOf(c), 8.5*inv, "#8A8175", "end", 400);
   });
   parent.appendChild(g);
@@ -7208,7 +7220,9 @@ async function buildPrintDoc(){
     // của bảng công tắc và ở chú giải trên bản vẽ — thêm một bảng nữa là lặp lại chính nó.
     ctlHtml+=`<p class="pr-hint">${twoWay.size? "↔ = cụm đảo chiều: bật/tắt được từ hai công tắc (đánh dấu theo TỪNG NÚT, không phải cả công tắc). ":""}Cao độ lắp công tắc mặc định +1,25 m tính từ sàn hoàn thiện.</p>`;
   }
-  if((fl.scenes||[]).length){
+  // KỊCH BẢN không vào file in (anh Khoa): thợ không lắp "kịch bản", thợ lắp công tắc và cụm —
+  // bảng công tắc ở trên đã đủ. Kịch bản là thứ trình bày với khách trên màn hình.
+  if(false && (fl.scenes||[]).length){
     // BỎ cột "Công suất" — cùng lý do với Tổng W công tắc.
     ctlHtml+=`<h2>Kịch bản chiếu sáng${multi? " — "+escapeHtml(fl.name):""}</h2>
       <table class="pr"><thead><tr><th>Kịch bản</th><th>Cụm BẬT</th>
@@ -7419,10 +7433,9 @@ async function buildPrintDoc(){
     ${mat}
     ${tableBlocks}
     ${grand}
-    ${luxHtml}
     ${note}
     </div>
-    <div class="pr-foot">INEX DESIGN · inexdesign.vn — Số liệu tính theo phương pháp quang thông, mang tính tham khảo cho thiết kế sơ bộ.</div>`;
+    <div class="pr-foot">INEX DESIGN · inexdesign.vn — Hồ sơ bố trí chiếu sáng &amp; điện nhẹ phục vụ thi công nội thất.</div>`;
 
   // ĐỢI ẢNH GIẢI MÃ XONG rồi mới trả về. Ảnh bản vẽ là data-URL cỡ MB; nút Xuất PDF chỉ chờ 60ms
   // rồi gọi window.print(), nên trình duyệt có thể phân trang lúc ảnh CHƯA CÓ kích thước thật —
