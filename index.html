@@ -1420,6 +1420,21 @@ function fanIssues(fan, fl){
 }
 const CIRCUIT_COLORS=["#C78F57","#7C9A8E","#8A9BB0","#9A7C86","#B0975C","#88997C","#A98C6A","#7E8AA0"];
 function circuitById(id, fl){ return ((fl||F()).circuits||[]).find(c=>c.id===id)||null; }
+/* NGUỒN CHỜ cấp cho DRIVER LED DÂY thì chính nó là thứ công tắc bật/tắt ngoài đời — không phải sợi
+   dây (xưởng gỗ lắp). Trả về id cụm của nguồn chờ:
+     · d.circuit nếu anh đã gán tay (kể cả "none" = cố ý không qua công tắc → null);
+     · không thì TỰ NHẬN: tên có "LED"/"driver" + cùng phòng có LED dây thuộc ĐÚNG MỘT cụm.
+   Không đoán khi mơ hồ (2 cụm LED dây trong phòng) — để anh chọn ở bảng thuộc tính. */
+function provCircuit(d, fl){
+  fl=fl||F();
+  if(!d || d.kind!=="prov") return null;
+  if(d.circuit==="none") return null;
+  if(d.circuit) return circuitById(d.circuit, fl)? d.circuit : null;
+  if(!/led|driver/i.test(d.note||"")) return null;
+  const z=deviceZone(d, fl); if(!z) return null;
+  const cs=new Set(z.lights.filter(l=>l.circuit && lightById(l.lightId).type==="strip").map(l=>l.circuit));
+  return cs.size===1? [...cs][0] : null;
+}
 /* Ký tự cụm a/b/c… — chuẩn bản vẽ ME: đèn ghi mã loại + chữ mạch (VD "D2a").
    Trả null khi hết 26 chữ. TUYỆT ĐỐI không trả "z" như trước: hai cụm cùng khoá làm hai đèn
    khác nhau in RA CÙNG MỘT NHÃN trên bản vẽ — sai âm thầm, tệ hơn là báo lỗi. */
@@ -3381,9 +3396,14 @@ function drawOverlay(){
     // Chuỗi đèn-với-đèn tính trên TOÀN TẦNG, không tách theo khu vực (anh Khoa): một cụm trải 2 phòng
     // mà nối riêng từng phòng thì hai nửa nằm rời nhau, đọc ra như hai cụm khác nhau. Cung nối liên
     // phòng chính là thứ nói lên "cụm này chạy qua cả hai phòng".
+    // Chỉ nối tới ký hiệu ĐANG HIỆN trên tờ: tờ chiếu sáng ẩn LED dây, nét đứt chạy tới khoảng trống
+    // là đọc ra "công tắc bật cái không có gì" (anh Khoa). Thay vào đó nối tới NGUỒN CHỜ DRIVER của
+    // cụm — đúng thứ công tắc cắt điện ngoài đời.
     const allPts=[];
-    fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===cid) allPts.push({x:l.x,y:l.y}); }));
+    fl.zones.forEach(z=>z.lights.forEach(l=>{ if(l.circuit===cid && lampOnSheet(lightById(l.lightId))) allPts.push({x:l.x,y:l.y}); }));
     (fl.fans||[]).forEach(f=>{ if(f.circuit===cid) allPts.push({x:f.x,y:f.y}); });
+    if(sheetHas("devices")) (fl.devices||[]).forEach(d=>{
+      if(deviceOnSheet(d) && provCircuit(d, fl)===cid) allPts.push({x:d.x,y:d.y}); });
     if(!allPts.length) return;
     mstEdges(allPts).forEach(([a,b])=>drawBow(a,b,.55,1*inv));
     // mỗi công tắc điều khiển cụm → MỘT đường tới đèn gần nhất, kèm CHỮ CÁI CỤM ở điểm giữa.
@@ -3443,7 +3463,11 @@ function drawOverlay(){
       // Số lượng theo phòng đã có ở bảng thống kê. Riêng NGUỒN CHỜ bắt buộc in TÊN thiết bị: dấu chờ
       // vô danh là lệnh để lại một dây sống vô danh trên giấy mang logo INEX.
       const lines = d.kind==="prov"
-        ? st.all.map(x=>(x.note? "CHỜ: "+x.note : "CHỜ: ?")+(mhLabel(x)? " "+mhLabel(x):""))
+        // GỌN (anh Khoa): chỉ MÃ + chữ cụm + cao độ, như mã đèn "BG12a". Tên thiết bị chờ tra ở bảng
+        // chú thích ký hiệu dưới tờ — câu dài "CHỜ: Driver LED dưới tủ bếp (công tắc cảm ứng…)" nằm
+        // giữa mặt bằng đè lên đèn và tường. Chưa đặt tên thì vẫn báo "?" để không ai bỏ sót.
+        ? st.all.map(x=>{ const ck=provCircuit(x, fl); const c=ck? circuitById(ck, fl) : null;
+            return (x.code||"NC")+(c? c.key:"")+(x.note? "":" ?")+(mhLabel(x)? " "+mhLabel(x):""); })
         : st.all.map(x=>mhLabel(x)).filter(Boolean);
       lines.reverse();                 // cao nhất lên trên, đúng như nhìn vào mặt tường
       // Ổ cắm / mạng / TV / nguồn chờ đều BÁM TƯỜNG (rot do wallSnap đặt, hướng vào phòng) → chữ
@@ -3706,7 +3730,16 @@ function symbolLegendBox(inv, P){
     rows.push({sw:true, txt:"Công tắc — chữ cạnh nó là cụm điều khiển"});
   if(sheetHas("devices")){
     const ks=[]; (fl.devices||[]).forEach(d=>{ if(deviceOnSheet(d) && !ks.includes(d.kind)) ks.push(d.kind); });
-    ks.forEach(k=>rows.push({dev:k, txt:(DEVICE_SPEC[k]||{}).label||k}));
+    ks.filter(k=>k!=="prov").forEach(k=>rows.push({dev:k, txt:(DEVICE_SPEC[k]||{}).label||k}));
+    // nguồn chờ: tên thiết bị nằm Ở ĐÂY, trên bản vẽ chỉ còn mã (NC1, NC2…)
+    if(ks.includes("prov")){
+      const seenNC=new Set();
+      (fl.devices||[]).filter(d=>d.kind==="prov" && deviceOnSheet(d))
+        .sort((a,b)=>String(a.code).localeCompare(String(b.code),"vi",{numeric:true}))
+        .forEach(d=>{ if(seenNC.has(d.code)) return; seenNC.add(d.code);
+          const ck=provCircuit(d, fl), c=ck? circuitById(ck, fl) : null;
+          rows.push({dev:"prov", txt:`${d.code||"NC"} — chờ ${d.note||"(chưa đặt tên)"}${mhLabel(d)? " · "+mhLabel(d):""}${c? " · cụm "+c.key:""}`}); });
+    }
   }
   if(!rows.length) return null;
 
@@ -5544,6 +5577,14 @@ function refreshDevicePanel(){
       ? `<label>Chờ cho thiết bị</label><div class="seg wrapseg" id="dvNote">${
           PROV_NAMES.map(n=>`<button type="button" data-nt="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}</div>`
       : `<label>Ghi chú (tuỳ chọn)</label><input type="text" id="dvNoteTxt" placeholder="VD: sau kệ TV, đầu giường trái">`;
+    // nguồn chờ cấp DRIVER LED DÂY → gán cụm để tờ chiếu sáng nối công tắc tới đúng điểm này
+    const provCir = d.kind==="prov"
+      ? `<label title="Nguồn chờ cấp cho driver LED dây: công tắc của cụm bật/tắt chính điểm này">Công tắc bật/tắt điểm này</label>
+         <select id="dvCir"><option value="">Tự nhận (theo LED dây cùng phòng)</option>
+           <option value="none">Không qua công tắc (nguồn thường trực)</option>
+           ${(F().circuits||[]).map(c=>`<option value="${c.id}">Cụm ${escapeHtml(c.key)}${c.name? " — "+escapeHtml(c.name):""}</option>`).join("")}
+         </select><p class="pr-hint" id="dvCirHint" style="margin:4px 0 0"></p>`
+      : "";
     p.innerHTML=`<p class="eyebrow">${escapeHtml(d.code||"")} · ${spec.label}</p>
       <div class="inline" style="gap:8px">
         <select id="dvKind" style="flex:1">${kindOpts}</select>
@@ -5558,6 +5599,7 @@ function refreshDevicePanel(){
         ${MH_NOTES.map(n=>`<button type="button" class="btn sm" data-nt="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join("")}
       </div>
       ${provChips}
+      ${provCir}
       ${spec.wet? `<p class="pr-hint" style="margin:8px 0 0">⚠ Vùng ẩm: ổ cắm phải đạt IP44 và đặt ngoài vùng nguy hiểm quanh vòi/sen.</p>`:""}`;
     // handlers
     p.querySelector("#dvKind").onchange=e=>mutate(()=>{ d.kind=e.target.value;
@@ -5574,7 +5616,15 @@ function refreshDevicePanel(){
     if(noteSeg) noteSeg.querySelectorAll("[data-nt]").forEach(b=> b.onclick=()=>mutate(()=>{ d.note=b.dataset.nt; }));
     const noteTxt=p.querySelector("#dvNoteTxt");
     if(noteTxt) noteTxt.oninput=e=>mutate(()=>{ d.note=e.target.value; });
+    const cirSel=p.querySelector("#dvCir");
+    if(cirSel) cirSel.onchange=e=>mutate(()=>{ if(e.target.value) d.circuit=e.target.value; else delete d.circuit; });
   }
+  { const cs=p.querySelector("#dvCir"); if(cs){
+      if(document.activeElement!==cs) cs.value=d.circuit||"";
+      const ck=provCircuit(d), c=ck? circuitById(ck) : null;
+      const h=p.querySelector("#dvCirHint");
+      if(h) h.textContent = !d.circuit? (c? `Đang tự nhận: cụm ${c.key}` : "Chưa nhận được cụm nào — điểm này không nối công tắc.")
+        : d.circuit==="none"? "Nguồn thường trực, không vẽ nét đứt tới điểm này." : ""; } }
   // cập nhật giá trị (không phá focus)
   // So sau khi TRIM: ô cao độ nay nhận chữ, mà giá trị lưu đã trim — ghi đè khi anh vừa gõ dấu
   // cách là nuốt mất dấu cách ("Ổ cắm hiện trạng" thành "Ổcắmhiệntrạng"). Guard focus không đủ.
@@ -6978,6 +7028,12 @@ function preflightIssues(){
     });
     // cụm rỗng in vào hồ sơ
     emptyCircuits(f).forEach(c=> out.push({lv:"warn", msg:`Cụm rỗng “${c.key}” (${f.name}) — nên xoá trước khi xuất.`, go:{fi, sec:"secCir"}}));
+    (f.circuits||[]).forEach(c=>{
+      const ls=f.zones.flatMap(z=>z.lights.filter(l=>l.circuit===c.id));
+      if(!ls.length || ls.some(l=>lightById(l.lightId).type!=="strip") || (f.fans||[]).some(x=>x.circuit===c.id)) return;
+      if((f.devices||[]).some(d=>provCircuit(d, f)===c.id)) return;
+      out.push({lv:"warn", msg:`Cụm ${c.key} (${f.name}) chỉ có LED dây — chưa gán nguồn chờ driver nên tờ chiếu sáng không có điểm để nối công tắc.`, go:{fi}});
+    });
     if(f.zones.some(z=>z.lights.length) && !(f.dims||[]).some(dm=>dm.sheet!=="device"))
       out.push({lv:"warn", msg:`${f.name} chưa có kích thước định vị đèn — tờ Định vị đèn sẽ không có số đo.`, go:{fi, tool:"dim"}});
   });
@@ -7184,7 +7240,8 @@ async function buildPrintDoc(){
     CS:[ "Chữ <b>a, b, c…</b> cạnh đèn là <b>cụm</b>: các đèn cùng chữ bật chung một nút công tắc.",
          "Nét đứt chỉ cho biết đèn nào chung công tắc — <b>không phải đường đi dây</b>.",
          (fl.switches||[]).length? `Công tắc cao <b>+${fmtPlan(swH.length===1? swH[0]:1.25,2)} m</b> tính từ sàn hoàn thiện${swH.length>1?" (chỗ khác ghi riêng trên bảng công tắc)":""}.` : null,
-         hasStrip? "LED dây do <b>xưởng gỗ</b> lắp — thợ điện chỉ chừa <b>nguồn chờ (NC)</b> tại điểm ghi trên bản vẽ." : null ],
+         hasStrip? "LED dây do <b>xưởng gỗ</b> lắp — thợ điện chừa <b>nguồn chờ NC</b>; nét đứt tới NC = công tắc cụm đó bật/tắt nguồn driver." : null,
+         (fl.devices||[]).some(d=>d.kind==="prov")? "<b>NC1, NC2…</b> = nguồn chờ — tên thiết bị chờ xem ô chú thích ký hiệu cuối tờ." : null ],
     DV:[ "Kích thước ghi bằng <b>mm</b>, đo từ <b>mặt tường hoàn thiện</b> tới <b>tâm đèn</b>.",
          "Chỉ dùng số ghi — <b>không đo trên giấy in</b>.",
          "Mã đèn (VD BG12) tra loại đèn và số lượng ở <b>Bảng vật tư</b>." ],
@@ -7295,14 +7352,16 @@ async function buildPrintDoc(){
   { const byKind=new Map(), provs=new Map();
     allDevices().forEach(d=>{
       if(d.kind==="prov"){ const n=(d.note||"chưa đặt tên").trim();
-        provs.set(n, (provs.get(n)||0)+1); return; }
+        const o=provs.get(n)||{n:0, codes:[]}; o.n++; if(d.code) o.codes.push(d.code); provs.set(n, o); return; }
       byKind.set(d.kind, (byKind.get(d.kind)||0)+1);
     });
     Object.keys(DEVICE_SPEC).forEach(k=>{ if(!byKind.has(k)) return;
       otherRows.push({ic:deviceIconSVG(k,"pr-sym").outerHTML, ten:DEVICE_SPEC[k].label,
         sl:byKind.get(k), dvt:"vị trí", gc:""}); });
-    provs.forEach((n,ten)=>otherRows.push({ic:deviceIconSVG("prov","pr-sym").outerHTML,
-      ten:"Nguồn chờ: "+ten, sl:n, dvt:"điểm", gc:"chừa sẵn nguồn, không lắp thiết bị"}));
+    // mã NC ghi kèm: trên bản vẽ chỉ còn "NC1e +2", thợ tra ngược từ mã sang đây
+    provs.forEach((o,ten)=>otherRows.push({ic:deviceIconSVG("prov","pr-sym").outerHTML,
+      ten:"Nguồn chờ: "+ten, sl:o.n, dvt:"điểm",
+      gc:(o.codes.length? [...new Set(o.codes)].join(", ")+" · ":"")+"chừa sẵn nguồn, không lắp thiết bị"}));
   }
   { const byGang=new Map();
     state.floors.forEach(f=>(f.switches||[]).forEach(sw=>{
